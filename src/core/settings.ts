@@ -380,10 +380,12 @@ export interface MdRenderingSettings {
 	italicColor?: string | null;
 }
 
+export type AppearanceMode = "system" | "light" | "dark";
+
 /** Appearance settings — mode, colors, type, markdown emphasis. */
 export interface AppearanceSettings {
-	/** "dark" | "light" (default dark). */
-	mode?: "dark" | "light";
+	/** "system" | "light" | "dark" (default system: follows the OS). */
+	mode?: AppearanceMode;
 	/** The one user-chosen color; everything else derives per-mode in code.
 	 *  null = the mode's default background. */
 	background?: string | null;
@@ -490,7 +492,7 @@ export interface FactorySettings {
 	general: Required<GeneralSettings>;
 	dictation: Required<DictationSettings>;
 	appearance: {
-		mode: "dark" | "light";
+		mode: AppearanceMode;
 		background: string | null;
 		fontFamily: string | null;
 		proseFontSize: number;
@@ -510,12 +512,12 @@ export const FACTORY_SETTINGS: FactorySettings = {
 	general: { autoUpdate: true },
 	dictation: { language: "en" },
 	appearance: {
-		mode: "dark",
-		background: null, // the dark default (#141414) lives in the mode's derivation curve
-		fontFamily: null, // Source Sans 3
+		mode: "system",
+		background: null, // each mode's default lives in app/globals.css
+		fontFamily: null, // Inter
 		proseFontSize: 16,
-		sessionNameSerif: true,
-		mdRendering: { headingWeight: 900, boldColor: null, italicColor: null },
+		sessionNameSerif: false,
+		mdRendering: { headingWeight: 700, boldColor: null, italicColor: null },
 	},
 	graph: { enabled: true, rendering: true, extractionChunkTokens: 4096 },
 	compaction: { thresholdTokens: 150_000 },
@@ -736,7 +738,7 @@ function sanitizeMdRendering(raw: unknown): MdRenderingSettings {
 
 function sanitizeAppearance(raw: Record<string, unknown>): AppearanceSettings {
 	const out: AppearanceSettings = {};
-	if (raw.mode === "dark" || raw.mode === "light") out.mode = raw.mode;
+	if (raw.mode === "system" || raw.mode === "dark" || raw.mode === "light") out.mode = raw.mode;
 	if (raw.background !== undefined) out.background = sanitizeHexOrNull(raw.background);
 	if (raw.fontFamily !== undefined) {
 		out.fontFamily = typeof raw.fontFamily === "string" && raw.fontFamily.trim() ? raw.fontFamily : null;

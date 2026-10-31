@@ -24,7 +24,7 @@
  *     would shadow every settings-page key change until restart.
  */
 
-const { app, BrowserWindow, Menu, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, nativeTheme, session, shell } = require("electron");
 const { createChatGPT, fileStore } = require("./chatgpt.cjs");
 const { attachChatGPTChild, trustedSender, chatGPTControl } = require("./chatgpt-ipc.cjs");
 const { createSubscriptions, loadSubscriptionSDK } = require("./subscriptions.cjs");
@@ -308,7 +308,9 @@ function createWindow(url) {
 				// height. Do not force the zoom-invariant native overlay to match
 				// the renderer's 60 CSS px bar: zooming out would cover its border.
 				// The renderer reserves the actual width via env(titlebar-area-*).
-				titleBarOverlay: { color: "#141414", symbolColor: "#e5e5e5" },
+				titleBarOverlay: nativeTheme?.shouldUseDarkColors
+					? { color: "#1f2428", symbolColor: "#f6f4ef" }
+					: { color: "#f7f4ef", symbolColor: "#1f3a4a" },
 				// Keep the custom bar alone; Alt reveals the native menu.
 				autoHideMenuBar: true,
 			}),
@@ -323,10 +325,10 @@ function createWindow(url) {
 		// the native window surface changes size before Chromium's compositor
 		// has a frame at the new size, and the gap shows the window's NATIVE
 		// background — Electron's default is white, glaring on a dark app.
-		// The app background (#141414) fills the lag instead. `show: false` +
+		// The app background (LettBestilt canvas, per OS mode) fills the lag instead. `show: false` +
 		// ready-to-show is the same treatment for first paint: the window
 		// appears only once the page has actually rendered.
-		backgroundColor: "#141414",
+		backgroundColor: nativeTheme?.shouldUseDarkColors ? "#1f2428" : "#f7f4ef",
 		show: false,
 		// Narrow-window behavior (owner, 2026-09-17): 640px is the floor —
 		// below it even a wrapped chrome row gets cramped and the chat header

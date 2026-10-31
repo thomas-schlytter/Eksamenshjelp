@@ -27,12 +27,12 @@ describe("FACTORY_SETTINGS (the compiled factory layer)", () => {
 		// with the message anchors (owner, 2026-10-13)
 		assert.deepEqual(FACTORY_SETTINGS.graph, { enabled: true, rendering: true, extractionChunkTokens: 4096 });
 		const a = FACTORY_SETTINGS.appearance;
-		assert.equal(a.mode, "dark");
+		assert.equal(a.mode, "system");
 		assert.equal(a.background, null); // the mode's own default, not a factory hex
-		assert.equal(a.fontFamily, null); // Source Sans 3
+		assert.equal(a.fontFamily, null); // Inter
 		assert.equal(a.proseFontSize, 16);
-		assert.equal(a.sessionNameSerif, true);
-		assert.equal(a.mdRendering.headingWeight, 900);
+		assert.equal(a.sessionNameSerif, false);
+		assert.equal(a.mdRendering.headingWeight, 700);
 		assert.equal(a.mdRendering.boldColor, null); // white
 		assert.equal(a.mdRendering.italicColor, null);
 	});

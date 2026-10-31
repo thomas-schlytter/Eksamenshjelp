@@ -6,10 +6,11 @@
  *
  * Why variables and not className swaps: every seam the settings touch was
  * built token-first (--font-prose, --lh-prose-size, --lh-ink-strong, …),
- * so application is setProperty and nothing re-renders. The ONE thing the
- * variables can't reach — the mode — is dark-only this wave (the light
- * palette is designed in the later design wave; <html class="dark"> is
- * static in app/layout.tsx).
+ * so application is setProperty and nothing re-renders. The mode is the one
+ * class swap: <html class="dark"> toggles from the chosen mode (system
+ * follows prefers-color-scheme live). The choice is mirrored to
+ * localStorage so the bootstrap script in app/layout.tsx paints the right
+ * mode before hydration.
  *
  * The provider is mounted at the ROOT LAYOUT level (like ActivityProvider):
  * every page picks appearance up on load. The settings page writes a
@@ -19,8 +20,31 @@
  * with the other navigations — mod+, pushes /settings from anywhere.)
  */
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { FACTORY_SETTINGS, type AppearanceSettings } from "@/src/core";
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { FACTORY_SETTINGS, type AppearanceMode, type AppearanceSettings } from "@/src/core";
+
+/** localStorage key the pre-paint bootstrap in app/layout.tsx reads. */
+export const THEME_MODE_STORAGE_KEY = "lh-theme-mode";
+
+const DARK_QUERY = "(prefers-color-scheme: dark)";
+
+/** The OS preference, live: re-renders when the system appearance flips. */
+function useSystemDark(): boolean {
+	const [dark, setDark] = useState(false);
+	useEffect(() => {
+		const mq = window.matchMedia(DARK_QUERY);
+		setDark(mq.matches);
+		const onChange = (e: MediaQueryListEvent) => setDark(e.matches);
+		mq.addEventListener("change", onChange);
+		return () => mq.removeEventListener("change", onChange);
+	}, []);
+	return dark;
+}
+
+/** Pure: the concrete mode a setting resolves to. Exported for tests. */
+export function resolveMode(mode: AppearanceMode, systemDark: boolean): "light" | "dark" {
+	return mode === "system" ? (systemDark ? "dark" : "light") : mode;
+}
 
 /** The resolved, fully-concrete appearance view (delta + factory merged). */
 export function resolveAppearance(delta: AppearanceSettings | undefined) {
@@ -74,11 +98,16 @@ export function derivedPalette(background: string): Record<string, string> {
 /** THE mapping: resolved appearance → the CSS variables to set on <html>.
  *  Absent entries = leave the factory stylesheet value in place. Pure —
  *  exported for tests. */
-export function appearanceVars(a: ReturnType<typeof resolveAppearance>): Record<string, string> {
+export function appearanceVars(
+	a: ReturnType<typeof resolveAppearance>,
+	resolvedMode: "light" | "dark" = "dark",
+): Record<string, string> {
 	const vars: Record<string, string> = {};
-	if (a.background !== null) Object.assign(vars, derivedPalette(a.background));
+	// The custom background derives on the DARK curve only (it raises
+	// channels); light mode keeps the LettBestilt palette.
+	if (a.background !== null && resolvedMode === "dark") Object.assign(vars, derivedPalette(a.background));
 	if (a.fontFamily !== null) {
-		vars["--font-prose"] = `"${a.fontFamily}", var(--font-sans3), ui-sans-serif, system-ui, sans-serif`;
+		vars["--font-prose"] = `"${a.fontFamily}", var(--font-inter), ui-sans-serif, system-ui, sans-serif`;
 	}
 	// The ONE documented reading-size variable (typography round 4): prose,
 	// inputs, and session titles all read it, so one setProperty moves them.
@@ -110,12 +139,15 @@ export function staleVarNames(
 interface AppearanceContextValue {
 	/** Resolved appearance; factory until the record arrives. */
 	appearance: ReturnType<typeof resolveAppearance>;
+	/** The concrete mode on screen right now (system already resolved). */
+	resolvedMode: "light" | "dark";
 	/** Called by the settings page after a successful section PUT. */
 	onAppearanceChange: (delta: AppearanceSettings | undefined) => void;
 }
 
 const AppearanceContext = createContext<AppearanceContextValue>({
 	appearance: resolveAppearance(undefined),
+	resolvedMode: "light",
 	onAppearanceChange: () => {},
 });
 
@@ -125,10 +157,25 @@ export function useAppearance() {
 
 export function AppearanceProvider({ children }: { children: React.ReactNode }) {
 	const [delta, setDelta] = useState<AppearanceSettings | undefined>(undefined);
+	const [loaded, setLoaded] = useState(false);
 	const appliedRef = useRef<string>("");
+	const systemDark = useSystemDark();
+	const resolvedMode = resolveMode(resolveAppearance(delta).mode, systemDark);
+
+	// The mode class. Until the record arrives the bootstrap script's class
+	// stands (it already read the cached choice), so nothing flashes. A
+	// LAYOUT effect so the class lands before children's passive effects
+	// read token colors (graph-view's canvas palette).
+	useLayoutEffect(() => {
+		if (!loaded) return;
+		document.documentElement.classList.toggle("dark", resolvedMode === "dark");
+		try {
+			localStorage.setItem(THEME_MODE_STORAGE_KEY, resolveAppearance(delta).mode);
+		} catch {/* private mode etc. — the class is still right */}
+	}, [loaded, resolvedMode, delta]);
 
 	// The vars apply on every change — stringified as the change signal.
-	const vars = useMemo(() => appearanceVars(resolveAppearance(delta)), [delta]);
+	const vars = useMemo(() => appearanceVars(resolveAppearance(delta), resolvedMode), [delta, resolvedMode]);
 	const key = useMemo(() => JSON.stringify(vars), [vars]);
 	// REMOVAL is half the job (owner repro, fix wave): a later write that
 	// OMITS a var (empty field = factory, serif toggle back on) must clear
@@ -166,6 +213,7 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
 				setDelta(
 					appearance && typeof appearance === "object" ? (appearance as AppearanceSettings) : undefined,
 				);
+				setLoaded(true);
 			})
 			.catch(() => {/* settings stay factory — not worth a crash */});
 		return () => {
@@ -175,11 +223,12 @@ export function AppearanceProvider({ children }: { children: React.ReactNode }) 
 
 	const onAppearanceChange = useCallback((next: AppearanceSettings | undefined) => {
 		setDelta(next);
+		setLoaded(true);
 	}, []);
 
 	const value = useMemo(
-		() => ({ appearance: resolveAppearance(delta), onAppearanceChange }),
-		[delta, onAppearanceChange],
+		() => ({ appearance: resolveAppearance(delta), resolvedMode, onAppearanceChange }),
+		[delta, resolvedMode, onAppearanceChange],
 	);
 	return <AppearanceContext.Provider value={value}>{children}</AppearanceContext.Provider>;
 }

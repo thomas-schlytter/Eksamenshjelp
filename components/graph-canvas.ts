@@ -1723,9 +1723,12 @@ export class GraphCanvasRenderer {
 			// Screen px ÷ k = world units — the lines stay evenly spaced
 			// at a constant on-screen pitch at any zoom.
 			const lineH = (settings.clusterLabelSize * REGION_LABEL_LINE_HEIGHT) / k;
+			// Light mode needs dark ink: the pastel 78% lightness only reads
+			// on the dark canvas.
+			const labelLightness = typeof document === "undefined" || document.documentElement.classList.contains("dark") ? 78 : 32;
 			for (const rm of this.regionMeta) {
 				if (!rm.lines) continue;
-				ctx.fillStyle = `hsla(${rm.hue}, 55%, 78%, 0.85)`;
+				ctx.fillStyle = `hsla(${rm.hue}, 55%, ${labelLightness}%, 0.85)`;
 				const firstOffset = (-(rm.lines.length - 1) / 2) * lineH;
 				for (let i = 0; i < rm.lines.length; i++) {
 					ctx.fillText(rm.lines[i]!, rm.cx, rm.cy + firstOffset + i * lineH);

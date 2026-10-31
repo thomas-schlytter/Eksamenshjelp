@@ -7,9 +7,8 @@
  * variables move IMMEDIATELY (the section's whole point — it must DO
  * something). Hex inputs commit on blur/Enter; the background derives the
  * raised/accent/edge palette in code (components/settings/appearance.tsx).
- * Mode is dark-only this wave: control rendered DISABLED with a note — the
- * light palette is the design wave's work, and a lying control is worse
- * than an honest disabled one.
+ * Mode: System (follows the OS), Light or Dark — the LettBestilt palettes
+ * in app/globals.css; the provider swaps <html class="dark">.
  *
  * Graph graying (owner, 2026-09-20) follows the graph viewer's render-panel
  * convention: the whole row dims when a parent is off (stored values
@@ -23,7 +22,7 @@
  * it). In a plain dev browser the API is absent → a small curated list
  * + a footer that says exactly that — never a fabricated system list.
  * The custom-family input inside the menu is the manual escape path.
- * Empty/unset keeps meaning Source Sans 3.
+ * Empty/unset keeps meaning Inter.
  *
  * Emphasis inks (same wave): the factory tokens default to the regular
  * text color now (globals.css); the rows' empty-state labels say "same
@@ -34,6 +33,7 @@ import { useEffect, useRef, useState } from "react";
 import {
 	EXTRACTION_CHUNK_TOKENS_FLOOR,
 	resolveSettings,
+	type AppearanceMode,
 	type AppearanceSettings,
 	type GraphSettings,
 } from "@/src/core";
@@ -45,7 +45,7 @@ import { CommitInput, SettingsMenuTrigger, SettingsRow, ThinSelect, Toggle } fro
 
 /** The factory reading family — the DEFAULT row's identity (unset =
  *  this). Exported for tests. */
-export const DEFAULT_READING_FONT = "Source Sans 3";
+export const DEFAULT_READING_FONT = "Inter";
 
 /** The dev-browser fallback list (queryLocalFonts is absent there):
  *  the app's own knowns plus a handful of ubiquitous macOS families,
@@ -186,19 +186,26 @@ export function AppearanceSection({
 
 	return (
 		<>
-			<SettingsRow label="Mode" hint="Coming soon" testid="row-mode" dimmed>
-				<ThinSelect value="dark" ariaLabel="mode" onChange={() => {}} testid="select-mode" disabled>
+			<SettingsRow label="Mode" testid="row-mode">
+				<ThinSelect
+					value={resolved.mode}
+					ariaLabel="mode"
+					onChange={(v) => onSectionChange({ ...appearance, mode: v as AppearanceMode })}
+					testid="select-mode"
+				>
+					<option value="system">System</option>
+					<option value="light">Light</option>
 					<option value="dark">Dark</option>
 				</ThinSelect>
 			</SettingsRow>
 			<SettingsRow
 				label="Background"
-				hint={`Empty = ${resolved.background ?? "#141414"}`}
+				hint={`Dark mode only. Empty = ${resolved.background ?? "#1f2428"}`}
 				testid="row-background"
 			>
 				<CommitInput
 					value={appearance?.background ?? ""}
-					placeholder="#141414"
+					placeholder="#1f2428"
 					ariaLabel="background hex"
 					testid="input-background"
 					onCommit={(v) => onSectionChange({ ...appearance, background: v === "" ? null : v })}
