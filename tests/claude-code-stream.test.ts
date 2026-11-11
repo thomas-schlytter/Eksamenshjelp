@@ -679,13 +679,94 @@ test("result error without result text or errors surfaces its subtype", async (t
 	assert.equal(getErrorMessage(events), "claude CLI failed: error_during_execution");
 });
 
-test("refusal stop reason → error", async (t) => {
-	const { events } = await runScenario(t, [
+test("refusal stop reason → error (opus: after its fallback refused the same way)", async (t) => {
+	t.mock.method(console, "warn", () => {});
+	const { events, calls } = await runScenario(t, [
 		streamEvent({ type: "message_start", message: { usage: {} } }),
 		streamEvent({ type: "message_delta", delta: { stop_reason: "refusal" }, usage: {} }),
 		streamEvent({ type: "message_stop" }),
 	]);
+	assert.equal(getErrorMessage(events), "The model refused to complete the request; opus refused first and the fallback refused too");
+	assert.equal(calls.length, 2);
+});
+
+function refusal(category: string | null): string[] {
+	return [
+		streamEvent({ type: "message_start", message: { usage: {} } }),
+		streamEvent({ type: "message_delta", delta: { stop_reason: "refusal", stop_details: { type: "refusal", category } }, usage: {} }),
+		streamEvent({ type: "message_stop" }),
+	];
+}
+
+/** One scenario per spawned CLI process, in launch order. */
+function createSequentialRuns(t: TestContext, scenarios: string[][]): { runClaude: RunClaude; calls: RunCall[] } {
+	const runs = scenarios.map((scenario) => createFakeRun(t, scenario));
+	const calls: RunCall[] = [];
+	let next = 0;
+	const runClaude: RunClaude = (args, options) => {
+		const run = runs[next++];
+		assert.ok(run, "more CLI launches than scenarios");
+		const child = run.runClaude(args, options);
+		const call = run.calls.at(-1);
+		assert.ok(call);
+		calls.push(call);
+		return child;
+	};
+	return { runClaude, calls };
+}
+
+async function runRefusalScenario(t: TestContext, scenarios: string[][], modelIndex = 0): Promise<ScenarioRun> {
+	const { runClaude, calls } = createSequentialRuns(t, scenarios);
+	const model = CLAUDE_CODE_MODELS[modelIndex];
+	assert.ok(model);
+	const context = normalizeContext({ systemPrompt: "You are a tutor.", messages: [HI], tools: [READ_TOOL] });
+	const events = await collectEvents(createClaudeCodeStreamFunction(runClaude)(model, context, { sessionId: SESSION_ID }));
+	return { events, calls };
+}
+
+test("parseCliLine carries the refusal category from stop_details", () => {
+	const [line] = refusal("cyber").slice(1);
+	assert.deepEqual(parseCliLine(line!), { type: "messageDelta", stopReason: "refusal", refusalCategory: "cyber", usage: {} });
+});
+
+test("opus refusal before any output → one silent retry on claude-opus-5 with the same transcript", async (t) => {
+	t.mock.method(console, "warn", () => {});
+	const { events, calls } = await runRefusalScenario(t, [refusal("bio"), readFixtureLines("text.jsonl")]);
+
+	assert.deepEqual(events.map((event) => event.type), ["start", "text_start", "text_delta", "text_end", "done"]);
+	const done = getLastEvent(events);
+	assert.ok(done.type === "done");
+	assert.equal(getText(done.message), "hello there");
+	assert.equal(done.message.model, "claude-opus-5");
+	assert.equal(calls.length, 2);
+	assert.equal(getFlagValue(calls[0]!.args, "--model"), "opus");
+	assert.equal(getFlagValue(calls[1]!.args, "--model"), "claude-opus-5");
+	assert.equal(getFlagValue(calls[1]!.args, "--effort"), getFlagValue(calls[0]!.args, "--effort"));
+	assert.equal(calls[1]!.systemPrompt, calls[0]!.systemPrompt);
+});
+
+test("fallback refuses too → one error naming the category, no second retry", async (t) => {
+	t.mock.method(console, "warn", () => {});
+	const { events, calls } = await runRefusalScenario(t, [refusal("cyber"), refusal("cyber")]);
+
+	assert.deepEqual(events.map((event) => event.type), ["start", "error"]);
+	assert.equal(getErrorMessage(events), "The model refused to complete the request (cyber); opus refused first and the fallback refused too");
+	assert.equal(calls.length, 2);
+});
+
+test("refusal after visible output is not retried", async (t) => {
+	const partial = readFixtureLines("text.jsonl").slice(0, 5);
+	const { events, calls } = await runRefusalScenario(t, [[...partial, ...refusal("cyber").slice(1)]]);
+
+	assert.equal(getErrorMessage(events), "The model refused to complete the request (cyber)");
+	assert.equal(calls.length, 1);
+});
+
+test("models without a configured fallback fail on refusal as before", async (t) => {
+	const { events, calls } = await runRefusalScenario(t, [refusal(null)], 1);
+
 	assert.equal(getErrorMessage(events), "The model refused to complete the request");
+	assert.equal(calls.length, 1);
 });
 
 test("non-zero exit mid-stream → error naming the exit code, stderr logged not shown, process and temp dirs gone", async (t) => {

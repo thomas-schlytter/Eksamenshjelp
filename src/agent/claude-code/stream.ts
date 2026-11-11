@@ -68,6 +68,20 @@ const STOP_REASONS: Record<string, StopReason> = {
 };
 
 const REFUSAL_MESSAGE = "The model refused to complete the request";
+
+/** Safety classifiers on newer models decline benign tutoring turns now and
+ * then (stop_reason "refusal", usually before any output). A turn refused
+ * before it produced anything is run once more on the model Anthropic
+ * recommends as the fallback (owner, 2026-11-11: Opus 5 for the opus alias). */
+const REFUSAL_FALLBACKS: Readonly<Record<string, { id: string; name: string }>> = {
+	opus: { id: "claude-opus-5", name: "Claude Opus 5" },
+};
+
+function refusalMessage(category: string | undefined, fallbackFrom: string | undefined): string {
+	const base = category ? `${REFUSAL_MESSAGE} (${category})` : REFUSAL_MESSAGE;
+	return fallbackFrom ? `${base}; ${fallbackFrom} refused first and the fallback refused too` : base;
+}
+
 const ABORT_MESSAGE = "Request was aborted";
 const START_FAILED_MESSAGE = "claude CLI failed to start";
 const NO_STOP_REASON_MESSAGE = "claude CLI ended the message without a stop reason";
@@ -151,13 +165,24 @@ class ClaudeTurn {
 	skippedBareCall = false;
 	started = false;
 	finished = false;
+	private refused = false;
+	private refusalCategory: string | undefined;
 
 	constructor(
 		private readonly stream: AssistantMessageEventStream,
 		model: Model<Api>,
 		private readonly harnessToolNames: ReadonlySet<string>,
+		private readonly refusal: {
+			/** Takes over the stream instead of failing when the model refused before any output. */
+			onRefusedBeforeOutput?: (category: string | undefined) => void;
+			/** This turn is the fallback attempt for a refusal by the named model. */
+			fallbackFrom?: string;
+			/** The stream already carries a "start" event from the refused attempt. */
+			started?: boolean;
+		} = {},
 	) {
 		this.output = createOutput(model);
+		this.started = refusal.started ?? false;
 	}
 
 	handle(event: CliEvent): void {
@@ -218,6 +243,10 @@ class ClaudeTurn {
 			case "messageDelta":
 				this.updateUsage(event.usage);
 				if (event.stopReason) this.setStopReason(event.stopReason);
+				if (event.stopReason === "refusal") {
+					this.refused = true;
+					this.refusalCategory = event.refusalCategory;
+				}
 				return;
 
 			case "messageStop":
@@ -364,7 +393,14 @@ class ClaudeTurn {
 		const { stopReason } = this.output;
 
 		if (stopReason === "error") {
-			this.fail(this.output.errorMessage ?? REFUSAL_MESSAGE, "error");
+			const { onRefusedBeforeOutput } = this.refusal;
+			if (this.refused && onRefusedBeforeOutput && this.output.content.length === 0 && this.intents.length === 0) {
+				// Nothing reached the learner: hand the stream to the fallback attempt.
+				this.finished = true;
+				onRefusedBeforeOutput(this.refusalCategory);
+				return;
+			}
+			this.fail(this.output.errorMessage ?? refusalMessage(this.refusalCategory, this.refusal.fallbackFrom), "error");
 			return;
 		}
 
@@ -691,18 +727,35 @@ export function createClaudeCodeStreamFunction(runClaude: RunClaude): StreamFunc
 	const owner = Symbol("claude-code stream owner");
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
-		const turn = new ClaudeTurn(stream, model, new Set(getCurrentTools(context.messages).map((tool) => tool.name)));
-
+		const toolNames = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
 		const env = toClaudeEnv();
+		const effort = toEffort(options?.reasoning);
+
+		const launch = (turn: ClaudeTurn, launchModel: Model<Api>, configuration: unknown) => {
+			startProcess(runClaude, turn, launchModel, context, options, owner, configuration, env).catch((error: unknown) => {
+				console.error("claude CLI turn failed:", error);
+				turn.fail(options?.signal?.aborted ? ABORT_MESSAGE : error instanceof ClaudeLaunchError ? error.message : START_FAILED_MESSAGE, options?.signal?.aborted ? "aborted" : "error");
+			});
+		};
+
+		const fallback = REFUSAL_FALLBACKS[model.id];
+		let turn: ClaudeTurn;
+		const onRefusedBeforeOutput = fallback
+			? (category: string | undefined) => {
+				console.warn(`claude CLI: ${model.id} refused the turn before any output (category: ${category ?? "none"}); retrying once on ${fallback.id}`);
+				const fallbackModel: Model<Api> = { ...model, id: fallback.id, name: fallback.name };
+				const retry = new ClaudeTurn(stream, fallbackModel, toolNames, { fallbackFrom: model.id, started: turn.started });
+				// A fresh process with the full transcript: the refused process is already gone.
+				launch(retry, fallbackModel, { request: configurationForReuse(fallbackModel, context, effort), env });
+			}
+			: undefined;
+		turn = new ClaudeTurn(stream, model, toolNames, { onRefusedBeforeOutput });
+
 		// An existing child must not retain stale authentication/routing after env changes.
-		const configuration = { request: configurationForReuse(model, context, toEffort(options?.reasoning)), env };
+		const configuration = { request: configurationForReuse(model, context, effort), env };
 		if (continueLiveProcess(turn, owner, options?.sessionId, configuration, context.messages, options?.signal)) return stream;
 
-		startProcess(runClaude, turn, model, context, options, owner, configuration, env).catch((error: unknown) => {
-			console.error("claude CLI turn failed:", error);
-			turn.fail(options?.signal?.aborted ? ABORT_MESSAGE : error instanceof ClaudeLaunchError ? error.message : START_FAILED_MESSAGE, options?.signal?.aborted ? "aborted" : "error");
-		});
-
+		launch(turn, model, configuration);
 		return stream;
 	};
 }
