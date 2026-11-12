@@ -1063,6 +1063,35 @@ test("a prefixed call the CLI rejects itself is left to the model, and its retry
 	await assertCleanedUp(getOnlyCall(calls));
 });
 
+test("a call the CLI rejects while its input is still streaming is left to the model", async (t) => {
+	// Recorded order (CLI 2.1.318, quiz not declared): the CLI answers the call
+	// between content_block_start and content_block_stop, before it is an intent.
+	const missing: ToolUse = { id: "toolu_streaming_missing", name: "quiz", arguments: { question: "q" } };
+	const noSuchTool = (toolUse: ToolUse, name: string) => JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: toolUse.id, is_error: true, content: `<tool_use_error>Error: No such tool available: ${name}</tool_use_error>` }] } });
+	const { events, calls } = await (async () => {
+		const warn = t.mock.method(console, "warn", () => {});
+		const result = await runScenario(t, [
+			streamEvent({ type: "message_start", message: { usage: {} } }),
+			streamEvent({ type: "content_block_start", index: 0, content_block: { type: "tool_use", id: missing.id, name: "mcp__learnharness__quiz", input: {} } }),
+			noSuchTool(missing, "mcp__learnharness__quiz"),
+			streamEvent({ type: "content_block_delta", index: 0, delta: { type: "input_json_delta", partial_json: JSON.stringify(missing.arguments) } }),
+			streamEvent({ type: "content_block_stop", index: 0 }),
+			streamEvent({ type: "message_delta", delta: { stop_reason: "tool_use" }, usage: {} }),
+			streamEvent({ type: "message_stop" }),
+			...readFixtureLines("text.jsonl"),
+			HOLD,
+		]);
+		assert.match(String(warn.mock.calls[0]?.arguments[0]), /answered harness tool call quiz itself.*No such tool available/);
+		return result;
+	})();
+	assert.equal(events.some((event) => event.type === "toolcall_start" || event.type === "toolcall_end"), false);
+	const done = getLastEvent(events);
+	assert.ok(done.type === "done");
+	assert.equal(done.reason, "stop");
+	assert.equal(getText(done.message), "hello there");
+	await assertCleanedUp(getOnlyCall(calls));
+});
+
 test("a sibling the CLI rejects after the first call's result does not fail the continuation", async (t) => {
 	const first: ToolUse = { id: "toolu_sibling_first", name: "read", arguments: { path: "a" } };
 	const sibling: ToolUse = { id: "toolu_sibling_rejected", name: "read", arguments: { path: "b" } };

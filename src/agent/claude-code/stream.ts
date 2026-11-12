@@ -269,6 +269,11 @@ class ClaudeTurn {
 
 	getIntents(): ToolCall[] { return this.intents; }
 
+	/** A harness call of this turn by id, finished or still streaming its input. */
+	findToolCall(id: string): ToolCall | undefined {
+		return this.intents.find((call) => call.id === id) ?? [...this.toolBlocks.values()].find((call) => call.id === id);
+	}
+
 	getMessage(): AssistantMessage { return this.output; }
 
 	setContextWindow(tokens: number | undefined): void {
@@ -454,6 +459,8 @@ class ClaudeProcess implements LiveProcess {
 	private readonly cancelledIds = new Set<string>();
 	/** Harness calls the CLI answered itself (an error result) without ever asking the MCP bridge. */
 	private readonly cliAnsweredIds = new Set<string>();
+	/** Every call that ever reached Pi through the MCP bridge in this process. */
+	private readonly admittedIds = new Set<string>();
 	/** How many intents the turn had when the current CLI message started. */
 	private intentsBeforeMessage = 0;
 	/** Recent non-delta stdout lines, written to the log when the turn fails. */
@@ -586,6 +593,7 @@ class ClaudeProcess implements LiveProcess {
 		this.sourceCalls = this.sourceCalls.filter((call) => !pending.some((admitted) => admitted.id === call.id));
 		this.admitted = pending;
 		this.toolCallIds = pending.map((call) => call.id);
+		for (const call of pending) this.admittedIds.add(call.id);
 		this.turn.admit(calls);
 		this.conversation.push(...structuredClone(conversationForReuse([this.turn.getMessage()])));
 		if (this.sessionId) addLiveProcess(this);
@@ -617,13 +625,15 @@ class ClaudeProcess implements LiveProcess {
 			// The CLI answered a harness call itself (invalid input, denial, discarded
 			// execution) instead of sending it to the MCP bridge. Nothing ran, and the
 			// model sees that error result, so drop the call and let the model go on.
-			// An unfinished turn has admitted nothing yet, so all its intents are still unadmitted.
-			const unadmitted = [...this.sourceCalls, ...(this.turn.finished ? [] : this.turn.getIntents())];
+			// The CLI may answer while the call's input is still streaming, before
+			// it becomes an intent, so any result for a call that never reached the
+			// bridge counts. Admitted and cancelled calls are the bridge's own results.
 			for (const id of event.ids) {
-				const call = unadmitted.find((candidate) => candidate.id === id);
-				if (!call || this.cliAnsweredIds.has(id) || this.cancelledIds.has(id)) continue;
+				if (this.admittedIds.has(id) || this.cancelledIds.has(id) || this.cliAnsweredIds.has(id)) continue;
+				if (this.bridge.getPendingToolCalls().some((call) => call.id === id)) continue;
 				this.cliAnsweredIds.add(id);
-				console.warn(`claude CLI answered harness tool call ${call.name} itself before MCP admission; leaving the error to the model: ${(event.texts[id] ?? "").slice(0, 500)}`);
+				const name = this.sourceCalls.find((call) => call.id === id)?.name ?? this.turn.findToolCall(id)?.name ?? "(bare name)";
+				console.warn(`claude CLI answered harness tool call ${name} itself before MCP admission; leaving the error to the model: ${(event.texts[id] ?? "").slice(0, 500)}`);
 			}
 			this.sourceCalls = this.sourceCalls.filter((call) => !this.cliAnsweredIds.has(call.id));
 			return;
