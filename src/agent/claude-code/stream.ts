@@ -327,7 +327,7 @@ class ClaudeTurn {
 						this.skippedBareCall = true;
 						return;
 					}
-					this.fail("claude CLI emitted an unsupported native tool call", "error");
+					this.fail(`claude CLI emitted an unsupported native tool call (${block.name})`, "error");
 					return;
 				}
 				this.toolBlocks.set(index, { type: "toolCall", id: block.id, name: toolNameFromMcp(block.name), arguments: {} });
@@ -456,6 +456,9 @@ class ClaudeProcess implements LiveProcess {
 	private readonly cliAnsweredIds = new Set<string>();
 	/** How many intents the turn had when the current CLI message started. */
 	private intentsBeforeMessage = 0;
+	/** Recent non-delta stdout lines, written to the log when the turn fails. */
+	private readonly recentLines: string[] = [];
+	private dumped = false;
 	private pendingError: string | undefined;
 	private contextWindow: number | undefined;
 	private contextProbe: ContextWindowProbe | undefined;
@@ -532,7 +535,15 @@ class ClaudeProcess implements LiveProcess {
 		this.killTimer.unref();
 	}
 
+	/** Diagnostics: what the CLI said just before a failure, so the cause can be read in main.log. */
+	private dumpRecentLines(message: string): void {
+		if (this.dumped) return;
+		this.dumped = true;
+		console.warn(`claude CLI turn failed (${message}); last CLI output:\n${this.recentLines.join("\n")}`);
+	}
+
 	fail(message: string): void {
+		this.dumpRecentLines(message);
 		// A parallel request can fail after the admitted slice was handed to
 		// Pi. Retain that failure for its continuation instead of silently
 		// replaying and hiding the compatibility error.
@@ -595,6 +606,10 @@ class ClaudeProcess implements LiveProcess {
 
 	private handleLine(line: string): void {
 		if (this.stopping || !line.trim()) return;
+		if (!line.includes('"content_block_delta"')) {
+			this.recentLines.push(line.length > 800 ? `${line.slice(0, 800)}…` : line);
+			if (this.recentLines.length > 25) this.recentLines.shift();
+		}
 		if (this.contextProbe?.handle(JSON.parse(line))) return;
 		const event = parseCliLine(line);
 		if (!event) return;
@@ -620,7 +635,7 @@ class ClaudeProcess implements LiveProcess {
 			return;
 		}
 		if (event.type === "messageStart" && this.sourceComplete && this.sourceCalls.length > 0) {
-			this.fail("claude CLI moved on without admitting its harness tool calls");
+			this.fail(`claude CLI moved on without admitting its harness tool calls (${this.sourceCalls.map((call) => call.name).join(", ")})`);
 			return;
 		}
 		if (event.type === "messageStart") {
@@ -628,7 +643,12 @@ class ClaudeProcess implements LiveProcess {
 			this.intentsBeforeMessage = this.turn.getIntents().length;
 		}
 		this.turn.handle(event);
-		if (this.turn.finished) { this.kill(); return; }
+		if (this.turn.finished) {
+			const message = this.turn.getMessage();
+			if (message.stopReason === "error") this.dumpRecentLines(message.errorMessage ?? "error");
+			this.kill();
+			return;
+		}
 		if (event.type === "messageStop" && this.turn.waitingForAdmission) {
 			const allIntents = this.turn.getIntents();
 			const intents = allIntents.filter((call) => !this.cliAnsweredIds.has(call.id));
