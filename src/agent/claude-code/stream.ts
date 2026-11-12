@@ -452,6 +452,10 @@ class ClaudeProcess implements LiveProcess {
 	private sourceComplete = false;
 	private admitted: PendingToolCall[] = [];
 	private readonly cancelledIds = new Set<string>();
+	/** Harness calls the CLI answered itself (an error result) without ever asking the MCP bridge. */
+	private readonly cliAnsweredIds = new Set<string>();
+	/** How many intents the turn had when the current CLI message started. */
+	private intentsBeforeMessage = 0;
 	private pendingError: string | undefined;
 	private contextWindow: number | undefined;
 	private contextProbe: ContextWindowProbe | undefined;
@@ -595,9 +599,18 @@ class ClaudeProcess implements LiveProcess {
 		const event = parseCliLine(line);
 		if (!event) return;
 		if (event.type === "toolResults") {
-			if (event.ids.some((id) => this.sourceCalls.some((call) => call.id === id))) {
-				this.fail("claude CLI refused a harness tool call before MCP admission");
+			// The CLI answered a harness call itself (invalid input, denial, discarded
+			// execution) instead of sending it to the MCP bridge. Nothing ran, and the
+			// model sees that error result, so drop the call and let the model go on.
+			// An unfinished turn has admitted nothing yet, so all its intents are still unadmitted.
+			const unadmitted = [...this.sourceCalls, ...(this.turn.finished ? [] : this.turn.getIntents())];
+			for (const id of event.ids) {
+				const call = unadmitted.find((candidate) => candidate.id === id);
+				if (!call || this.cliAnsweredIds.has(id) || this.cancelledIds.has(id)) continue;
+				this.cliAnsweredIds.add(id);
+				console.warn(`claude CLI answered harness tool call ${call.name} itself before MCP admission; leaving the error to the model: ${(event.texts[id] ?? "").slice(0, 500)}`);
 			}
+			this.sourceCalls = this.sourceCalls.filter((call) => !this.cliAnsweredIds.has(call.id));
 			return;
 		}
 		// Moving on before held calls were answered means the CLI did not
@@ -610,13 +623,18 @@ class ClaudeProcess implements LiveProcess {
 			this.fail("claude CLI moved on without admitting its harness tool calls");
 			return;
 		}
-		if (event.type === "messageStart") this.contextProbe?.refresh();
+		if (event.type === "messageStart") {
+			this.contextProbe?.refresh();
+			this.intentsBeforeMessage = this.turn.getIntents().length;
+		}
 		this.turn.handle(event);
 		if (this.turn.finished) { this.kill(); return; }
 		if (event.type === "messageStop" && this.turn.waitingForAdmission) {
-			const intents = this.turn.getIntents();
-			// Only rejected bare calls: keep the turn open for the model's retry in its next message.
-			if (intents.length === 0 && this.turn.skippedBareCall) return;
+			const allIntents = this.turn.getIntents();
+			const intents = allIntents.filter((call) => !this.cliAnsweredIds.has(call.id));
+			const messageIntents = allIntents.slice(this.intentsBeforeMessage);
+			// Only calls the CLI rejected itself: keep the turn open for the model's retry in its next message.
+			if (intents.length === 0 && (this.turn.skippedBareCall || messageIntents.length > 0)) return;
 			if (intents.length === 0 || new Set(intents.map((call) => call.id)).size !== intents.length) {
 				this.fail("claude CLI emitted an invalid tool batch");
 				return;

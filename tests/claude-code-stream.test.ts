@@ -549,7 +549,6 @@ test("a bare-only rejection may finish with ordinary text instead of an MCP retr
 		{ name: "an empty tool-use batch in the next message", lines: toToolUseMessage([]), error: /invalid tool batch/ },
 		{ name: "duplicate corrected intent IDs", lines: toToolUseMessage([retry, retry]), error: /invalid tool batch/ },
 		{ name: "a prefixed retry with no MCP request", lines: [...toToolUseMessage([retry]), exitWith(1, "")], error: /exited with code 1/ },
-		{ name: "a prefixed retry rejected before MCP admission", lines: [...toToolUseMessage([retry]), rejectBareCall(retry)], error: /refused.*before MCP admission/ },
 		{ name: "missing MCP identity", lines: [...toToolUseMessage([retry]), JSON.stringify({ fake: "call", name: retry.name, arguments: retry.arguments })], error: /compatibility error.*claudecode\/toolUseId/ },
 		{ name: "mismatched MCP identity", lines: [...toToolUseMessage([retry]), callTool({ ...retry, id: "toolu_not_the_retry" })], error: /does not match its streamed tool intent/ },
 		{ name: "mismatched MCP arguments", lines: [...toToolUseMessage([retry]), callTool({ ...retry, arguments: { path: "different" } })], error: /does not match its streamed tool intent/ },
@@ -1032,12 +1031,52 @@ test("a CLI-rejected malformed call is not exposed for execution", async (t) => 
 		streamEvent({ type: "message_delta", delta: { stop_reason: "tool_use" }, usage: {} }),
 		streamEvent({ type: "message_stop" }),
 		JSON.stringify({ type: "user", message: { content: [{ type: "tool_result", tool_use_id: "toolu_bad_json", is_error: true, content: "invalid arguments" }] } }),
+		...readFixtureLines("text.jsonl"),
 		HOLD,
 	]);
 
+	const warn = t.mock.method(console, "warn", () => {});
 	const events = await collectEvents(createClaudeCodeStreamFunction(runClaude)(getModel(), normalizeContext({ messages: [HI], tools: [READ_TOOL] })));
-	assert.equal(events.some((event) => event.type === "toolcall_end"), false);
-	assert.match(getErrorMessage(events) ?? "", /refused.*before MCP admission/);
+	assert.equal(events.some((event) => event.type === "toolcall_start" || event.type === "toolcall_end"), false);
+	const done = getLastEvent(events);
+	assert.ok(done.type === "done");
+	assert.equal(done.reason, "stop");
+	assert.equal(getText(done.message), "hello there");
+	assert.match(String(warn.mock.calls[0]?.arguments[0]), /answered harness tool call read itself.*invalid arguments/);
+	await assertCleanedUp(getOnlyCall(calls));
+});
+
+test("a prefixed call the CLI rejects itself is left to the model, and its retry is admitted", async (t) => {
+	const rejected: ToolUse = { id: "toolu_cli_rejected", name: "read", arguments: { path: "a" } };
+	const retry: ToolUse = { id: "toolu_cli_retry", name: "read", arguments: { path: "a" } };
+	const { runClaude, calls } = createFakeRun(t, [
+		...toToolUseMessage([rejected]), rejectBareCall(rejected),
+		...toToolUseMessage([retry]), callTool(retry), REPLY,
+	]);
+	t.mock.method(console, "warn", () => {});
+	const streamFunction = createClaudeCodeStreamFunction(runClaude);
+	const toolMessage = await runTurn(streamFunction, [HI]);
+
+	assert.deepEqual(toolMessage.content, [{ type: "toolCall", ...retry }]);
+	const reply = await runTurn(streamFunction, [HI, toolMessage, toToolResult(retry, "contents of a")]);
+	assert.equal(getText(reply), "contents of a");
+	await assertCleanedUp(getOnlyCall(calls));
+});
+
+test("a sibling the CLI rejects after the first call's result does not fail the continuation", async (t) => {
+	const first: ToolUse = { id: "toolu_sibling_first", name: "read", arguments: { path: "a" } };
+	const sibling: ToolUse = { id: "toolu_sibling_rejected", name: "read", arguments: { path: "b" } };
+	const { runClaude, calls } = createFakeRun(t, [
+		...toToolUseMessage([first, sibling]), callTool(first), rejectBareCall(sibling), REPLY,
+	]);
+	t.mock.method(console, "warn", () => {});
+	const streamFunction = createClaudeCodeStreamFunction(runClaude);
+	const toolMessage = await runTurn(streamFunction, [HI]);
+
+	assert.deepEqual(toolMessage.content, [{ type: "toolCall", ...first }]);
+	const reply = await runTurn(streamFunction, [HI, toolMessage, toToolResult(first, "contents of a")]);
+	assert.equal(reply.stopReason, "stop");
+	assert.equal(getText(reply), "contents of a");
 	await assertCleanedUp(getOnlyCall(calls));
 });
 
@@ -1117,7 +1156,8 @@ test("CLI denial cannot execute a tool in the native Pi loop", async (t) => {
 	const read: ToolUse = { id: "toolu_denied", name: "read", arguments: { path: "a" } };
 	const { runClaude, calls } = createFakeRun(t, [...toToolUseMessage([read]), JSON.stringify({ type: "user", message: { content: [
 		{ type: "tool_result", tool_use_id: read.id, is_error: true, content: "Denied by managed policy" },
-	] } }), HOLD]);
+	] } }), ...readFixtureLines("text.jsonl"), HOLD]);
+	t.mock.method(console, "warn", () => {});
 	let executed = 0;
 	const agent = new Agent({ initialState: { model: getModel(), tools: [{
 		name: "read", label: "Read", description: "Read", parameters: Type.Object({ path: Type.String() }),
@@ -1127,8 +1167,8 @@ test("CLI denial cannot execute a tool in the native Pi loop", async (t) => {
 	assert.equal(executed, 0);
 	const last = agent.state.messages.at(-1);
 	assert.ok(last?.role === "assistant");
-	assert.equal(last.stopReason, "error");
-	assert.match(last.errorMessage ?? "", /refused.*before MCP admission/);
+	assert.equal(last.stopReason, "stop");
+	assert.equal(last.content.some((block) => block.type === "toolCall"), false);
 	await assertCleanedUp(getOnlyCall(calls));
 });
 

@@ -15,7 +15,7 @@ export type CliEvent =
 	| { type: "messageStop" }
 	| { type: "assistantError"; error: string; text: string }
 	| { type: "resultError"; text: string }
-	| { type: "toolResults"; ids: string[] };
+	| { type: "toolResults"; ids: string[]; texts: Record<string, string> };
 
 type RawUsage = {
 	input_tokens?: number | null;
@@ -49,7 +49,7 @@ type RawCliLine = {
 	type?: string;
 	event?: RawStreamEvent;
 	error?: string | null;
-	message?: { content?: { type: string; text?: string; tool_use_id?: string }[] };
+	message?: { content?: { type: string; text?: string; tool_use_id?: string; content?: unknown }[] };
 	is_error?: boolean;
 	result?: string;
 	subtype?: string;
@@ -160,6 +160,13 @@ function getResultErrorText(line: RawCliLine): string {
 	return `claude CLI failed: ${line.subtype ?? "unknown error"}`;
 }
 
+/** The CLI's own wording for a tool result, for diagnostics only. */
+function getToolResultText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content.flatMap((part) => (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string" ? [(part as { text: string }).text] : [])).join("\n");
+}
+
 export function parseCliLine(text: string): CliEvent | null {
 	let parsed: unknown;
 	try {
@@ -182,8 +189,10 @@ export function parseCliLine(text: string): CliEvent | null {
 
 		case "user": {
 			const blocks = Array.isArray(line.message?.content) ? line.message.content : [];
-			const ids = blocks.flatMap((block) => block.type === "tool_result" && typeof block.tool_use_id === "string" ? [block.tool_use_id] : []);
-			return ids.length ? { type: "toolResults", ids } : null;
+			const results = blocks.filter((block) => block.type === "tool_result" && typeof block.tool_use_id === "string");
+			const ids = results.map((block) => block.tool_use_id as string);
+			const texts = Object.fromEntries(results.map((block) => [block.tool_use_id as string, getToolResultText(block.content)]));
+			return ids.length ? { type: "toolResults", ids, texts } : null;
 		}
 
 		case "result":
