@@ -775,7 +775,15 @@ export function createClaudeCodeStreamFunction(runClaude: RunClaude): StreamFunc
 	const owner = Symbol("claude-code stream owner");
 	return (model, context, options) => {
 		const stream = createAssistantMessageEventStream();
-		const toolNames = new Set(getCurrentTools(context.messages).map((tool) => tool.name));
+		// Bare-name tolerance covers the tools declared now and the harness tools this
+		// conversation already used: a tool switched off in Settings stays in the
+		// history, the model may call it again, and the CLI answers "No such tool".
+		const toolNames = new Set([
+			...getCurrentTools(context.messages).map((tool) => tool.name),
+			...context.messages.flatMap((message) => message.role === "assistant"
+				? message.content.flatMap((block) => (block.type === "toolCall" ? [block.name] : []))
+				: []),
+		]);
 		const env = toClaudeEnv();
 		const effort = toEffort(options?.reasoning);
 

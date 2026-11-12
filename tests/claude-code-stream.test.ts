@@ -565,6 +565,27 @@ test("a bare-only rejection may finish with ordinary text instead of an MCP retr
 	});
 }
 
+test("a bare call to a harness tool switched off after this chat used it is left to the CLI", async (t) => {
+	// Settings swapped explain for quiz: explain is no longer declared, but the
+	// history shows it, so the model calls it by its bare name.
+	const earlier: AssistantMessage = {
+		role: "assistant", api: getModel().api, provider: getModel().provider, model: getModel().id,
+		content: [{ type: "toolCall", id: "toolu_old_explain", name: "explain", arguments: {} }],
+		usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+		stopReason: "toolUse", timestamp: 0,
+	};
+	const earlierResult = toToolResult({ id: "toolu_old_explain", name: "explain", arguments: {} }, "answered");
+	const bare: ToolUse = { id: "toolu_switched_off", name: "explain", arguments: {} };
+	const { runClaude, calls } = createFakeRun(t, [...toBareToolUseMessage([bare]), rejectBareCall(bare), ...readFixtureLines("text.jsonl"), HOLD]);
+	t.mock.method(console, "warn", () => {});
+	const events = await collectEvents(createClaudeCodeStreamFunction(runClaude)(getModel(), normalizeContext({ messages: [HI, earlier, earlierResult, HI], tools: [READ_TOOL] })));
+	assert.equal(events.some((event) => event.type === "toolcall_end"), false);
+	const done = getLastEvent(events);
+	assert.ok(done.type === "done");
+	assert.equal(getText(done.message), "hello there");
+	await assertCleanedUp(getOnlyCall(calls));
+});
+
 test("a bare name from a removed tool is not tolerated when no tools are declared", async (t) => {
 	const bare: ToolUse = { id: "toolu_removed_read", name: "read", arguments: {} };
 	const { runClaude, calls } = createFakeRun(t, [...toBareToolUseMessage([bare]), HOLD]);
