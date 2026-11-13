@@ -8,15 +8,18 @@ const { PROVIDERS, fileStore, validateCredential, safeHttps, failure } = require
 const LABELS = { "github-copilot": "GitHub Copilot", xai: "Grok" };
 const APIS = new Set(["openai-responses", "openai-completions", "anthropic-messages"]);
 const clone = (value) => value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+// Brukervendt (norsk). Serverens feilklassifisering (src/agent/subscription-stream.ts)
+// leser disse tekstene: behold nøkkelordene bakgrunn, fornye, avbrutt og katalog,
+// og unngå dem i de andre meldingene.
 const MESSAGES = {
-	storage: "The saved connection could not be read or written safely. Reopen the app or reconnect after resolving the credential-file problem.",
-	login: "Sign-in did not complete. Try connecting again.",
-	refresh: "The connection could not be refreshed. Retry or reconnect in Providers.",
-	cancel: "Sign-in cancelled.",
-	unavailable: "This subscription connection is unavailable. Reconnect or explicitly choose another connection.",
-	background: "Background use is off for this connection. Automatic follow-up remains deferred in its queue.",
-	stale: "The connection or model catalog changed. Select an available model and retry.",
-	interaction: "This sign-in action is no longer available.",
+	storage: "Den lagrede tilkoblingen kunne ikke leses eller skrives trygt. Åpne appen på nytt, eller koble til på nytt når problemet med innloggingsfila er løst.",
+	login: "Innloggingen ble ikke fullført. Prøv å koble til på nytt.",
+	refresh: "Tilkoblingen kunne ikke fornyes. Prøv igjen, eller koble til på nytt under Leverandører.",
+	cancel: "Innloggingen ble avbrutt.",
+	unavailable: "Denne abonnementstilkoblingen er ikke tilgjengelig. Koble til på nytt, eller velg selv en annen tilkobling.",
+	background: "Bruk i bakgrunnen er slått av for denne tilkoblingen. Den automatiske oppfølgingen blir stående i køen.",
+	stale: "Tilkoblingen eller modellkatalogen er endret. Velg en tilgjengelig modell og prøv igjen.",
+	interaction: "Denne innloggingen er ikke lenger tilgjengelig.",
 };
 function publicError(error) { return MESSAGES[error?.code] ?? MESSAGES.unavailable; }
 /** Resolve the SAME SDK installation as the standalone server, through public exports. */
@@ -157,7 +160,7 @@ function createSubscriptions(options) {
 					if (event.type === "auth_url") addBrowser(event.url);
 					if (event.type === "device_code") { addBrowser(event.verificationUri); attempt.public.userCode = event.userCode; }
 					// Native provider diagnostics are never forwarded. Public prompt wording comes from SDK-owned prompts.
-					attempt.public.progress = event.type === "device_code" || event.type === "auth_url" ? "Complete sign-in in your browser." : "Waiting for the provider…";
+					attempt.public.progress = event.type === "device_code" || event.type === "auth_url" ? "Fullfør innloggingen i nettleseren." : "Venter på leverandøren…";
 					changed(entry);
 				},
 				prompt: (prompt) => new Promise((resolve, reject) => {

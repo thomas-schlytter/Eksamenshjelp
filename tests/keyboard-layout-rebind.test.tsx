@@ -82,10 +82,10 @@ describe("keyboard rebind shares layout normalization with dispatch", () => {
 		await click(host, "kbd-rebind-find");
 		await press({ key: "Control", code: "ControlLeft", ctrlKey: true });
 		assert.deepEqual(loadOverrides(), {});
-		assert.ok(host.textContent!.includes("Press keys…"));
+		assert.ok(host.textContent!.includes("Trykk tastene…"));
 		await press({ key: "Escape", code: "Escape" });
 		assert.deepEqual(loadOverrides(), {});
-		assert.ok(!host.textContent!.includes("Press keys…"));
+		assert.ok(!host.textContent!.includes("Trykk tastene…"));
 		await click(host, "kbd-rebind-find");
 		await press({ key: "л", code: "KeyK" });
 		assert.deepEqual(loadOverrides(), { find: "л" });

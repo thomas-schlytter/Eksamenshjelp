@@ -6,7 +6,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import type { ChatDeleteMode } from "@/src/core";
-import { DumbbellIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon } from "lucide-react";
+import {
+	CircleHelpIcon, DumbbellIcon, HomeIcon, NetworkIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon,
+} from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
 import { LhMark } from "@/components/lh-mark";
@@ -22,6 +24,10 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { daysLeftLabel, daysLeftShort, sortCoursesByExam } from "@/components/courses/course-format";
+import type { CourseSummary } from "@/components/courses/course-types";
+import { TopicStatusBar } from "@/components/courses/status-ui";
+import { useCourseSummaries } from "@/components/courses/use-courses";
 
 /**
  * Toggleable sidebar — NOT a modal drawer: no backdrop, no focus theft. It
@@ -207,11 +213,11 @@ export function SidebarToggle() {
 				open ? "w-0 -mr-3" : "w-9 mr-0 lh-closed-toggle",
 			)}
 		>
-			<Hint label="Open sidebar" action="toggle-sidebar">
+			<Hint label="Åpne sidemenyen" action="toggle-sidebar">
 			<Button
 				variant="ghost"
 				size="icon"
-				aria-label="Open sidebar"
+				aria-label="Åpne sidemenyen"
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
@@ -243,7 +249,7 @@ function SessionStatus({ busy }: { busy: boolean }) {
 	return <BrailleSpinner />;
 }
 
-/** Compact "how long ago": "just now", "5m ago", "3h ago", "2d ago",
+/** Compact "how long ago": "akkurat nå", "5 min siden", "3 t siden", "2 d siden",
  *  then a plain date. How long a session has been WAITING matters more
  *  than an absolute timestamp. Beyond a week the date renders ISO
  *  (YYYY-MM-DD, zero-padded) — the international standard: unambiguous
@@ -252,13 +258,13 @@ function SessionStatus({ busy }: { busy: boolean }) {
  *  — trivial, a format function swap). Pure — exported for tests. */
 export function timeAgo(iso: string, now = new Date()): string {
 	const ms = now.getTime() - new Date(iso).getTime();
-	if (ms < 60_000) return "just now";
+	if (ms < 60_000) return "akkurat nå";
 	const min = Math.floor(ms / 60_000);
-	if (min < 60) return `${min}m ago`;
+	if (min < 60) return `${min} min siden`;
 	const h = Math.floor(min / 60);
-	if (h < 24) return `${h}h ago`;
+	if (h < 24) return `${h} t siden`;
 	const d = Math.floor(h / 24);
-	if (d < 7) return `${d}d ago`;
+	if (d < 7) return `${d} d siden`;
 	const date = new Date(iso);
 	const mm = String(date.getMonth() + 1).padStart(2, "0");
 	const dd = String(date.getDate()).padStart(2, "0");
@@ -271,12 +277,12 @@ export function timeAgo(iso: string, now = new Date()): string {
  *  still rides the API payload, so this is a one-line flip back if it's
  *  ever wanted. */
 function sessionMeta(chat: ChatListItem): string {
-	if (chat.compacting) return `Compacting context · ${timeAgo(chat.updatedAt)}`;
-	if (chat.pendingQuestion) return `Waiting for input · ${timeAgo(chat.updatedAt)}`;
+	if (chat.compacting) return `Komprimerer kontekst · ${timeAgo(chat.updatedAt)}`;
+	if (chat.pendingQuestion) return `Venter på svar · ${timeAgo(chat.updatedAt)}`;
 	if ((chat.kind ?? "teach") === "practice" && chat.pendingProblem) {
-		return `Problem waiting · ${timeAgo(chat.updatedAt)}`;
+		return `Oppgave venter · ${timeAgo(chat.updatedAt)}`;
 	}
-	if (chat.busy) return "Working…";
+	if (chat.busy) return "Arbeider…";
 	return timeAgo(chat.updatedAt);
 }
 
@@ -326,8 +332,19 @@ export function SessionRow({
 			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
 			    was left of the name; right-aligned keeps the titles flush with
 			    the teaching rows and reads cleaner. */}
+			{/* The fag a session belongs to (NTNU round): its fagkode as a
+			    quiet label, so a list of sessions across several fag scans. */}
+			{chat.course && (
+				<span
+					data-testid="session-course"
+					className="shrink-0 rounded-sm border border-border/70 px-1 font-ui text-[10px] tabular-nums text-muted-foreground"
+				>
+					<span className="sr-only">Fag: </span>
+					{chat.course.code}
+				</span>
+			)}
 			{(chat.kind ?? "teach") === "practice" && (
-				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Practice session" />
+				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Øvingsøkt" />
 			)}
 		</button>
 	);
@@ -373,7 +390,7 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 							onCancel();
 						}
 					}}
-					aria-label="Rename session"
+					aria-label="Gi økta nytt navn"
 					data-testid="session-rename-input"
 					className="lh-input w-full min-w-0 truncate border-0 border-b border-border bg-transparent px-0 text-foreground outline-none"
 				/>
@@ -384,10 +401,62 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 }
 
 /** The three-way kind filter (practice sessions, owner 2026-10-04):
- *  Teaching / All / Practice — a client-side filter over the same
- *  snapshot, persisted in localStorage, defaulting to All. */
+ *  Alle / Læring / Øving — a client-side filter over the same
+ *  snapshot, persisted in localStorage, defaulting to Alle. */
 export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
+const KIND_FILTER_LABEL: Record<SessionKindFilter, string> = { all: "Alle", teach: "Læring", practice: "Øving" };
+
+/** The window event that opens «Legg til fag» on the home screen. */
+export const ADD_COURSE_EVENT = "lh:add-course";
+
+const NAV_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 font-ui text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
+
+/**
+ * The fag section (NTNU round): every fag as a link to its page, nearest
+ * exam first, with the same segmented progress line as the home cards and
+ * the days left. Pure (props in, markup out) for the render pins.
+ */
+export function SidebarCourses({ courses, activeCode, onAdd }: {
+	courses: readonly CourseSummary[] | null;
+	/** The fag whose page is open, if any. */
+	activeCode?: string;
+	onAdd?: () => void;
+}) {
+	return (
+		<nav aria-label="Fag" data-tour="sidebar-courses" data-testid="sidebar-courses" className="mx-3 mb-2">
+			<div className="mb-0.5 flex items-center justify-between px-2">
+				<span className="text-xs uppercase tracking-widest text-muted-foreground/70">Fag</span>
+			</div>
+			<ul className="max-h-40 overflow-y-auto">
+				{sortCoursesByExam(courses ?? []).map((course) => (
+					<li key={course.code}>
+						<Link
+							href={`/fag/${encodeURIComponent(course.code)}`}
+							title={`${course.code} ${course.name}. ${daysLeftLabel(course.daysLeft)}.`}
+							aria-current={activeCode === course.code ? "page" : undefined}
+							data-testid="sidebar-course"
+							className={cn(NAV_ROW, "text-foreground", activeCode === course.code && "bg-accent")}
+						>
+							<span className="w-[4.5rem] shrink-0 truncate font-medium tabular-nums">{course.code}</span>
+							<span className="sr-only">{course.name}. {daysLeftLabel(course.daysLeft)}.</span>
+							<TopicStatusBar counts={course.counts} className="min-w-0 flex-1" />
+							<span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground" aria-hidden="true">
+								{daysLeftShort(course.daysLeft)}
+							</span>
+						</Link>
+					</li>
+				))}
+			</ul>
+			{/* The query opens the panel on arrival; the click's event opens it
+			    when home is already showing (same URL, no navigation). */}
+			<Link href="/?leggtil=1" onClick={onAdd} data-testid="sidebar-add-course" className={NAV_ROW}>
+				<PlusIcon className="size-3.5 shrink-0" aria-hidden="true" />
+				Legg til fag
+			</Link>
+		</nav>
+	);
+}
 
 function SessionsSidebar() {
 	const { open, toggle } = useSidebar();
@@ -405,6 +474,9 @@ function SessionsSidebar() {
 	const pathname = usePathname();
 	const router = useRouter();
 	const { open: openSettings } = useSettingsDialog();
+	// The fag list (NTNU round): kept fresh by `courses-changed`.
+	const { courses } = useCourseSummaries();
+	const activeCourse = /^\/fag\/([^/]+)/.exec(pathname ?? "")?.[1];
 
 	/* New session (owner, 2026-09-13): NO POST — the button opens the
 	   sessionless draft view; the session is created only when the first
@@ -663,27 +735,24 @@ function SessionsSidebar() {
 					{/* Hover mirrors the ghost toggle buttons (owner ask, 2026-09-17):
 					    same size-9 chip geometry, same hover:bg-accent treatment. */}
 					<Hint
-						// Kept (owner, subtlety round 2026-09-25) but to the RIGHT
-						// of the logo, carrying its real shortcut: ⌘G jumps to
-						// the graph view (keyboard-shortcuts routes it to "/",
-						// the same destination as this logo).
-						label="Home"
-						action="jump-graph"
+						// The mark is the home link: «Mine fag». (⌘G now belongs to
+						// the Kunnskapskart row below, where it leads.)
+						label="Hjem"
 						side="right"
 					>
 						<Link
 							href="/"
-							aria-label="Home"
+							aria-label="Hjem"
 							className="lh-no-drag flex size-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
 						>
 							<LhMark className="size-6" />
 						</Link>
 					</Hint>
-					<Hint label="Close sidebar" action="toggle-sidebar">
+					<Hint label="Lukk sidemenyen" action="toggle-sidebar">
 						<Button
 							variant="ghost"
 							size="icon"
-							aria-label="Close sidebar"
+							aria-label="Lukk sidemenyen"
 							onClick={toggle}
 							className="lh-no-drag"
 						>
@@ -692,36 +761,48 @@ function SessionsSidebar() {
 					</Hint>
 				</div>
 
-				{/* Two doors, STACKED (owner round 8, 2026-10-05 — was a
-				    half/half row): full-width rows read cleaner and give the
-				    labels room; teaching keeps the original draft route,
-				    practice carries its mode. */}
-				<div className="mx-3 mb-2 flex flex-col gap-1.5">
-					<button
-						type="button"
-						data-testid="new-session"
-						onClick={() => void newSession()}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-					>
-						<PlusIcon className="size-3" />
-						Teaching
-						<span className="sr-only">create a new teaching session</span>
-					</button>
-					<button
-						type="button"
-						data-testid="new-session-practice"
-						onClick={() => router.push("/chat/new?mode=practice")}
-						className="flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-					>
-						<DumbbellIcon className="size-3" />
-						Practice
-						<span className="sr-only">create a new practice session</span>
-					</button>
+				{/* TOP NAVIGATION (NTNU round): one door to a new session (the
+				    lær/øv pair is gone: one mode outwardly), the app-wide search,
+				    then the places: Hjem, the fag, the knowledge map. */}
+				<div className="mx-3 mb-2 flex flex-col gap-0.5">
+					<Hint label="Ny økt" action="new-session" side="right">
+						<button type="button" data-testid="new-session" onClick={() => void newSession()} className={NAV_ROW}>
+							<PlusIcon className="size-3.5 shrink-0" aria-hidden="true" />
+							Ny økt
+						</button>
+					</Hint>
+					<Hint label="Søk i appen" action="open-search" side="right">
+						<button
+							type="button"
+							data-testid="open-app-search"
+							onClick={() => window.dispatchEvent(new CustomEvent("lh:open-help"))}
+							className={NAV_ROW}
+						>
+							<SearchIcon className="size-3.5 shrink-0" aria-hidden="true" />
+							Søk i appen
+						</button>
+					</Hint>
+					<Link href="/" aria-current={pathname === "/" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/" && "bg-accent text-foreground")}>
+						<HomeIcon className="size-3.5 shrink-0" aria-hidden="true" />
+						Hjem
+					</Link>
+					<Hint label="Kunnskapskart" action="jump-graph" side="right">
+						<Link href="/kart" aria-current={pathname === "/kart" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/kart" && "bg-accent text-foreground")}>
+							<NetworkIcon className="size-3.5 shrink-0" aria-hidden="true" />
+							Kunnskapskart
+						</Link>
+					</Hint>
 				</div>
 
+				<SidebarCourses
+					courses={courses}
+					activeCode={activeCourse ? decodeURIComponent(activeCourse) : undefined}
+					onAdd={() => window.dispatchEvent(new CustomEvent(ADD_COURSE_EVENT))}
+				/>
+
 				<div className="mx-3 mb-2 flex items-center gap-2">
-					<span className="text-xs uppercase tracking-widest text-muted-foreground/70">Sessions</span>
-					<Hint label="Search sessions" action="sessions-search" side="bottom">
+					<span className="px-2 text-xs uppercase tracking-widest text-muted-foreground/70">Økter</span>
+					<Hint label="Søk i økter" action="sessions-search" side="bottom">
 					<span className="relative flex-1">
 						<Input
 							ref={searchRef}
@@ -771,8 +852,8 @@ function SessionsSidebar() {
 									e.currentTarget.blur();
 								}
 							}}
-							placeholder="Search…"
-							aria-label="Search sessions"
+							placeholder="Søk …"
+							aria-label="Søk i økter"
 							className="h-6 rounded-sm border-border bg-background pl-6 text-xs placeholder:text-muted-foreground/60"
 						/>
 						<SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/70" />
@@ -780,38 +861,38 @@ function SessionsSidebar() {
 					</Hint>
 				</div>
 
-				{/* The three-way filter, HEADING THE LIST (owner round 8b,
-				    2026-10-05 — moved below the search): it scopes what the
-				    list shows, so it sits directly above it as a caption row;
-				    search stays the top muscle-memory target. Order: Teaching /
-				    Practice / All — the real modes first, "All" as the escape
-				    hatch on the right, mirroring the create-buttons above.
-				    Persisted client-side. */}
-				<div className="mx-3 flex items-center gap-0.5 rounded-md border border-border/60 bg-background p-0.5" data-testid="session-kind-filter">
-					{(["teach", "practice", "all"] as const).map((f) => (
+				{/* The kind filter, HEADING THE LIST (owner round 8b; quieter in
+				    the NTNU round): it scopes what the list shows, so it sits
+				    directly above it. «Alle» leads: it is the default, and the
+				    lær/øv split is no longer how sessions are started. A real
+				    radio group; persisted client-side. */}
+				<div role="radiogroup" aria-label="Vis økter" className="mx-3 flex items-center gap-0.5 px-1" data-testid="session-kind-filter">
+					{(["all", "teach", "practice"] as const).map((f) => (
 						<button
 							key={f}
 							type="button"
+							role="radio"
+							aria-checked={kindFilter === f}
 							data-testid={`kind-filter-${f}`}
 							onClick={() => setFilter(f)}
 							className={cn(
-								"flex-1 rounded-sm px-2 py-1 text-[11px] uppercase tracking-wider transition-colors",
+								"rounded-sm px-2 py-0.5 font-ui text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
 								kindFilter === f
 									? "bg-accent text-foreground"
 									: "text-muted-foreground hover:text-foreground",
 							)}
 						>
-							{f === "teach" ? "Teaching" : f === "all" ? "All" : "Practice"}
+							{KIND_FILTER_LABEL[f]}
 						</button>
 					))}
 				</div>
 
 				<div ref={listRef} className="flex-1 overflow-y-auto p-2">
 					{shown === null ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">Loading…</div>
+						<div className="px-2 py-4 text-xs text-muted-foreground">Laster …</div>
 					) : shown.length === 0 ? (
 						<div className="px-2 py-4 text-xs text-muted-foreground">
-							{query.trim() ? "No sessions match." : "No sessions yet."}
+							{query.trim() ? "Ingen økter passer med søket." : "Ingen økter ennå."}
 						</div>
 					) : (
 						shown.map((c, i) =>
@@ -846,19 +927,26 @@ function SessionsSidebar() {
 					    learner opted out (no ambient signal, user decision). */}
 					<ActivitySection />
 
-					{/* Settings entry (settings-app wave): same row language as
-					    New session — quiet, bottom-pinned, opens the centered
-					    dialog (also mod+, in the keyboard registry). */}
-					<div className="px-3 pb-3 pt-1">
-						<Hint label="Settings" action="open-settings" side="right">
+					{/* Help + settings (settings-app wave; help in the NTNU round):
+					    quiet, bottom-pinned, side by side. Hjelp opens the help
+					    center; Innstillinger the centered dialog (also mod+,). */}
+					<div className="flex items-center gap-1 px-3 pb-3 pt-1">
+						<Hint label="Hjelpesenter" action="open-help" side="top">
+							<Link href="/hjelp" data-tour="sidebar-help" data-testid="help-entry" className={cn(NAV_ROW, "w-auto flex-1")}>
+								<CircleHelpIcon className="size-3.5 shrink-0" aria-hidden="true" />
+								Hjelp
+							</Link>
+						</Hint>
+						<Hint label="Innstillinger" action="open-settings" side="top">
 							<button
 								type="button"
 								onClick={() => openSettings()}
+								data-tour="sidebar-settings"
 								data-testid="settings-entry"
-								className="flex items-center gap-1.5 rounded-md px-2 py-1.5 text-xs uppercase tracking-wider text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+								className={cn(NAV_ROW, "w-auto flex-1")}
 							>
-								<SettingsIcon className="size-3" />
-								Settings
+								<SettingsIcon className="size-3.5 shrink-0" aria-hidden="true" />
+								Innstillinger
 							</button>
 						</Hint>
 					</div>
@@ -890,7 +978,7 @@ function SessionsSidebar() {
 							}}
 							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
 						>
-							Rename
+							Gi nytt navn
 						</button>
 						{/* Export as Markdown (owner, release polish 2026-10-06): the
 					    session-markdown engine's user-facing debut — same-origin
@@ -912,7 +1000,7 @@ function SessionsSidebar() {
 							}}
 							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
 						>
-							Export as Markdown…
+							Eksporter som Markdown …
 						</button>
 						<button
 							type="button"
@@ -924,7 +1012,7 @@ function SessionsSidebar() {
 							}}
 							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
 						>
-							Delete…
+							Slett …
 						</button>
 						<div className="my-0.5 border-t border-border/60" aria-hidden="true" />
 						<CoverageMenuBlock chatId={ctxChatId} />

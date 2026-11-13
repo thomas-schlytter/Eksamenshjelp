@@ -177,7 +177,7 @@ test("a failed save keeps the previous language, including a shortcut pressed wh
 	await act(async () => { write.resolve(Response.json({}, { status: 500 })); await saved; });
 	assert.equal(await saved, false);
 	assert.equal(f.setting.language, "pl");
-	assert.match(f.setting.error!, /Could not save/);
+	assert.match(f.setting.error!, /Kunne ikke lagre/);
 	assert.equal(Socket.all[0]!.language, "pl");
 });
 
@@ -192,7 +192,7 @@ test("confirmed choices stay cached across navigation; failed explicit refreshes
 	assert.equal(f.state.reads, reads, "navigation must not reread a confirmed preference");
 	await act(async () => { notifySettingsSaved("dictation"); });
 	await act(async () => { f.dictation.toggle(); });
-	assert.match(f.dictation.error!, /Could not load/);
+	assert.match(f.dictation.error!, /Kunne ikke laste/);
 	assert.equal(f.state.captures, 0);
 	assert.equal(Socket.all.length, 0);
 	f.state.readFails = false;

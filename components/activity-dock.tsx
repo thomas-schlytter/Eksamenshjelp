@@ -231,9 +231,9 @@ export function toBlobs(feed: ActivityFeed): ActivityBlob[] {
 			// 66dbea9): a pinned model whose key is gone reads as the key
 			// being needed, same quiet tone.
 			activity: isModelsRefusal(job.error)
-				? "needs model setup"
+				? "trenger modelloppsett"
 				: isProviderKeyRefusal(job.error)
-					? "needs a provider key"
+					? "trenger en API-nøkkel"
 					: (job.activity ?? ""),
 			model: usage?.model,
 			steps: usage?.steps,
@@ -256,13 +256,21 @@ export function toBlobs(feed: ActivityFeed): ActivityBlob[] {
 	return blobs;
 }
 
-/** Elapsed as a compact ticking string: 45s / 3m 04s / 1h 12m. */
+/** Display names for the server's extraction phases (the wire values stay English). */
+const EXTRACTION_PHASE_LABEL: Record<string, string> = {
+	extracting: "trekker ut",
+	auditing: "kontrollerer",
+	merging: "fletter",
+	embedding: "indekserer",
+};
+
+/** Elapsed as a compact ticking string: 45s / 3m 04s / 1t 12m. */
 export function formatElapsed(ms: number): string {
 	const s = Math.max(0, Math.floor(ms / 1000));
 	if (s < 60) return `${s}s`;
 	const m = Math.floor(s / 60);
 	if (m < 60) return `${m}m ${String(s % 60).padStart(2, "0")}s`;
-	return `${Math.floor(m / 60)}h ${String(m % 60).padStart(2, "0")}m`;
+	return `${Math.floor(m / 60)}t ${String(m % 60).padStart(2, "0")}m`;
 }
 
 // ─── The section (the sidebar's bottom strip) ─────────────────────────────────
@@ -347,9 +355,9 @@ export function ActivitySection({ feed: feedProp }: { feed?: ActivityFeed }) {
 		<section data-testid="activity-section" className="border-t border-border px-3 pb-3 pt-2">
 			<div className="mb-1 flex items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground/70">
 				<ActivityIcon className="size-3" />
-				Background agents
+				Bakgrunnsagenter
 				{blobs.length > 0 && (
-					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Total running cost (inferred)">
+					<span className="ml-auto tabular-nums" data-testid="activity-total-cost" title="Samlet kostnad så langt (beregnet)">
 						{planCostLabel(totalCost, subscriptionLabels(blobs.map((blob) => blob.model)))}
 				</span>
 				)}
@@ -392,16 +400,16 @@ function ActivityBlobRow({
 	const Icon = blob.process === "extraction" ? WaypointsIcon : (blob.jobKind && KIND_ICON[blob.jobKind]) || BotIcon;
 	const label =
 		blob.process === "extraction"
-			? `Extraction — ${blob.phase ?? "running"}`
+			? `Uttrekk: ${EXTRACTION_PHASE_LABEL[blob.phase ?? ""] ?? blob.phase ?? "kjører"}`
 			: blob.jobKind === "research"
-				? "Researcher"
+				? "Research"
 				: blob.jobKind === "demo"
-					? "Demo builder"
+					? "Demo"
 					: blob.jobKind === "visual"
-						? "Figure maker"
+						? "Visualisering"
 						: blob.jobKind === "pdf"
-							? "PDF reader"
-							: "Sub-agent";
+							? "PDF-leser"
+							: "Bakgrunnsagent";
 	return (
 		<div
 			data-testid={`activity-blob-${blob.process}`}
@@ -437,8 +445,8 @@ function ActivityBlobRow({
 				data-testid="activity-abort"
 				onClick={onAbort}
 				disabled={abortState !== undefined}
-				title={abortState === "failed" ? "Abort failed — try again" : "End this background process"}
-				aria-label={`End ${label} in ${blob.title}`}
+				title={abortState === "failed" ? "Kunne ikke avbryte. Prøv igjen" : "Avslutt denne bakgrunnsprosessen"}
+				aria-label={`Avslutt ${label} i ${blob.title}`}
 				className="absolute right-1 top-1/2 -translate-y-1/2 rounded-md p-1 text-muted-foreground/70 transition-colors hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
 			>
 				<SquareIcon className="size-3" />
@@ -462,13 +470,13 @@ function ActivityBlobRow({
 						</div>
 						{blob.activity && <div className="break-words">{blob.activity}</div>}
 						<div className="flex justify-between gap-2">
-							<span>Cost</span>
+							<span>Kostnad</span>
 							<span className="tabular-nums text-card-foreground">
 								{planCostLabel(blob.cost, subscriptionLabel(blob.model))}
 							</span>
 						</div>
 						<div className="flex justify-between gap-2">
-							<span>Context</span>
+							<span>Kontekst</span>
 							<span className="tabular-nums text-card-foreground" data-testid="activity-blob-context">
 								{blob.context === null
 									? "—"
@@ -477,23 +485,23 @@ function ActivityBlobRow({
 						</div>
 						{blob.model && (
 							<div className="flex justify-between gap-2">
-								<span>Model</span>
+								<span>Modell</span>
 								<span className="truncate text-card-foreground">{blob.model}</span>
 							</div>
 						)}
 						{blob.steps !== undefined && (
 							<div className="flex justify-between gap-2">
-								<span>Steps</span>
+								<span>Steg</span>
 								<span className="tabular-nums text-card-foreground">{blob.steps}</span>
 							</div>
 						)}
 						<a href={`/chat/${blob.chatId}`} className="text-primary hover:underline">
-							Open session →
+							Åpne økta →
 						</a>
 					</div>
 					<div className="mt-2 text-muted-foreground/80">
-					{abortState === "failed" && "Abort failed — try again"}
-					{abortState === "pending" && "Stopping…"}
+					{abortState === "failed" && "Kunne ikke avbryte. Prøv igjen"}
+					{abortState === "pending" && "Stopper…"}
 				</div>
 				</div>
 			)}

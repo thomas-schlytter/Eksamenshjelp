@@ -40,14 +40,14 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 
 		await act(async () => summary().click());
 		const detail = host.querySelector('[data-testid="stats-detail"]')!;
-		assert.equal(cacheRow()?.textContent, "Cache hit rate90.0%");
+		assert.equal(cacheRow()?.textContent, "Treffrate i hurtigbuffer90.0%");
 		assert(detail.contains(cacheRow()));
 		const labels = [...detail.querySelectorAll(".flex.justify-between > span:first-child")].map((el) => el.textContent);
-		assert.deepEqual(labels.slice(0, 3), ["Context (last call)", "Total cost", "Cache hit rate"]);
+		assert.deepEqual(labels.slice(0, 3), ["Kontekst (siste kall)", "Total kostnad", "Treffrate i hurtigbuffer"]);
 		assert.equal(summary().textContent, collapsedSummary);
 
 		await act(async () => render([turn(900), { ...turn(0), id: "second", messageId: "second" }]));
-		assert.equal(cacheRow()?.textContent, "Cache hit rate81.8%", "session totals, not the last request or mean percentages");
+		assert.equal(cacheRow()?.textContent, "Treffrate i hurtigbuffer81.8%", "session totals, not the last request or mean percentages");
 		assert.equal(summary().textContent, collapsedSummary);
 
 		for (const turns of [[], [turn(undefined, undefined)], [turn(0)], [turn(0, 900)]]) {
@@ -55,7 +55,7 @@ test("cache hit rate appears only inside expanded session stats, follows the ses
 			assert.equal(cacheRow(), null, "unknown, empty, all-zero and write-only records stay hidden even while expanded");
 		}
 		await act(async () => render([turn(900)]));
-		assert.equal(cacheRow()?.textContent, "Cache hit rate90.0%");
+		assert.equal(cacheRow()?.textContent, "Treffrate i hurtigbuffer90.0%");
 		await act(async () => summary().click());
 		assert.equal(host.querySelector('[data-testid="stats-detail"]'), null);
 		assert.equal(cacheRow(), null);

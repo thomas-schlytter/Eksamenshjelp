@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
+import { ArrowDownIcon, ChevronRightIcon, MessageCircleQuestionIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
 import { useEnterSubmits } from "@/components/enter-submits";
@@ -16,6 +16,8 @@ import {
 	CONFIDENCE_STOPS,
 	DEFAULT_CONFIDENCE_INDEX,
 	emptyDockSelection,
+	explanationRequiredFor,
+	explanationSatisfied,
 	normalizeOptions,
 	resolveCorrect,
 	seededRandom,
@@ -75,6 +77,15 @@ export interface QuestionDockProps {
 	reveal?: boolean;
 	onExpand: () => void;
 	onSubmit: (output: QuestionAnswerData) => void;
+	/** "Hopp over" (2026-11): leave the question unanswered and let the
+	 *  agent move on. One click, no confirm; the page builds the skipped
+	 *  answer and sends it on the ordinary answer path. Absent = no button. */
+	onSkip?: () => void;
+	/** "Spør agenten" (2026-11): put the question on hold and hand the
+	 *  composer back. `draft` is whatever the learner had typed in the
+	 *  answer/thinking field, so it is never lost (it becomes the composer
+	 *  draft). Absent = no button. */
+	onHold?: (draft: string) => void;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
@@ -97,6 +108,11 @@ export interface QuestionDockProps {
 	 *  and say so in the hint row. The server registry is the real gate;
 	 *  this is the affordance. */
 	compactionRunning?: boolean;
+	/** The turn that posed this question has not settled yet (the local
+	 *  stream is still open): an answer or skip POST would be refused, so
+	 *  those two wait with a small "Et øyeblikk…" hint. "Spør agenten" stays
+	 *  live: the session model queues it and applies it at the settle. */
+	turnSettling?: boolean;
 }
 
 export function QuestionDock({
@@ -107,12 +123,15 @@ export function QuestionDock({
 	reveal = false,
 	onExpand,
 	onSubmit,
+	onSkip,
+	onHold,
 	initialDraft,
 	onSaveDraft,
 	onEscape,
 	phase = "probe",
 	dictationClaim = true,
 	compactionRunning = false,
+	turnSettling = false,
 }: QuestionDockProps) {
 	// The probe-phase names (owner, 2026-10-09) canonicalize onto their
 	// teach twins for every dock concern — parse dispatch, labels, kinds:
@@ -123,7 +142,7 @@ export function QuestionDock({
 	// The chip's display name carries the tool's OWN name (owner
 	// 2026-10-09): probe-phase questions label Probe/Recall in the
 	// composer; teach tools keep the standing labels.
-	const toolLabel = toolName === "probe" ? "Probe" : toolName === "recall" ? "Recall" : undefined;
+	const toolLabel = toolName === "probe" ? "Kartlegging" : toolName === "recall" ? "Gjenkalling" : undefined;
 	// Parse, don't cast (src/core/tool-parts.ts): the model authored this
 	// input, and only the schema the tool declared vouches for its shape.
 	// The dock mounts on input-available parts (already validated at the
@@ -147,10 +166,59 @@ export function QuestionDock({
 					label={
 						(canonical === "quiz" || canonical === "explain") &&
 						normalizeQuizType((parsed as { type?: unknown }).type) === "predict"
-							? "Prediction"
+							? "Forutsi"
 							: undefined
 					}
 				/>
+			)}
+			{/* The two ways out stay reachable while a teach check sits behind
+			    its reveal (owner 2026-11): a learner who would rather ask or
+			    move on must not have to open the check first. Quiet, small,
+			    under the invitation. They carry the help center's anchors
+			    here; the form's own pair takes them over once it is open. */}
+			{!expanded && reveal && (onHold || onSkip) && (
+				<div data-testid="question-collapsed-actions" className="flex flex-wrap items-center justify-end gap-1 border-t border-border/60 px-2 py-1">
+					{turnSettling && onSkip && (
+						<span role="status" className="mr-auto pl-2 text-xs text-muted-foreground">Et øyeblikk…</span>
+					)}
+					{onHold && (
+						<Button
+							type="button"
+							variant="ghost"
+							data-testid="question-hold-collapsed"
+							data-tour="question-hold"
+							title="Sett spørsmålet på vent og skriv til agenten"
+							// A live dictation belongs to the reading-thinking field
+							// here: let its tail land before the hand-over, so it
+							// rides the dismissal like it does on Esc.
+							onClick={() => {
+								if (!isDictationActive()) onHold("");
+								else void finishDictation().then(() => onHold(""));
+							}}
+							className="h-7 rounded-[6px] px-2 text-xs font-normal text-muted-foreground"
+						>
+							<MessageCircleQuestionIcon aria-hidden />
+							Spør agenten
+						</Button>
+					)}
+					{onSkip && (
+						<Button
+							type="button"
+							variant="ghost"
+							data-testid="question-skip-collapsed"
+							data-tour="question-skip"
+							title={turnSettling ? "Et øyeblikk, agenten gjør seg ferdig" : "Gå videre uten å svare. Teller ikke som feil."}
+							disabled={compactionRunning || turnSettling}
+							onClick={() => {
+								if (!isDictationActive()) onSkip();
+								else void finishDictation().then(onSkip);
+							}}
+							className="h-7 rounded-[6px] px-2 text-xs font-normal text-muted-foreground"
+						>
+							Hopp over
+						</Button>
+					)}
+				</div>
 			)}
 			<div className={expanded ? "dock-variant" : "invisible h-0 overflow-hidden"}>
 				<QuestionDockForm
@@ -160,11 +228,14 @@ export function QuestionDock({
 					phase={phase}
 					active={expanded}
 					onSubmit={onSubmit}
+					onSkip={onSkip}
+					onHold={onHold}
 					initialDraft={initialDraft}
 					onSaveDraft={onSaveDraft}
 					onEscape={onEscape}
 					dictationClaim={dictationClaim}
 					compactionRunning={compactionRunning}
+					turnSettling={turnSettling}
 				/>
 			</div>
 		</>
@@ -200,12 +271,12 @@ export function QuestionDockBar({
 	question: string;
 	onExpand: () => void;
 	variant?: "collapsed" | "reveal";
-	/** The kind chip's text (owner 2026-10-03): "Prediction" when a
+	/** The kind chip's text (owner 2026-10-03): "Forutsi" when a
 	 *  predict-type quiz minimizes by scroll — predictions never use the
 	 *  reveal variant, but the scroll-collapse strip can still hide them. */
 	label?: string;
 	/** The chip's TOOL display name (owner 2026-10-09): probe-phase calls
-	 *  label Probe/Recall — the phase boundary visible in the composer. */
+	 *  label Kartlegging/Gjenkalling — the phase boundary visible in the composer. */
 	toolLabel?: string;
 }) {
 	if (variant === "reveal") {
@@ -220,11 +291,11 @@ export function QuestionDockBar({
 					<PlayIcon className="size-3.5" />
 				</span>
 				<span className="min-w-0 flex-1">
-					<span className="block text-sm font-medium">Check your understanding</span>
+					<span className="block text-sm font-medium">Sjekk forståelsen</span>
 					<span className="block truncate text-xs text-muted-foreground">{teaserText(question)}</span>
 				</span>
 				<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
-					Open <ChevronRightIcon className="size-3.5" />
+					Åpne <ChevronRightIcon className="size-3.5" />
 				</span>
 			</button>
 		);
@@ -239,11 +310,11 @@ export function QuestionDockBar({
 			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				{label ??
 							toolLabel ??
-							(toolName === "quiz" ? "Check" : toolName === "explain" ? "Explain" : "Question")}
+							(toolName === "quiz" ? "Sjekk" : toolName === "explain" ? "Forklar" : "Spørsmål")}
 			</span>
 			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
 			<span className="flex shrink-0 items-center gap-1 text-xs font-medium">
-				Answer <ArrowDownIcon className="size-3.5" />
+				Svar <ArrowDownIcon className="size-3.5" />
 			</span>
 		</button>
 	);
@@ -257,11 +328,14 @@ function QuestionDockForm({
 	phase = "probe",
 	active,
 	onSubmit,
+	onSkip,
+	onHold,
 	initialDraft,
 	onSaveDraft,
 	onEscape,
 	dictationClaim = true,
 	compactionRunning = false,
+	turnSettling = false,
 }: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
 	const kind = toolQuestionKind(toolName);
 
@@ -368,19 +442,42 @@ function QuestionDockForm({
 
 	const toggle = (idx: number) => setSel(toggleOption(selectMode, sel, idx));
 
-	const canSubmit =
+	/* THE REQUIRED EXPLANATION (2026-11, owner: "flervalg som gjøres om til
+	 * explain for å godkjenne"): a graded multiple-choice pick alone is one
+	 * bit, and a guessable one. The thinking field is therefore REQUIRED on
+	 * quiz/probe answers (never on "Vet ikke", never on ask): the client
+	 * still grades the option, but the agent approves the answer on the
+	 * explanation (`explanationRequired` in the answer record). */
+	const needsExplanation = qd.mode !== "text" && explanationRequiredFor(kind, sel.dontKnow);
+	const answerChosen =
 		qd.mode === "text"
 			? text.trim().length > 0
 			: sel.dontKnow || (sel.otherSelected && other.trim().length > 0) || sel.selected.size > 0;
+	const explanationMissing = needsExplanation && !explanationSatisfied(thinking);
+	const canSubmit = answerChosen && !explanationMissing;
+	// The nudge: a submit attempt with the explanation still owed moves the
+	// learner INTO the field and turns the hint into the instruction.
+	const [explainNudge, setExplainNudge] = useState(false);
+
+	/** A pick, by pointer or keyboard. Single-select graded choice hands
+	 *  focus straight to the explanation field: it is the next thing owed,
+	 *  so pick → type → Enter is one uninterrupted motion. Multi-select
+	 *  keeps focus (more picks are coming; Tab reaches the field). */
+	const pick = (idx: number) => {
+		toggle(idx);
+		if (kind === "quiz" && selectMode === "single-select") thinkingRef.current?.focus();
+	};
 
 	const submit = () => {
-		if (!canSubmit || compactionRunning) return;
+		if (!answerChosen || compactionRunning || turnSettling) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): Enter may arrive while
 		 * a run is live with reasoning still in Deepgram's hands. Stop the
 		 * run, let the last finals land in the target field, and only then
 		 * build the answer — the spoken reasoning is never lost to a
 		 * forgotten stop. The field values below come from the REF mirrors
-		 * because the flush lands via setState after an await. */
+		 * because the flush lands via setState after an await. The
+		 * explanation gate reads the same mirror for the same reason: a
+		 * dictated explanation counts the moment its tail lands. */
 		if (!isDictationActive()) {
 			doSubmit();
 			return;
@@ -388,7 +485,12 @@ function QuestionDockForm({
 		void finishDictation().then(doSubmit);
 	};
 	const doSubmit = () => {
-		if (!canSubmit) return;
+		if (!answerChosen) return;
+		if (needsExplanation && !explanationSatisfied(thinkingTextRef.current)) {
+			setExplainNudge(true);
+			thinkingRef.current?.focus();
+			return;
+		}
 		const req: AnswerRequest = {
 			dontKnow: sel.dontKnow,
 			values: [...sel.selected].map((i) => qd.options[i]!.value),
@@ -415,6 +517,17 @@ function QuestionDockForm({
 	 * law as the practice dock — dictated answers rarely focus the field.
 	 * Rides submit() so the dictation-flush law is shared, not forked. */
 	useEnterSubmits(submit);
+
+	/* "Spør agenten" (2026-11): the question goes on hold and the composer
+	 * returns. Whatever sits in the learner's field travels along as the
+	 * composer draft — a live dictation is finished first, so the spoken
+	 * tail lands here (the nothing-gets-lost law) before the hand-over. */
+	const hold = () => {
+		if (!onHold) return;
+		const go = () => onHold((qd.mode === "text" ? answerTextRef.current : thinkingTextRef.current).trim());
+		if (!isDictationActive()) go();
+		else void finishDictation().then(go);
+	};
 
 	// Selecting Other never clears the thinking field — two channels, the
 	// answer and the reasoning behind it, side by side.
@@ -446,7 +559,7 @@ function QuestionDockForm({
 	const rowCount = qd.mode === "text" ? 0 : optionCount + 1;
 
 	const kbdAct = (idx: number) => {
-		if (idx < optionCount) toggle(idx);
+		if (idx < optionCount) pick(idx);
 		else if (kind === "quiz")
 			setSel((prev) => ({ ...prev, selected: new Set(), otherSelected: false, dontKnow: !prev.dontKnow }));
 		else {
@@ -510,6 +623,16 @@ function QuestionDockForm({
 			// Keys from a typing surface keep their meaning (arrows move
 			// the caret, space types).
 			if (typing || modded) return;
+			// 1–9 pick an option directly (2026-11): with the explanation now
+			// owed on graded choices, the pick itself must cost one key. Acts
+			// exactly like a click on that row (the walk follows it).
+			if (/^[1-9]$/.test(e.key) && Number(e.key) <= optionCount) {
+				e.preventDefault();
+				const idx = Number(e.key) - 1;
+				setKbdIdx(idx);
+				pick(idx);
+				return;
+			}
 			if (e.key === "ArrowDown") {
 				e.preventDefault();
 				const next = Math.min((kbdIdx ?? -1) + 1, rowCount - 1);
@@ -540,7 +663,9 @@ function QuestionDockForm({
 				e.preventDefault();
 				kbdAct(kbdIdx);
 			} else if (e.key === "Enter") {
-				if (kbdIdx === null || !canSubmit) return;
+				// answerChosen, not canSubmit: with the explanation still owed
+				// Enter lands the learner in the field (submit's own gate).
+				if (kbdIdx === null || !answerChosen) return;
 				e.preventDefault();
 				submit();
 			}
@@ -565,17 +690,17 @@ function QuestionDockForm({
 			<div data-dock-scroll-area="" data-session-find-root="" className="max-h-[var(--dock-max-h,55dvh)] overflow-y-auto px-4 pt-3">
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					{toolName === "probe"
-						? "Probe"
+						? "Kartlegging"
 						: toolName === "recall"
-							? "Recall"
+							? "Gjenkalling"
 							: kind === "quiz"
 								? qd.questionType === "predict"
-									? "Prediction"
-									: "Check"
-									: kind === "explain"
-										? "Explain"
-											: "Question"}
-					{qd.mode === "multi-select" && " · select all that apply"}
+									? "Forutsi"
+									: "Sjekk"
+								: kind === "explain"
+									? "Forklar"
+									: "Spørsmål"}
+					{qd.mode === "multi-select" && " · velg alle som passer"}
 				</div>
 				<div className="mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
@@ -597,7 +722,7 @@ function QuestionDockForm({
 									role={qd.mode === "multi-select" ? "checkbox" : "radio"}
 									aria-checked={isSel}
 									data-kbdrow={i}
-									onClick={() => toggle(i)}
+									onClick={() => pick(i)}
 									className={cn(
 										"flex items-start gap-3 rounded-lg border px-3 py-2 text-left text-sm outline-none transition-colors",
 										isSel ? "border-primary bg-accent" : "hover:bg-accent/50",
@@ -662,7 +787,7 @@ function QuestionDockForm({
 								>
 									{sel.dontKnow && <span className="size-1.5 rounded-full bg-current" />}
 								</span>
-								<span>I don't know</span>
+								<span>Vet ikke</span>
 							</button>
 						)}
 
@@ -729,7 +854,7 @@ function QuestionDockForm({
 												submit();
 											}
 									}}
-									placeholder="Type your own answer…"
+									placeholder="Annet… skriv ditt eget svar"
 									className="lh-input w-full min-w-0 flex-1 bg-transparent outline-none placeholder:text-muted-foreground"
 									onClick={(e) => e.stopPropagation()}
 								/>
@@ -761,7 +886,7 @@ function QuestionDockForm({
 								sel.dontKnow ? "text-muted-foreground/50" : "text-muted-foreground",
 							)}
 						>
-							Confidence
+							Sikkerhet
 						</span>
 						<div
 							className={cn("relative h-4 min-w-0 flex-1", sel.dontKnow && "opacity-40")}
@@ -790,9 +915,9 @@ function QuestionDockForm({
 								step={1}
 								value={CONFIDENCE_STOPS[confIdx]}
 								disabled={sel.dontKnow}
-								aria-label="Confidence — the probability your selected answer is correct"
-								aria-valuetext={`${CONFIDENCE_STOPS[confIdx]} percent`}
-								title="The probability your selected answer is correct — 50% is a coin flip. Adjust with ←/→."
+								aria-label="Sikkerhet: sannsynligheten for at svaret du valgte er riktig"
+								aria-valuetext={`${CONFIDENCE_STOPS[confIdx]} prosent`}
+								title="Sannsynligheten for at svaret du valgte er riktig. 50 % er et myntkast. Juster med ←/→."
 								data-testid="confidence-slider"
 								onChange={(e) => {
 									// Snap to the nearest stop; the rendered VALUE is the stop's own
@@ -844,10 +969,26 @@ function QuestionDockForm({
 			>
 				<div
 					data-testid={qd.mode === "text" ? "answer-field" : "thinking-field"}
-					className="rounded-[10px] border border-border/70 bg-background/60 transition-colors focus-within:border-primary/50"
+					// The help center's anchor for the required explanation.
+					data-tour={needsExplanation ? "question-explain" : undefined}
+					data-explanation-required={needsExplanation ? "true" : undefined}
+					className={cn(
+						"rounded-[10px] border bg-background/60 transition-colors focus-within:border-primary/50",
+						explainNudge && explanationMissing ? "border-primary/60" : "border-border/70",
+					)}
 				>
-					<div className="px-2.5 pt-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-						{qd.mode === "text" ? "Your answer" : "YOUR THINKING"}
+					<div
+						data-testid="learner-field-label"
+						className={cn(
+							"px-2.5 pt-2 text-xs font-medium uppercase tracking-wide",
+							needsExplanation && explanationMissing ? "text-foreground" : "text-muted-foreground",
+						)}
+					>
+						{qd.mode === "text"
+							? "Svaret ditt"
+							: needsExplanation
+								? "Forklar kort hvorfor (kreves for å få godkjent)"
+								: "Din tankegang"}
 					</div>
 					{qd.mode === "text" ? (
 						<PathInput
@@ -873,7 +1014,7 @@ function QuestionDockForm({
 									submit();
 								}
 							}}
-							placeholder="Type your answer…"
+							placeholder="Skriv svaret ditt…"
 							className="field-sizing-content lh-input max-h-48 min-h-10 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 						/>
 					) : (
@@ -900,9 +1041,29 @@ function QuestionDockForm({
 								if (e.key === "Enter" && (!e.shiftKey || e.metaKey || e.ctrlKey)) {
 									e.preventDefault();
 									submit();
+									return;
+								}
+								// ←/→ in the EMPTY field still set the confidence (2026-11):
+								// a pick now lands focus here, and an empty field has no
+								// caret to move, so the slider keeps its global keys right
+								// up to the first typed character.
+								if (
+									(e.key === "ArrowLeft" || e.key === "ArrowRight") &&
+									!e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey &&
+									kind === "quiz" && !sel.dontKnow &&
+									thinkingTextRef.current.length === 0
+								) {
+									e.preventDefault();
+									setConfIdx((i) =>
+										Math.min(CONFIDENCE_STOPS.length - 1, Math.max(0, i + (e.key === "ArrowRight" ? 1 : -1))),
+									);
 								}
 							}}
-							placeholder="Why this answer? Whatever comes to mind."
+							placeholder={
+								needsExplanation
+									? "Forklar med egne ord hvorfor du valgte dette."
+									: "Hvorfor dette svaret? Skriv det du tenker."
+							}
 							className={cn(
 								"field-sizing-content lh-input max-h-48 w-full resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground/70",
 								// Phase-scaled prominence: teaching invites depth,
@@ -911,17 +1072,74 @@ function QuestionDockForm({
 							)}
 						/>
 					)}
-					<div className="flex items-center justify-between gap-2 p-1">
-						<span aria-hidden className="pl-1.5 text-xs text-muted-foreground">
-								{compactionRunning ? "compacting session…" : "↵ submits · ⇧↵ newline"}
-						</span>
-						<Button
-							type="submit"
-							disabled={!canSubmit || compactionRunning}
-							className="ml-auto h-9 rounded-[6px] px-3.5 text-sm font-medium"
+					<div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 p-1">
+						<span
+							data-testid="dock-hint"
+							// The explanation hint is an instruction, not decoration:
+							// announced, and lifted out of the muted register while owed.
+							aria-hidden={answerChosen && explanationMissing ? undefined : true}
+							role={answerChosen && explanationMissing ? "status" : undefined}
+							className={cn(
+								"pl-1.5 text-xs",
+								answerChosen && explanationMissing ? "font-medium text-foreground" : "text-muted-foreground",
+							)}
 						>
-							Submit answer
-						</Button>
+							{compactionRunning
+								? "komprimerer økta…"
+								: turnSettling
+									? "Et øyeblikk…"
+									: answerChosen && explanationMissing
+									? "Skriv en kort forklaring for å sende svaret."
+									: "↵ sender · ⇧↵ ny linje"}
+						</span>
+						<div className="ml-auto flex items-center gap-1">
+							{/* The two ways OUT that are not answers (2026-11, owner: "man
+							    skal kunne velge å ikke svare, eller sette det på vent").
+							    Quiet ghost buttons beside the primary: always visible,
+							    never competing with it. type="button": neither is a
+							    form submit. */}
+							{onHold && (
+								<Button
+									type="button"
+									variant="ghost"
+									data-testid="question-hold"
+									// One visible anchor at a time: collapsed, the bar's
+									// own pair carries the help center's anchors.
+									data-tour={active ? "question-hold" : undefined}
+									title="Sett spørsmålet på vent og skriv til agenten"
+									onClick={hold}
+									className="h-9 rounded-[6px] px-2.5 text-sm font-normal text-muted-foreground"
+								>
+									<MessageCircleQuestionIcon aria-hidden />
+									Spør agenten
+								</Button>
+							)}
+							{onSkip && (
+								<Button
+									type="button"
+									variant="ghost"
+									data-testid="question-skip"
+									data-tour={active ? "question-skip" : undefined}
+									title={turnSettling ? "Et øyeblikk, agenten gjør seg ferdig" : "Gå videre uten å svare. Teller ikke som feil."}
+									// Skip rides the answer POST, which would block on
+									// the compaction gate exactly like a submit, and is
+									// refused while the posing turn is still settling.
+									disabled={compactionRunning || turnSettling}
+									onClick={onSkip}
+									className="h-9 rounded-[6px] px-2.5 text-sm font-normal text-muted-foreground"
+								>
+									Hopp over
+								</Button>
+							)}
+							<Button
+								type="submit"
+								disabled={!canSubmit || compactionRunning || turnSettling}
+								title={answerChosen && explanationMissing ? "Skriv en kort forklaring først" : undefined}
+								className="h-9 rounded-[6px] px-3.5 text-sm font-medium"
+							>
+								Send svar
+							</Button>
+						</div>
 					</div>
 				</div>
 			</form>

@@ -26,7 +26,7 @@ export interface NotesImportResult {
 /** Contributor's strict attribution: validate the complete response before
  * applying any row, even when several files have identical basenames. */
 export function parseNotesImportResults(body: unknown, files: readonly File[]): NotesImportResult[] {
-	const invalid = () => new Error("Invalid import response. Check the graph before retrying.");
+	const invalid = () => new Error("Ugyldig svar fra importen. Sjekk kunnskapskartet før du prøver igjen.");
 	if (!body || typeof body !== "object" || !("results" in body) || !Array.isArray(body.results) || body.results.length !== files.length) throw invalid();
 	const seen = new Set<number>();
 	for (const raw of body.results) {
@@ -53,10 +53,10 @@ export async function postNotesImport(files: readonly File[]): Promise<NotesImpo
 	const response = await fetch("/api/graph/import", { method: "POST", body: form });
 	let body: unknown;
 	try { body = await response.json(); }
-	catch { throw new Error("Invalid import response. Check the graph before retrying."); }
+	catch { throw new Error("Ugyldig svar fra importen. Sjekk kunnskapskartet før du prøver igjen."); }
 	if (!response.ok) {
 		const detail = body && typeof body === "object" && "error" in body && typeof body.error === "string" ? `: ${body.error}` : "";
-		throw new Error(`Import request failed (HTTP ${response.status})${detail}${/[.!?]$/.test(detail) ? "" : "."} Check the graph before retrying.`);
+		throw new Error(`Importen mislyktes (HTTP ${response.status})${detail}${/[.!?]$/.test(detail) ? "" : "."} Sjekk kunnskapskartet før du prøver igjen.`);
 	}
 	return parseNotesImportResults(body, files);
 }
@@ -95,21 +95,21 @@ export function NotesImportControl({ importing, onImportFiles }: { importing: bo
 		onImportFiles(event.target.files);
 		event.target.value = "";
 	};
-	const choices = [["Files", filesRef], ["Folder", folderRef]] as const;
+	const choices = [["Filer", filesRef], ["Mappe", folderRef]] as const;
 	return (
 		<div className="relative shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur"
 			onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setOpen(false); }}
 			onKeyDown={(event) => { if (event.key === "Escape") setOpen(false); }}>
 			<input ref={filesRef} type="file" multiple accept=".md,.markdown,.txt,.pdf" className="hidden" onChange={onChange} />
 			<input ref={folderRef} type="file" {...{ webkitdirectory: "" }} className="hidden" onChange={onChange} />
-			<Hint label="Import notes into the graph" side="bottom">
+			<Hint label="Importer notater til kunnskapskartet" side="bottom">
 				<button type="button" onClick={() => setOpen(!open)} aria-expanded={open} aria-haspopup="menu" data-testid="import-notes"
 					className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent">
-					<UploadIcon className="size-3" />{importing ? "Importing…" : "Import notes…"}
+					<UploadIcon className="size-3" />{importing ? "Importerer…" : "Importer notater…"}
 				</button>
 			</Hint>
 			{open && (
-				<div role="menu" aria-label="Import notes" className="absolute right-0 top-full z-50 mt-1 min-w-32 rounded-lg border bg-card p-1 shadow-lg">
+				<div role="menu" aria-label="Importer notater" className="absolute right-0 top-full z-50 mt-1 min-w-32 rounded-lg border bg-card p-1 shadow-lg">
 					{choices.map(([label, input]) => <button key={label} type="button" role="menuitem" className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
 						onClick={() => { setOpen(false); input.current?.click(); }}>{label}</button>)}
 				</div>

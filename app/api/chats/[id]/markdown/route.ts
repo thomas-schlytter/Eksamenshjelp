@@ -1,8 +1,8 @@
 /**
  * THE SESSION MARKDOWN EXPORT (owner, release polish 2026-10-06): the
  * user-facing export the session-markdown engine was built for — the
- * same document the extractor reads, minted anchorless (anchors are
- * extraction provenance; a learner's export carries no message ids).
+ * session-markdown engine's document, minted anchorless (a learner's
+ * export carries no message ids) and with the Norwegian label table.
  *
  * GET /api/chats/:id/markdown → the whole session as one markdown file
  * (Content-Disposition attachment; filename from the slugified title).
@@ -10,7 +10,7 @@
  * the same engine (problem/conclude results render as tool blocks,
  * markers are invisible by the engine's law).
  */
-import { sessionMarkdown } from "@/src/core";
+import { MARKDOWN_LABELS_NB, sessionMarkdown } from "@/src/core";
 import { getChat } from "@/src/server";
 
 /** Filename-safe title (own module scope on purpose: tiny + pure). */
@@ -27,7 +27,9 @@ export async function GET(_req: Request, ctx: { params: Promise<{ id: string }> 
 	const { id } = await ctx.params;
 	const record = getChat(id);
 	if (!record) return Response.json({ error: "Unknown chat" }, { status: 404 });
-	const markdown = sessionMarkdown(record.messages, { title: record.title, anchors: false });
+	// The learner's document is Norwegian; the engine's own default (English)
+	// is untouched for every other reader.
+	const markdown = sessionMarkdown(record.messages, { title: record.title, anchors: false, labels: MARKDOWN_LABELS_NB });
 	return new Response(markdown, {
 		headers: {
 			"content-type": "text/markdown; charset=utf-8",

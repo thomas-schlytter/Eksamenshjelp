@@ -189,7 +189,7 @@ describe("parseGraphSettingsBody", () => {
 		// below the cost floor: 400 with the floor named (penny-batches)
 		const tiny = parseGraphSettingsBody({ extractionChunkTokens: 100 });
 		assert.equal(tiny.ok, false, "below-floor rejected");
-		assert.match(tiny.ok === false ? tiny.error : "", /at least 500/);
+		assert.match(tiny.ok === false ? tiny.error : "", /minst 500/);
 		// junk shapes: 400
 		assert.equal(parseGraphSettingsBody({ extractionChunkTokens: "4096" }).ok, false);
 		assert.equal(parseGraphSettingsBody({ extractionChunkTokens: NaN }).ok, false);
@@ -223,8 +223,8 @@ describe("parseCompactionSettingsBody (owner round 14)", () => {
 	it("rejects below the 32k floor with the anti-churn rationale", () => {
 		const r = parseCompactionSettingsBody({ thresholdTokens: 20_000 });
 		assert.ok(!r.ok);
-		assert.match(r.error ?? "", /at least 32000/);
-		assert.match(r.error ?? "", /churn/);
+		assert.match(r.error ?? "", /minst 32000/);
+		assert.match(r.error ?? "", /om og om igjen/);
 	});
 	it("rejects non-numbers", () => {
 		const r = parseCompactionSettingsBody({ thresholdTokens: "big" });

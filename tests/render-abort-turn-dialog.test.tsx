@@ -10,26 +10,29 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { AbortTurnBody } from "@/components/abort-turn-dialog";
 
 describe("AbortTurnBody", () => {
-	it("turn mode: names the turn, the partial-stays promise, Abort", () => {
+	it("turn mode: names the turn, the partial-stays promise, Stopp", () => {
 		const html = renderToStaticMarkup(
 			<AbortTurnBody mode="turn" onClose={() => {}} onConfirm={() => {}} />,
 		);
 		assert.ok(html.includes('data-testid="abort-turn-dialog"'));
-		assert.match(html, /Abort this turn\?/);
-		assert.match(html, /The partial answer stays in the transcript\./);
-		assert.match(html, /Cancel/);
-		assert.match(html, /Abort/);
+		assert.match(html, /Stoppe svaret\?/);
+		assert.match(html, /Det agenten har skrevet så langt, blir stående i økta\./);
+		assert.match(html, />\s*Avbryt\s*</, "the cancel button");
+		assert.match(html, />\s*Stopp svaret\s*</, "the confirm never shares the cancel's word");
 	});
 
-	it("question mode: names the dismissal, the skip, Dismiss", () => {
+	it("question mode: names the dismissal and points at the two gentler ways out", () => {
 		const html = renderToStaticMarkup(
 			<AbortTurnBody mode="question" onClose={() => {}} onConfirm={() => {}} />,
 		);
-		assert.match(html, /Dismiss this question\?/);
-		assert.match(html, /Skipped — the teacher moves on without it\./);
-		assert.match(html, /Dismiss/);
+		assert.match(html, /Lukke spørsmålet\?/);
+		// What Esc does, and how it differs from the dock's two buttons (2026-11).
+		assert.match(html, /lukkes uten svar/);
+		assert.match(html, /«Hopp over»/);
+		assert.match(html, /«Spør agenten»/);
+		assert.match(html, />\s*Lukk spørsmålet\s*</);
 		// the abort copy must not leak into the dismissal mode
-		assert.ok(!html.includes("Abort this turn"));
+		assert.ok(!html.includes("Stoppe svaret"));
 	});
 
 	it("the confirm action is the destructive pair, never the cancel", () => {

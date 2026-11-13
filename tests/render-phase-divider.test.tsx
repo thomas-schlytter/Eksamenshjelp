@@ -18,9 +18,9 @@ import { teachStepIndex } from "../src/core/phases.ts";
 describe("PhaseChip (header)", () => {
 	it("renders the learner-facing label — no colored dot (phase color retired)", () => {
 		for (const [phase, label] of [
-			["probe", "Probing"],
-			["plan", "Planning"],
-			["teach", "Teaching"],
+			["probe", "Kartlegging"],
+			["plan", "Plan"],
+			["teach", "Læring"],
 		] as const) {
 			const html = renderToStaticMarkup(<PhaseChip phase={phase} />);
 			assert.ok(html.includes('data-testid="phase-chip"'));
@@ -50,7 +50,7 @@ describe("PhaseDivider (transcript boundary)", () => {
 	it("the plan seam: monochrome dotted rules + node count", () => {
 		const html = renderToStaticMarkup(<PhaseDivider phase="plan" nodeCount={3} />);
 		assert.ok(html.includes('data-testid="phase-divider-plan"'));
-		assert.match(html, /Plan · 3 nodes/);
+		assert.match(html, /Plan · 3 noder/);
 		assert.ok(html.includes("border-dotted"), "dotted rule");
 		assert.ok(html.includes("border-border"), "monochrome rule");
 		assert.ok(!html.includes("border-phase-"), "phase-colored rules are retired");
@@ -59,10 +59,10 @@ describe("PhaseDivider (transcript boundary)", () => {
 	it("the teach seam: monochrome rule, no count", () => {
 		const html = renderToStaticMarkup(<PhaseDivider phase="teach" />);
 		assert.ok(html.includes('data-testid="phase-divider-teach"'));
-		assert.match(html, /Teaching/);
+		assert.match(html, /Læring/);
 		assert.ok(!html.includes("border-phase-"));
 		assert.ok(!html.includes("text-phase-"));
-		assert.ok(!html.includes("nodes"));
+		assert.ok(!html.includes("noder"));
 	});
 
 	it("singular node count", () => {
@@ -72,7 +72,7 @@ describe("PhaseDivider (transcript boundary)", () => {
 
 	it("a plan seam without a count still labels itself", () => {
 		const html = renderToStaticMarkup(<PhaseDivider phase="plan" />);
-		assert.match(html, /Planning/);
+		assert.match(html, />Plan</);
 	});
 
 	it("probe renders null (never a boundary — phases only advance)", () => {

@@ -37,7 +37,7 @@ function createJob(init: CreateJobInit): JobRecord {
 		toolCallId: init.toolCallId,
 		...(init.input !== undefined ? { input: init.input } : {}),
 		status: "running",
-		activity: init.activity ?? "starting",
+		activity: init.activity ?? "starter",
 		createdAt: now,
 		updatedAt: now,
 	};

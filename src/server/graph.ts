@@ -109,14 +109,14 @@ export function deleteGraphNode(nodeId: string): NodeDeleteOutcome {
 			ok: false,
 			status: 409,
 			code: "extraction_running",
-			error: "An extraction is running — try again when it finishes",
+			error: "Et uttrekk pågår. Prøv igjen når det er ferdig.",
 		};
 	}
 	// THE SYNC BLOCK — no awaits below (the doc above): the gate and the
 	// rewrite are one atomic stretch of the event loop.
 	const stats = deleteNodeTraces(stores.graphStore, nodeId);
 	if (stats === null) {
-		return { ok: false, status: 404, code: "not_found", error: "No such node" };
+		return { ok: false, status: 404, code: "not_found", error: "Noden finnes ikke." };
 	}
 	return { ok: true, stats, graphRevision: graphRevision() };
 }

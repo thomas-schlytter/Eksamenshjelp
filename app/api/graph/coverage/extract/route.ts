@@ -26,7 +26,7 @@ export async function POST(request: Request) {
 		return Response.json({ error: 'Body must be {chatId: string}' }, { status: 400 });
 	}
 	if (extractionStatuses().some((run) => run.kind === "chat" && run.chatId === chatId)) {
-		return Response.json({ error: "An extraction run is already in flight for this session" }, { status: 409 });
+		return Response.json({ error: "Et uttrekk kjører allerede for denne økta." }, { status: 409 });
 	}
 	// Fire-and-forget, like the trigger: the dock + the coverage panel's
 	// running flags track progress; the promise never blocks the response.

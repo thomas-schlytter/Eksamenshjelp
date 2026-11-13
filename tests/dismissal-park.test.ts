@@ -200,3 +200,63 @@ describe("the dismiss route — the park contract (202)", () => {
 		assert.equal(res.status, 400);
 	});
 });
+
+// ─── Hopp over / Spør agenten: the two server seams (2026-11) ────────────────
+
+describe("Hopp over (answer route) and Spør agenten (silent route)", () => {
+	it("the SILENT route accepts an on-hold dismissal: persisted, nothing wakes, the model reads the hold", async () => {
+		const chat = chatWithDanglingQuiz("hold");
+		const pending = danglingQuestionOf(chatStore.getChat(chat)!.messages)!;
+		const dismissRoute = await import("../app/api/chats/[id]/dismiss/route.ts");
+		let changed = 0;
+		const off = subscribe((e) => {
+			if (e.type === "record-changed" && e.chatId === chat) changed++;
+		});
+		const res = await dismissRoute.POST(
+			new Request(`http://test/api/chats/${chat}/dismiss`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					input: {
+						type: "dismiss",
+						toolCallId: pending.toolCallId,
+						answer: dismissedAnswer("quiz", "What is a cyclic group?", { reason: "onHold", tool: "quiz" }),
+					},
+				}),
+			}),
+			{ params: Promise.resolve({ id: chat }) },
+		);
+		off();
+		assert.equal(res.status, 200);
+		assert.equal(changed, 1);
+		assert.ok(!isTurnRunning(chat), "the hold never starts a turn");
+		const messages = chatStore.getChat(chat)!.messages;
+		assert.equal(danglingQuestionOf(messages), null, "the composer returns");
+		const result = messages.at(-1) as unknown as { role: string; content: Array<{ text: string }>; details: { onHold?: boolean } };
+		assert.equal(result.role, "toolResult");
+		assert.equal(result.details.onHold, true);
+		assert.deepEqual(JSON.parse(result.content[0]!.text), { kind: "quiz", dismissed: true, onHold: true });
+	});
+
+	it("the ANSWER route's validation accepts a skipped answer as the call's result", async () => {
+		const { inputAppends, parseChatInput } = await import("../src/core/input-events.ts");
+		const chat = chatWithDanglingQuiz("skip");
+		const record = chatStore.getChat(chat)!;
+		const pending = danglingQuestionOf(record.messages)!;
+		const input = parseChatInput({
+			type: "answer",
+			toolCallId: pending.toolCallId,
+			answer: dismissedAnswer("quiz", "What is a cyclic group?", { reason: "skipped", tool: "quiz" }),
+		});
+		const appends = inputAppends(record, input) as unknown as Array<{ role: string; toolCallId: string; toolName: string; isError: boolean; content: Array<{ text: string }>; details: { skipped?: boolean } }>;
+		assert.equal(appends.length, 1);
+		assert.equal(appends[0]!.role, "toolResult");
+		assert.equal(appends[0]!.toolCallId, pending.toolCallId);
+		assert.equal(appends[0]!.toolName, "quiz");
+		assert.equal(appends[0]!.isError, false);
+		assert.equal(appends[0]!.details.skipped, true);
+		assert.deepEqual(JSON.parse(appends[0]!.content[0]!.text), { kind: "quiz", dismissed: true, skipped: true });
+		// With the result appended nothing dangles: the handler starts the turn.
+		assert.equal(danglingQuestionOf([...record.messages, ...(appends as never[])]), null);
+	});
+});

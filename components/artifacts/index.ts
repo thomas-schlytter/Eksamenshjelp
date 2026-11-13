@@ -5,6 +5,7 @@ import { JobCard, PdfJobCard } from "@/components/artifacts/job-card";
 import { VisualCard } from "@/components/artifacts/visual-card";
 import { ProbeDoneCard } from "@/components/artifacts/probe-done-card";
 import { ToolCallCard } from "@/components/artifacts/tool-call-card";
+import { TopicStatusCard } from "@/components/artifacts/topic-status-card";
 import { ProblemCard, ConcludeCard } from "@/components/practice-cards";
 
 /**
@@ -50,4 +51,7 @@ export const artifactRenderers: Record<string, ComponentType<ArtifactPartProps>>
 	// discipline (their results are pre-formatted strings too).
 	list_sessions: ToolCallCard,
 	list_propositions: ToolCallCard,
+	// Exam mode: the agent's topic_status call is one calm line (status
+	// dot + topic + new status), never the raw arguments.
+	topic_status: TopicStatusCard,
 };

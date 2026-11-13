@@ -183,7 +183,7 @@ test("stale save, pin edit and disconnect all return reload guidance without wri
 	const before = current();
 	for (const method of ["POST", "PATCH", "DELETE"]) {
 		const res = await mutate({ baseUrl: "http://h", authMode: "keyless", overrides: {} }, method, { "if-match": etag });
-		assert.equal(res.status, 409); assert.match(await res.text(), /Reload/);
+		assert.equal(res.status, 409); assert.match(await res.text(), /Last inn oppsettet på nytt/);
 	}
 	assert.equal(requests.length, 0); assert.deepEqual(current(), before);
 });

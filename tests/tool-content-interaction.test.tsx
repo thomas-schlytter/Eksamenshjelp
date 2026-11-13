@@ -29,7 +29,14 @@ test("actual select → submit → saved result → historical Why uses source d
 		assert.ok(choice);
 		await act(async () => choice.click());
 		assert.equal(choice.getAttribute("aria-checked"), "true");
-		const submit = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Submit answer"))!;
+		const submit = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent?.includes("Send svar"))!;
+		// Graded multiple choice owes a short explanation before it can be sent (2026-11).
+		assert.equal(submit.disabled, true, "a bare pick cannot be submitted");
+		await act(async () => {
+			const editor = host.querySelector<HTMLElement>('[data-testid="thinking-field"] [data-file-path-input]')!;
+			editor.textContent = "The gradient collects the partials.";
+			editor.dispatchEvent(new window.Event("input", { bubbles: true }));
+		});
 		assert.equal(submit.disabled, false);
 		// linkedom does not implement the browser's default button→form
 		// action; dispatch its native submit event through React instead.
@@ -40,12 +47,13 @@ test("actual select → submit → saved result → historical Why uses source d
 		assert.equal(answer.answers[0]!.value, label, "display recovery must not alter the submitted identity");
 		assert.equal(answer.answers[0]!.label, label);
 		assert.equal(answer.correct, true);
+		assert.equal(answer.explanationRequired, true, "the record says the explanation was owed and given");
 		const persisted = JSON.parse(JSON.stringify(newAnswerResult("interactive_source", "probe", answer)));
 		assert.deepEqual(persisted.details, JSON.parse(JSON.stringify(answer)));
 		assert.equal(persisted.details.explanation, explanation);
 		const saved = structuredClone(persisted.details);
 		await act(async () => root.render(<AnsweredCard answer={persisted.details} input={input} />));
-		const why = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Why")!;
+		const why = [...host.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Hvorfor")!;
 		await act(async () => why.click());
 		assert.equal(host.querySelectorAll("mtr").length, 4, "question and revealed explanation retain their rows");
 		const paragraphs = host.querySelectorAll('[data-testid="tucked-explanation"] p');

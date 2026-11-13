@@ -7,6 +7,7 @@ import { ActivityProvider } from "@/components/activity-dock";
 import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
+import { HelpProvider } from "@/components/help/help-provider";
 
 // LettBestilt-tema: Inter for both chrome and teaching prose; JetBrains Mono
 // stays only for code (font-mono). Titles follow the prose font unless the
@@ -19,13 +20,13 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" }
 const themeBootstrap = `(function(){try{var m=localStorage.getItem("lh-theme-mode")||"system";var d=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
 export const metadata: Metadata = {
-	title: "Learning Harness",
-	description: "A teacher agent with a memory — sessions, quizzes, and a knowledge graph of what you know.",
+	title: "LearnHarness",
+	description: "Les smartere til eksamen: legg til fagene dine, kartlegg hva du kan, og følg en plan fram til eksamensdagen.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang="en" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
+		<html lang="nb" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
 			<head>
 				<script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
 			</head>
@@ -36,7 +37,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 				<AppearanceProvider>
 					<SidebarProvider>
 						<ActivityProvider>
-							<AppShell>{children}</AppShell>
+							{/* The help layer (search palette, guided tours) sits INSIDE the
+							    shell: it opens the settings dialog and the sidebar, whose
+							    providers live there. */}
+							<AppShell>
+								<HelpProvider>{children}</HelpProvider>
+							</AppShell>
 						</ActivityProvider>
 					</SidebarProvider>
 				</AppearanceProvider>

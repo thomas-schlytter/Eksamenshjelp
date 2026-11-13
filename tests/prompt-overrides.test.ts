@@ -178,6 +178,7 @@ describe("the source-derived segment list", () => {
 			[
 				"system-prompt.md",
 				"prober/10-probe-doctrine.md",
+				"shared/05-language.md",
 				"shared/10-voice.md",
 				"shared/15-accuracy.md",
 				"shared/16-mental-model.md",
@@ -205,6 +206,20 @@ describe("the source-derived segment list", () => {
 		assert.equal(prober.some((s) => s.path === "shared/10-voice.md" && s.shared), true);
 		assert.equal(teacher.some((s) => s.path === "shared/10-voice.md" && s.shared), true);
 		assert.equal(prober.some((s) => s.path === "shared/15-accuracy.md" && s.shared), true);
+		// The LANGUAGE fragment (2026-11): Norwegian bokmål is one law for every
+		// agent, so it leads the shared appendix of prober and teacher AND sits
+		// on practice's curated allowlist (the question mechanics still do not).
+		const practice = effectivePromptSegments("practice", {});
+		for (const [name, segments] of [["prober", prober], ["teacher", teacher], ["practice", practice]] as const) {
+			const shared = segments.filter((s) => s.path.startsWith("shared/")).map((s) => s.path);
+			assert.equal(shared[0], "shared/05-language.md", `${name}: language leads the shared appendix`);
+		}
+		assert.deepEqual(
+			practice.filter((s) => s.shared).map((s) => s.path),
+			["shared/05-language.md", "shared/10-voice.md", "shared/15-accuracy.md", "shared/16-mental-model.md", "shared/40-formatting.md"],
+		);
+		assert.equal(allSegmentPaths().includes("shared/05-language.md"), true, "the settings prompt list discovers it");
+		assert.equal(isValidSegmentPath("shared/05-language.md"), true, "and it is an overridable segment path");
 		// Tool MECHANICS are shared; question METHODOLOGY is phase-owned.
 		assert.equal(prober.some((s) => s.path.startsWith("teacher/")), false);
 		assert.equal(teacher.some((s) => s.path.startsWith("prober/")), false);

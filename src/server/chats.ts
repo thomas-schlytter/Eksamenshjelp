@@ -74,7 +74,7 @@ export function runningWorkBlocker(chatId: string): Extract<ChatDeleteOutcome, {
 			ok: false,
 			status: 409,
 			code: "turn_in_flight",
-			error: "A turn is running in this session — try again when it finishes",
+			error: "En tur kjører i denne økta. Prøv igjen når den er ferdig.",
 			jobIds: [],
 		};
 	}
@@ -88,7 +88,7 @@ export function runningWorkBlocker(chatId: string): Extract<ChatDeleteOutcome, {
 			ok: false,
 			status: 409,
 			code: "jobs_running",
-			error: "Background jobs are still running in this session — try again when they finish",
+			error: "Bakgrunnsjobber kjører fortsatt i denne økta. Prøv igjen når de er ferdige.",
 			jobIds: runningJobs.map((job) => job.id),
 		};
 	}
@@ -97,7 +97,7 @@ export function runningWorkBlocker(chatId: string): Extract<ChatDeleteOutcome, {
 
 export async function deleteChatSession(chatId: string, mode: ChatDeleteMode): Promise<ChatDeleteOutcome> {
 	if (!stores.chatStore.getChat(chatId)) {
-		return { ok: false, status: 404, code: "not_found", error: "No such session" };
+		return { ok: false, status: 404, code: "not_found", error: "Økta finnes ikke." };
 	}
 	const blocker = runningWorkBlocker(chatId);
 	if (blocker) return blocker;
@@ -110,7 +110,7 @@ export async function deleteChatSession(chatId: string, mode: ChatDeleteMode): P
 					ok: false,
 					status: 503,
 					code: "extraction_winding_down",
-					error: "The session's extraction is still winding down — try again in a moment",
+					error: "Uttrekket for økta holder på å avslutte. Prøv igjen om et øyeblikk.",
 				};
 			}
 			await new Promise((resolve) => setTimeout(resolve, WIND_DOWN_POLL_MS));
@@ -128,14 +128,14 @@ export async function deleteChatSession(chatId: string, mode: ChatDeleteMode): P
 /** Source deletion has already purged the selected batch's graph traces.
  * Remove the remaining session data with the same gates/cleanup and no await. */
 export function deleteIdleChatRecord(chatId: string): Extract<ChatDeleteOutcome, { ok: false }> | { ok: true } {
-	if (!stores.chatStore.getChat(chatId)) return { ok: false, status: 404, code: "not_found", error: "No such session" };
+	if (!stores.chatStore.getChat(chatId)) return { ok: false, status: 404, code: "not_found", error: "Økta finnes ikke." };
 	const blocker = runningWorkBlocker(chatId);
 	if (blocker) return blocker;
-	if (extractionStatuses().some((run) => run.chatId === chatId)) return { ok: false, status: 503, code: "extraction_winding_down", error: "The session's extraction is still winding down — try again in a moment" };
+	if (extractionStatuses().some((run) => run.chatId === chatId)) return { ok: false, status: 503, code: "extraction_winding_down", error: "Uttrekket for økta holder på å avslutte. Prøv igjen om et øyeblikk." };
 	finishChatRecordDeletion(chatId);
 	// ChatStore can swallow unlink failures. Do not tell source deletion to
 	// discard placement/folders while the conversation still exists.
-	if (stores.chatStore.getChat(chatId)) throw new Error("Could not remove the selected session record.");
+	if (stores.chatStore.getChat(chatId)) throw new Error("Kunne ikke fjerne den valgte økta.");
 	return { ok: true };
 }
 

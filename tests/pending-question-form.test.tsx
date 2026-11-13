@@ -130,3 +130,222 @@ test("saving a unique live question preserves its mounted form and selection", a
 		assert.ok(host.querySelector('[role="radio"][aria-checked="true"]'));
 	} finally { await act(async () => root.unmount()); host.remove(); }
 });
+
+// ─── Hopp over / Spør agenten / the required explanation (2026-11) ───────────
+
+const quizArgs = {
+	question: "Which one?", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }], correctAnswer: "yes", explanation: "Yes is correct.",
+} as unknown as QuizToolInput;
+
+async function mountDock(props: Partial<Omit<React.ComponentProps<typeof QuestionDock>, "input" | "toolName">> & { toolName: React.ComponentProps<typeof QuestionDock>["toolName"]; input: unknown }) {
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	await act(async () => root.render(<QuestionDock toolCallId="q1" expanded onExpand={() => {}} onSubmit={() => {}}
+		dictationClaim={false} {...props} input={props.input as QuizToolInput} />));
+	const type = async (testId: string, text: string) => {
+		await act(async () => {
+			const editor = host.querySelector<HTMLElement>(`[data-testid="${testId}"] [data-file-path-input]`)!;
+			editor.textContent = text;
+			editor.dispatchEvent(new window.Event("input", { bubbles: true }));
+		});
+	};
+	const submitButton = () => host.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+	const submitForm = () => act(async () => { host.querySelector("form")!.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true })); });
+	const unmount = async () => { await act(async () => root.unmount()); host.remove(); };
+	return { host, type, submitButton, submitForm, unmount };
+}
+
+test("Hopp over: one click, no confirm, no answer built — the page owns the skip", async () => {
+	let skips = 0; let submitted = 0;
+	const dock = await mountDock({ toolName: "quiz", input: quizArgs, onSkip: () => { skips++; }, onHold: () => {}, onSubmit: () => { submitted++; } });
+	try {
+		const skip = dock.host.querySelector<HTMLButtonElement>('[data-tour="question-skip"]')!;
+		assert.ok(skip, "the help-center anchor is on the button");
+		assert.equal(skip.textContent, "Hopp over");
+		assert.equal(skip.getAttribute("type"), "button", "never a form submit");
+		assert.equal(skip.disabled, false, "skipping needs no selection and no explanation");
+		await act(async () => skip.click());
+		assert.equal(skips, 1);
+		assert.equal(submitted, 0);
+		assert.equal(dock.host.querySelector('[role="dialog"]'), null, "no confirmation step");
+	} finally { await dock.unmount(); }
+});
+
+test("Hopp over is present for every question type; without handlers the dock shows neither button", async () => {
+	const inputs: Array<[React.ComponentProps<typeof QuestionDock>["toolName"], unknown]> = [
+		["quiz", quizArgs], ["probe", quizArgs],
+		["explain", { question: "Why?", correctAnswer: "Because." }], ["recall", { question: "Why?", correctAnswer: "Because." }],
+		["ask_user_question", { question: "Which?", options: [{ label: "A" }, { label: "B" }] }], ["ask_user_question", { question: "Goal?" }],
+	];
+	for (const [toolName, input] of inputs) {
+		const dock = await mountDock({ toolName, input, onSkip: () => {}, onHold: () => {} });
+		try {
+			assert.ok(dock.host.querySelector('[data-tour="question-skip"]'), `${toolName}: skip`);
+			assert.ok(dock.host.querySelector('[data-tour="question-hold"]'), `${toolName}: hold`);
+		} finally { await dock.unmount(); }
+	}
+	const bare = await mountDock({ toolName: "quiz", input: quizArgs });
+	try {
+		assert.equal(bare.host.querySelector('[data-tour="question-skip"]'), null);
+		assert.equal(bare.host.querySelector('[data-tour="question-hold"]'), null);
+	} finally { await bare.unmount(); }
+});
+
+test("Spør agenten hands over what the learner had typed (thinking field, or the free-text answer)", async () => {
+	const held: string[] = [];
+	const choice = await mountDock({ toolName: "quiz", input: quizArgs, onSkip: () => {}, onHold: (draft) => { held.push(draft); } });
+	try {
+		const hold = choice.host.querySelector<HTMLButtonElement>('[data-tour="question-hold"]')!;
+		assert.equal(hold.textContent, "Spør agenten");
+		assert.equal(hold.getAttribute("title"), "Sett spørsmålet på vent og skriv til agenten");
+		await choice.type("thinking-field", "  what does 'which one' refer to?  ");
+		await act(async () => hold.click());
+	} finally { await choice.unmount(); }
+	const text = await mountDock({ toolName: "explain", input: { question: "Why?", correctAnswer: "Because." }, onHold: (draft) => { held.push(draft); } });
+	try {
+		await text.type("answer-field", "is this about the first lemma?");
+		await act(async () => text.host.querySelector<HTMLButtonElement>('[data-tour="question-hold"]')!.click());
+	} finally { await text.unmount(); }
+	const empty = await mountDock({ toolName: "quiz", input: quizArgs, onHold: (draft) => { held.push(draft); } });
+	try {
+		await act(async () => empty.host.querySelector<HTMLButtonElement>('[data-tour="question-hold"]')!.click());
+	} finally { await empty.unmount(); }
+	assert.deepEqual(held, ["what does 'which one' refer to?", "is this about the first lemma?", ""]);
+});
+
+for (const toolName of ["quiz", "probe"] as const) {
+	test(`graded multiple choice (${toolName}) cannot be sent without a short explanation`, async () => {
+		let answer: { correct?: boolean; thinking?: string; explanationRequired?: boolean } | undefined;
+		let sent = 0;
+		const dock = await mountDock({ toolName, input: quizArgs, onSubmit: (a) => { answer = a; sent++; } });
+		try {
+			const field = dock.host.querySelector('[data-testid="thinking-field"]')!;
+			assert.equal(field.getAttribute("data-tour"), "question-explain");
+			assert.match(dock.host.querySelector('[data-testid="learner-field-label"]')!.textContent!, /Forklar kort hvorfor \(kreves for å få godkjent\)/);
+			assert.equal(dock.submitButton().disabled, true, "nothing chosen yet");
+			await act(async () => { dock.host.querySelector<HTMLButtonElement>('[role="radio"]')!.click(); });
+			assert.equal(dock.submitButton().disabled, true, "a bare pick is not enough");
+			assert.match(dock.host.querySelector('[data-testid="dock-hint"]')!.textContent!, /Skriv en kort forklaring for å sende svaret\./);
+			// Enter / form submit with the explanation still owed sends nothing.
+			await dock.submitForm();
+			assert.equal(sent, 0);
+			await dock.type("thinking-field", "fordi");
+			assert.equal(dock.submitButton().disabled, true, "one word is below the floor");
+			await dock.type("thinking-field", "fordi ja er definisjonen");
+			assert.equal(dock.submitButton().disabled, false);
+			assert.match(dock.host.querySelector('[data-testid="dock-hint"]')!.textContent!, /↵ sender/, "the hint returns to the chord");
+			await dock.submitForm();
+			assert.equal(answer?.thinking, "fordi ja er definisjonen");
+			assert.equal(answer?.explanationRequired, true);
+			assert.equal(typeof answer?.correct, "boolean", "the option is still graded client-side");
+		} finally { await dock.unmount(); }
+	});
+}
+
+test("«Vet ikke» stays an honest answer: no explanation owed", async () => {
+	let answer: { dontKnow?: boolean; explanationRequired?: boolean } | undefined;
+	const dock = await mountDock({ toolName: "quiz", input: quizArgs, onSubmit: (a) => { answer = a; } });
+	try {
+		const idk = [...dock.host.querySelectorAll<HTMLButtonElement>("button")].find((b) => b.textContent === "Vet ikke")!;
+		await act(async () => idk.click());
+		assert.equal(dock.submitButton().disabled, false);
+		assert.equal(dock.host.querySelector('[data-testid="thinking-field"]')!.getAttribute("data-tour"), null, "the requirement lifts with the pick");
+		assert.match(dock.host.querySelector('[data-testid="learner-field-label"]')!.textContent!, /Din tankegang/);
+		await dock.submitForm();
+		assert.equal(answer?.dontKnow, true);
+		assert.equal(answer?.explanationRequired, undefined);
+	} finally { await dock.unmount(); }
+});
+
+test("ask_user_question is ungraded: a pick alone can be sent", async () => {
+	let answer: { answers?: unknown[]; explanationRequired?: boolean } | undefined;
+	const dock = await mountDock({ toolName: "ask_user_question", input: { question: "Which?", options: [{ label: "A" }, { label: "B" }] }, onSubmit: (a) => { answer = a; } });
+	try {
+		await act(async () => { dock.host.querySelector<HTMLButtonElement>('[role="radio"]')!.click(); });
+		assert.equal(dock.submitButton().disabled, false);
+		await dock.submitForm();
+		assert.equal(answer?.answers?.length, 1);
+		assert.equal(answer?.explanationRequired, undefined);
+	} finally { await dock.unmount(); }
+});
+
+test("number keys pick an option directly (the pick must stay one key)", async () => {
+	// linkedom has no layout: the walked-row effect's scrollIntoView is a no-op here.
+	(dom.window.HTMLElement.prototype as unknown as { scrollIntoView: () => void }).scrollIntoView = () => {};
+	const dock = await mountDock({ toolName: "quiz", input: quizArgs });
+	try {
+		const press = (key: string) => act(async () => {
+			const event = new window.Event("keydown", { bubbles: true, cancelable: true });
+			Object.assign(event, { key });
+			document.dispatchEvent(event);
+		});
+		await press("2");
+		const rows = [...dock.host.querySelectorAll<HTMLButtonElement>('[role="radio"]')];
+		assert.equal(rows[1]!.getAttribute("aria-checked"), "true");
+		assert.equal(rows[0]!.getAttribute("aria-checked"), "false");
+		await press("9"); // no ninth option: inert
+		assert.equal(rows[1]!.getAttribute("aria-checked"), "true");
+	} finally { await dock.unmount(); }
+});
+
+test("a teach check behind «Sjekk forståelsen» keeps Hopp over and Spør agenten visible and working, with ONE anchor each", async () => {
+	let skips = 0; const held: string[] = []; let expands = 0;
+	const dock = await mountDock({ toolName: "quiz", input: quizArgs, expanded: false, reveal: true,
+		onExpand: () => { expands++; }, onSkip: () => { skips++; }, onHold: (draft) => { held.push(draft); } });
+	try {
+		assert.ok(dock.host.querySelector('[data-testid="teach-check-reveal"]'), "the invitation is still the bar");
+		for (const anchor of ["question-skip", "question-hold"]) {
+			const anchored = dock.host.querySelectorAll(`[data-tour="${anchor}"]`);
+			assert.equal(anchored.length, 1, `${anchor}: exactly one anchor while collapsed`);
+			assert.equal(anchored[0]!.closest('[data-testid="question-collapsed-actions"]') !== null, true, "and it is the visible one");
+		}
+		const skip = dock.host.querySelector<HTMLButtonElement>('[data-testid="question-skip-collapsed"]')!;
+		const hold = dock.host.querySelector<HTMLButtonElement>('[data-testid="question-hold-collapsed"]')!;
+		assert.equal(skip.textContent, "Hopp over");
+		assert.equal(hold.textContent, "Spør agenten");
+		await act(async () => skip.click());
+		await act(async () => hold.click());
+		assert.equal(skips, 1);
+		assert.deepEqual(held, [""]);
+		assert.equal(expands, 0, "neither opens the check");
+	} finally { await dock.unmount(); }
+
+	// Opened, the form's own pair takes the anchors over; the collapsed row is gone.
+	const open = await mountDock({ toolName: "quiz", input: quizArgs, expanded: true, reveal: false, onSkip: () => {}, onHold: () => {} });
+	try {
+		assert.equal(open.host.querySelector('[data-testid="question-collapsed-actions"]'), null);
+		assert.equal(open.host.querySelectorAll('[data-tour="question-skip"]').length, 1);
+		assert.equal(open.host.querySelectorAll('[data-tour="question-hold"]').length, 1);
+	} finally { await open.unmount(); }
+
+	// The scroll-collapsed strip (not a reveal) keeps its one-line shape.
+	const strip = await mountDock({ toolName: "quiz", input: quizArgs, expanded: false, reveal: false, onSkip: () => {}, onHold: () => {} });
+	try {
+		assert.equal(strip.host.querySelector('[data-testid="question-collapsed-actions"]'), null);
+		assert.equal(strip.host.querySelectorAll('[data-tour="question-skip"]').length, 0, "no hidden anchors");
+	} finally { await strip.unmount(); }
+});
+
+test("while the posing turn settles, Send svar and Hopp over wait with «Et øyeblikk…»; Spør agenten stays live", async () => {
+	let skips = 0; let holds = 0; let submitted = 0;
+	const dock = await mountDock({ toolName: "explain", input: { question: "Why?", correctAnswer: "Because." }, turnSettling: true,
+		onSkip: () => { skips++; }, onHold: () => { holds++; }, onSubmit: () => { submitted++; } });
+	try {
+		await dock.type("answer-field", "because");
+		assert.equal(dock.submitButton().disabled, true);
+		await dock.submitForm();
+		assert.equal(submitted, 0);
+		const skip = dock.host.querySelector<HTMLButtonElement>('[data-testid="question-skip"]')!;
+		assert.equal(skip.disabled, true);
+		assert.match(dock.host.querySelector('[data-testid="dock-hint"]')!.textContent!, /Et øyeblikk…/);
+		await act(async () => dock.host.querySelector<HTMLButtonElement>('[data-testid="question-hold"]')!.click());
+		assert.equal(holds, 1, "the hold is queued by the session model, so the button never blocks");
+		assert.equal(skips, 0);
+	} finally { await dock.unmount(); }
+	const collapsed = await mountDock({ toolName: "quiz", input: quizArgs, expanded: false, reveal: true, turnSettling: true, onSkip: () => {}, onHold: () => {} });
+	try {
+		assert.equal(collapsed.host.querySelector<HTMLButtonElement>('[data-testid="question-skip-collapsed"]')!.disabled, true);
+		assert.equal(collapsed.host.querySelector<HTMLButtonElement>('[data-testid="question-hold-collapsed"]')!.disabled, false);
+		assert.match(collapsed.host.querySelector('[data-testid="question-collapsed-actions"]')!.textContent!, /Et øyeblikk…/);
+	} finally { await collapsed.unmount(); }
+});

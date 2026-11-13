@@ -38,8 +38,39 @@
  * no-drag column killed drag over the counts/search/close area).
  */
 
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { usePathname } from "next/navigation";
+import { CourseLinkChip } from "@/components/courses/course-chip";
 import { SidebarToggle } from "@/components/sidebar";
+import type { ChatListItem } from "@/src/core";
+
+/** The session a path names, or undefined (the draft view is no session). */
+export function chatIdFromPath(pathname: string | null | undefined): string | undefined {
+	const id = /^\/chat\/([A-Za-z0-9_-]+)\/?$/.exec(pathname ?? "")?.[1];
+	return id && id !== "new" ? id : undefined;
+}
+
+/**
+ * THE FAG CHIP (NTNU round): a session started from a fag shows its
+ * fagkode in the bar, as a link back to the fag page. The bar reads the
+ * link itself from the session list (the one payload that carries
+ * `course`), keyed by the route, so no surface has to thread a prop.
+ * Renders nothing until the answer is in, and nothing for a free session.
+ */
+function SessionCourseChip({ chatId }: { chatId: string }) {
+	const [code, setCode] = useState<string | null>(null);
+	useEffect(() => {
+		let live = true;
+		fetch("/api/chats", { cache: "no-store" })
+			.then((res) => res.json() as Promise<{ chats?: ChatListItem[] }>)
+			.then((body) => {
+				if (live) setCode(body.chats?.find((chat) => chat.id === chatId)?.course?.code ?? null);
+			})
+			.catch(() => { /* no chip is the honest fallback */ });
+		return () => { live = false; };
+	}, [chatId]);
+	return code ? <CourseLinkChip code={code} /> : null;
+}
 
 export function TopBar({
 	drag = true,
@@ -50,12 +81,14 @@ export function TopBar({
 	onMouseDown?: React.MouseEventHandler<HTMLElement>;
 	children?: ReactNode;
 }) {
+	const chatId = chatIdFromPath(usePathname());
 	return (
 		<header
 			onMouseDown={onMouseDown}
 			className={`${drag ? "lh-drag " : ""}lh-wco-gutter flex h-15 select-none items-center gap-3 border-b border-border px-3`}
 		>
 			<SidebarToggle />
+			{chatId && <SessionCourseChip key={chatId} chatId={chatId} />}
 			{children}
 		</header>
 	);

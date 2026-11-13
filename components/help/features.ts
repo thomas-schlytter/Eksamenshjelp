@@ -1,0 +1,184 @@
+/**
+ * The feature registry (NTNU round): everything a student can DO from the
+ * search palette. Pure data. Add a row to make a feature findable; the
+ * integrity test (tests/help-registry.test.ts) proves every route, settings
+ * section, keys row, shortcut and tour a row points at really exists.
+ */
+
+import type { FeatureEntry } from "./types.ts";
+
+export const FEATURES: readonly FeatureEntry[] = [
+	{
+		id: "hjem",
+		title: "Gå til Hjem",
+		description: "Oversikten over fagene dine.",
+		keywords: ["hjem", "mine fag", "forside", "start", "oversikt", "home"],
+		action: { kind: "route", href: "/" },
+	},
+	{
+		id: "legg-til-fag",
+		title: "Legg til fag",
+		description: "Søk opp et NTNU-fag med fagkode eller navn.",
+		keywords: ["nytt fag", "fagkode", "emne", "emnekode", "kurs", "ntnu", "add course", "legge til"],
+		action: {
+			kind: "point",
+			route: "/",
+			anchor: "add-course",
+			title: "Legg til fag",
+			text: "Trykk her og søk på fagkode eller navn, for eksempel TTK4100.",
+		},
+		suggested: true,
+	},
+	{
+		id: "apne-fag",
+		title: "Åpne et fag",
+		description: "Se eksamensplan, temaer og kontekst for et fag.",
+		keywords: ["fagside", "eksamensplan", "plan", "temaer", "kontekst", "emne"],
+		action: {
+			kind: "point",
+			route: "/",
+			anchor: "course-card",
+			title: "Åpne et fag",
+			text: "Trykk på et fagkort for å åpne fagsiden med eksamensplan, temaer og kontekst.",
+		},
+	},
+	{
+		id: "ny-okt",
+		title: "Ny økt",
+		description: "Start en fri økt om noe du vil forstå.",
+		keywords: ["ny økt", "start økt", "læringsøkt", "øvingsøkt", "lær", "øv", "chat", "samtale", "new session"],
+		action: { kind: "route", href: "/chat/new" },
+		suggested: true,
+	},
+	{
+		id: "kunnskapskart",
+		title: "Kunnskapskart",
+		description: "Se det du har lært som et kart av påstander og sammenhenger.",
+		keywords: ["kart", "graf", "knowledge graph", "påstander", "kjeder", "resonnementskjeder", "noder"],
+		action: { kind: "route", href: "/kart" },
+	},
+	{
+		id: "importer-notater",
+		title: "Importer notater",
+		description: "Legg egne notater inn i kunnskapskartet.",
+		keywords: ["importer", "notater", "pdf", "markdown", "tekstfil", "last opp", "import notes", "uttrekk"],
+		action: { kind: "route", href: "/kart" },
+	},
+	{
+		id: "hjelpesenter",
+		title: "Hjelpesenter",
+		description: "Spørsmål og svar, og veivisere som viser deg rundt.",
+		keywords: ["hjelp", "help", "spørsmål og svar", "faq", "veiviser", "support", "brukerstøtte"],
+		action: { kind: "route", href: "/hjelp" },
+		suggested: true,
+	},
+	{
+		id: "innstillinger",
+		title: "Åpne innstillinger",
+		description: "Modeller, nøkler, utseende, tastatur og oppdateringer.",
+		keywords: ["innstillinger", "settings", "oppsett", "preferanser", "valg"],
+		action: { kind: "settings", section: "keys" },
+	},
+	{
+		id: "innstillinger-leverandorer",
+		title: "Leverandører og API-nøkler",
+		description: "Koble til en AI-leverandør med API-nøkkel, abonnement, Claude Code eller egen adresse.",
+		keywords: [
+			"nøkkel", "nøkler", "api", "api-nøkkel", "api key", "leverandør", "provider", "abonnement", "openai", "anthropic",
+			"claude", "chatgpt", "google", "gemini", "openrouter", "claude code", "lokal modell", "ollama", "endepunkt",
+		],
+		action: { kind: "settings", section: "keys" },
+		suggested: true,
+	},
+	{
+		id: "innstillinger-modeller",
+		title: "Velg modeller",
+		description: "Velg modell for «Sterk», «Rimelig» og «Bilde», og styr hva agenten får gjøre.",
+		keywords: ["modell", "modeller", "model", "sterk", "rimelig", "bilde", "agent", "tenkenivå", "nettsøk", "verktøy", "systemprompt"],
+		action: { kind: "settings", section: "agent" },
+	},
+	{
+		id: "innstillinger-diktering",
+		title: "Sett opp diktering",
+		description: "Legg inn Deepgram-nøkkelen som trengs for å snakke i stedet for å skrive.",
+		keywords: ["diktering", "diktere", "tale", "snakke", "mikrofon", "stemme", "deepgram", "dictation", "tale til tekst"],
+		action: { kind: "settings", section: "keys", row: "DEEPGRAM_API_KEY" },
+	},
+	{
+		id: "innstillinger-nettsok",
+		title: "Sett opp nettsøk",
+		description: "Legg inn en nøkkel fra Tavily eller Brave Search så appen kan søke på nettet.",
+		keywords: ["nettsøk", "websøk", "web search", "søk på nettet", "tavily", "brave", "research", "internett"],
+		action: { kind: "settings", section: "keys", row: "TAVILY_API_KEY" },
+	},
+	{
+		id: "innstillinger-utseende",
+		title: "Utseende",
+		description: "Lys eller mørk modus, skrift og tekststørrelse.",
+		keywords: ["utseende", "tema", "farger", "skrift", "font", "tekststørrelse", "skriftstørrelse", "appearance", "bakgrunn"],
+		action: { kind: "settings", section: "appearance" },
+	},
+	{
+		id: "tema-mork",
+		title: "Bytt til mørk modus",
+		description: "Mørk bakgrunn med lys tekst.",
+		keywords: ["mørk modus", "mørkt tema", "dark mode", "dark", "nattmodus", "svart"],
+		action: { kind: "theme", mode: "dark" },
+	},
+	{
+		id: "tema-lys",
+		title: "Bytt til lys modus",
+		description: "Lys bakgrunn med mørk tekst.",
+		keywords: ["lys modus", "lyst tema", "light mode", "light", "dagmodus", "hvit"],
+		action: { kind: "theme", mode: "light" },
+	},
+	{
+		id: "tema-system",
+		title: "Følg systemets lys/mørk-innstilling",
+		description: "Appen bytter selv mellom lys og mørk sammen med maskinen din.",
+		keywords: ["system", "automatisk tema", "auto", "følg systemet", "lys mørk"],
+		action: { kind: "theme", mode: "system" },
+	},
+	{
+		id: "innstillinger-kunnskapskart",
+		title: "Innstillinger for kunnskapskartet",
+		description: "Velg hvordan kartet skal vises.",
+		keywords: ["kart", "graf", "kartvisning", "kjedevisning", "graph"],
+		action: { kind: "settings", section: "graph" },
+	},
+	{
+		id: "innstillinger-tastatur",
+		title: "Endre hurtigtaster",
+		description: "Se alle hurtigtaster og velg dine egne.",
+		keywords: ["tastatur", "hurtigtast", "hurtigtaster", "snarvei", "snarveier", "keyboard", "shortcut", "tastatursnarvei"],
+		action: { kind: "settings", section: "keyboard" },
+	},
+	{
+		id: "innstillinger-oppdateringer",
+		title: "Oppdateringer",
+		description: "Se hvilken versjon du har, og se etter nye.",
+		keywords: ["oppdatering", "oppdater", "versjon", "update", "ny versjon", "automatiske oppdateringer", "generelt"],
+		action: { kind: "settings", section: "general" },
+	},
+	{
+		id: "snarveioversikt",
+		title: "Vis snarveioversikten",
+		description: "En rask oversikt over alle hurtigtaster.",
+		keywords: ["snarveier", "hurtigtaster", "tastatur", "cheat sheet", "shortcuts", "taster"],
+		action: { kind: "shortcut", action: "cheat-sheet" },
+	},
+	{
+		id: "sidemeny",
+		title: "Vis eller skjul sidemenyen",
+		description: "Få mer plass, eller hent menyen tilbake.",
+		keywords: ["sidemeny", "meny", "sidebar", "skjul", "vis", "sidepanel", "fullskjerm"],
+		action: { kind: "shortcut", action: "toggle-sidebar" },
+	},
+	{
+		id: "sok-okter",
+		title: "Søk i øktene dine",
+		description: "Finn en tidligere økt på tittel.",
+		keywords: ["søk økt", "finn økt", "tidligere økter", "historikk", "search sessions"],
+		action: { kind: "shortcut", action: "sessions-search" },
+	},
+];

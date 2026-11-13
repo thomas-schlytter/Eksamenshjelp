@@ -111,7 +111,9 @@ export function KeyboardShortcuts() {
 			// The input guard: inside a typing surface only mod/alt combos
 			// fire (they never type a character). Bare keys — "?" included —
 			// pass through so the field keeps them. Tab already returned above.
-			if (isTypingSurface(e) && !(e.metaKey || e.ctrlKey || e.altKey)) return;
+			// Help is the one exception: F1 types nothing, and a learner stuck
+			// in a field is exactly who needs it.
+			if (isTypingSurface(e) && !(e.metaKey || e.ctrlKey || e.altKey) && action !== "open-help") return;
 
 			// Dispatch: global commands we own run here; surface commands
 			// ride the window event for the mounted surface to catch.
@@ -125,7 +127,19 @@ export function KeyboardShortcuts() {
 					handlersRef.current.openSettings();
 					break;
 				case "jump-graph":
-					handlersRef.current.router.push("/");
+					// The knowledge map moved off the home page (NTNU round):
+					// home is «Mine fag», the map lives at /kart.
+					handlersRef.current.router.push("/kart");
+					break;
+				case "open-search":
+					// Claim the chord so the browser's print dialog cannot open too.
+					// The help provider owns the listener (and the palette).
+					e.preventDefault();
+					window.dispatchEvent(new CustomEvent("lh:open-help"));
+					break;
+				case "open-help":
+					e.preventDefault(); // browsers bind F1 to their own help
+					handlersRef.current.router.push("/hjelp");
 					break;
 				case "cheat-sheet":
 					handlersRef.current.setCheatOpen(true);
@@ -140,8 +154,16 @@ export function KeyboardShortcuts() {
 					window.dispatchEvent(new CustomEvent(kbdEventForAction(action)));
 			}
 		};
+		// The search palette's «Snarveioversikt» entry opens the sheet through
+		// the same event spelling every other action uses.
+		const onCheat = () => handlersRef.current.setCheatOpen(true);
+		const cheatEvent = kbdEventForAction("cheat-sheet");
 		window.addEventListener("keydown", onKeyDown);
-		return () => window.removeEventListener("keydown", onKeyDown);
+		window.addEventListener(cheatEvent, onCheat);
+		return () => {
+			window.removeEventListener("keydown", onKeyDown);
+			window.removeEventListener(cheatEvent, onCheat);
+		};
 	}, [cheatOpen]);
 
 	return <CheatSheet open={cheatOpen} onClose={() => setCheatOpen(false)} />;
@@ -155,13 +177,16 @@ function CheatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 	if (!open) return null;
 	const scopes = ["global", "chat", "graph"] as const;
 	const scopeLabels: Record<(typeof scopes)[number], string> = {
-		global: "Global",
-		chat: "Chat",
-		graph: "Graph view",
+		global: "Overalt",
+		chat: "I en økt",
+		graph: "Kunnskapskart",
 	};
 	return (
 		<div
 			data-testid="cheat-sheet"
+			role="dialog"
+			aria-modal="true"
+			aria-label="Hurtigtaster"
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 			{...backdropDismiss}
 		>
@@ -170,8 +195,8 @@ function CheatSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
 				onClick={(e) => e.stopPropagation()}
 			>
 				<div className="mb-4 flex items-baseline justify-between">
-					<span className="text-sm font-medium text-card-foreground">Keyboard shortcuts</span>
-					<span className="text-xs text-muted-foreground">Esc to close</span>
+					<span className="text-sm font-medium text-card-foreground">Hurtigtaster</span>
+					<span className="text-xs text-muted-foreground">Esc lukker</span>
 				</div>
 				{scopes.map((scope) => {
 					const actions = KEYBOARD_ACTIONS.filter((a) => a.scope === scope);

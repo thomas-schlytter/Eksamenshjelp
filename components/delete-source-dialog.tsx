@@ -11,25 +11,25 @@ export function DeleteSourceBody({ sources, folders, deleteSessions, onDeleteSes
 }) {
 	const chats = sources.filter((s) => s.kind === "chat");
 	const names = [...sources.map((s) => s.label ?? s.id), ...folders.map((f) => f.name)];
-	return <div role="dialog" aria-modal="true" aria-label="Delete sources" data-testid="delete-source-dialog"
+	return <div role="dialog" aria-modal="true" aria-label="Slett kilder" data-testid="delete-source-dialog"
 		onClick={(e) => e.stopPropagation()} className="w-[32rem] max-w-[calc(100vw-2rem)] rounded-xl border bg-card p-5 shadow-xl">
-		<h2 className="text-sm font-semibold text-destructive">Delete selected sources and folders?</h2>
-		<p className="mt-1.5 font-mono text-sm" data-testid="source-deletion-names">{names.slice(0, 8).join(", ")}{names.length > 8 ? `, and ${names.length - 8} more` : ""}</p>
+		<h2 className="text-sm font-semibold text-destructive">Slette valgte kilder og mapper?</h2>
+		<p className="mt-1.5 font-mono text-sm" data-testid="source-deletion-names">{names.slice(0, 8).join(", ")}{names.length > 8 ? ` og ${names.length - 8} til` : ""}</p>
 		{sources.length > 0 && <p className="mt-2 text-sm text-muted-foreground" data-testid="source-deletion-contributions">
-			Removes these sources’ contributions to propositions and reasoning chains. Knowledge supported by other sources survives; knowledge supported only by these sources is removed.
+			Fjerner det disse kildene har bidratt med til påstander og resonnementskjeder. Kunnskap som andre kilder også støtter, beholdes. Kunnskap som bare disse kildene støtter, fjernes.
 		</p>}
-		<p className="mt-2 text-xs text-muted-foreground">Imported source records are removed, but original files on disk are never changed. Selected folders are removed only when empty; folders needed by kept sessions remain.</p>
+		<p className="mt-2 text-xs text-muted-foreground">Importerte kilder fjernes fra appen, men originalfilene på disken endres aldri. Valgte mapper fjernes bare når de er tomme. Mapper som trengs av økter du beholder, blir stående.</p>
 		{chats.length > 0 && <label className="mt-4 flex cursor-pointer items-start gap-2.5 rounded-lg border border-border/60 px-4 py-3">
 			<input type="checkbox" data-testid="delete-source-sessions" checked={deleteSessions} disabled={busy}
 				onChange={(e) => onDeleteSessions(e.target.checked)} className="mt-0.5 size-4 shrink-0 accent-primary" />
-			<span className="min-w-0"><span className="block text-sm">Also delete the {chats.length} selected {chats.length === 1 ? "session" : "sessions"}</span>
-				<span className="mt-1 block text-xs text-muted-foreground">Unchecked, conversations stay in their current folders and can be extracted again. Either way, their graph contributions and extraction coverage are cleared. Checking this also permanently deletes their messages and background jobs.</span>
+			<span className="min-w-0"><span className="block text-sm">Slett også {chats.length === 1 ? "den valgte økta" : `de ${chats.length} valgte øktene`}</span>
+				<span className="mt-1 block text-xs text-muted-foreground">Uten kryss blir samtalene liggende i mappene sine og kan trekkes ut på nytt. Uansett fjernes bidragene deres til kunnskapskartet og uttrekksdekningen. Med kryss slettes også meldingene og bakgrunnsjobbene deres for godt.</span>
 			</span>
 		</label>}
 		{failure && <p role="alert" data-testid="source-delete-failure" className="mt-3 text-xs text-foreground">{failure}</p>}
 		<div className="mt-4 flex justify-end gap-2">
-			<button type="button" data-testid="source-delete-cancel" disabled={busy} onClick={onClose} className="rounded-sm px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40">Cancel</button>
-			<button type="button" data-testid="source-delete-confirm" disabled={busy} onClick={onRun} className="rounded-sm border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-40">{busy ? "Deleting…" : failure ? "Try again" : "Delete"}</button>
+			<button type="button" data-testid="source-delete-cancel" disabled={busy} onClick={onClose} className="rounded-sm px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40">Avbryt</button>
+			<button type="button" data-testid="source-delete-confirm" disabled={busy} onClick={onRun} className="rounded-sm border border-destructive/50 bg-destructive/10 px-3 py-1.5 text-xs text-destructive transition-colors hover:bg-destructive/20 disabled:opacity-40">{busy ? "Sletter…" : failure ? "Prøv igjen" : "Slett"}</button>
 		</div>
 	</div>;
 }

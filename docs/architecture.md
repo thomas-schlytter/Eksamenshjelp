@@ -185,6 +185,19 @@ Source contribution deletion refuses while any extraction is registered; deletin
 
 Extraction is the normal **construction** writer, not the only graph mutation. Node deletion, session deletion, chain simplification and position commits also write graph files. Session deletion's `preserve-graph` mode keeps graph content/provenance while removing extraction bookkeeping; `delete-nodes` removes that session's traces, retaining identities supported by surviving sources. Deleting a proposition removes chains that use it; deleting an argument identity removes that chain. Node deletion refuses while extraction is registered. Session deletion blocks live turns/computing workers, winds down its own extraction and rechecks before its synchronous purge. Graph snapshot reads do not start extraction or settle layout.
 
+## 6b. Courses and exam mode (NTNU fork)
+
+This fork adds a course layer on top of the unchanged teach/practice engines. The UI is Norwegian bokmål; model-facing text stays English, and `prompts/shared/05-language.md` tells every agent to address the learner in Norwegian.
+
+- **Data:** one `Course` per file in `data/courses/<CODE>.json` (`src/core/courses.ts` types, `src/store/courses.ts` adapter): NTNU facts, exam info, sources (NTNU page, files/folders by path, links, pasted notes), topics with a traffic-light status (`unknown`/`red`/`yellow`/`green`) and the checked plan items. The NTNU course list is cached in `data/ntnu/courses.json`.
+- **NTNU:** `src/server/ntnu.ts` parses the public course page and the public course list (exam dates). No login; Canvas material must be added by the learner as files.
+- **Plan:** `buildExamPlan(course, today)` is pure and deterministic. It is derived on every read from topic statuses, weights, exam date and minutes per day; only the done-marks are stored.
+- **Topics:** `POST /api/courses/[code]/topics/generate` uses a single submit agent on the extractor role when models are configured, otherwise a deterministic fallback from the learning outcomes.
+- **Sessions:** `ChatRecord.course` links a session to a course (optionally a topic and a mode). Creation writes a `course-context` marker as message[0] (same mechanics as `graph-context`): course facts, topic list with statuses, sources the agent can read with its file tools, and a mode instruction (`learn`, `practice`, `mapping`). Linked sessions get the `topic_status` tool, which updates a topic's color and emits `courses-changed`.
+- **Question flow:** an answer can carry `skipped` (ordinary answer event, starts the agent's turn, not evidence), `onHold` (silent dismissal, the composer returns, the agent re-poses later) and `explanationRequired` (graded multiple choice needs the learner's reasoning before it counts).
+- **Help:** `components/help/` holds the search palette (features, Q&A, tours, courses, sessions), the help center at `/hjelp`, and the tour engine driven by `data-tour` anchors.
+- **Routes:** `/` is the course dashboard, `/fag/[code]` the course page, `/kart` the knowledge graph (the former home).
+
 ## 7. Change notifications and observability
 
 There are two SSE channels with different jobs:

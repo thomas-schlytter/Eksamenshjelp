@@ -468,6 +468,20 @@ export interface QuestionAnswerData {
 	committed?: string; // explain only (rendering): the model's committed answer
 	explanation?: string; // quiz only (rendering)
 	dismissed?: boolean;
+	/** "Hopp over" (2026-11): the learner chose not to answer NOW. Rides the
+	 *  ordinary answer event (the agent's turn starts), counts as no
+	 *  evidence. Always paired with `dismissed: true` so every older fold
+	 *  (cards, exports, the model record) keeps reading it as a non-answer. */
+	skipped?: boolean;
+	/** "Spør agenten" (2026-11): the learner paused the question to talk to
+	 *  the agent. Rides the SILENT dismissal route (the composer returns,
+	 *  nothing wakes); the agent re-poses the question afterwards. Always
+	 *  paired with `dismissed: true`. */
+	onHold?: boolean;
+	/** Graded multiple choice (quiz/probe, never "I don't know") required a
+	 *  written explanation before submit (2026-11): the client verdict only
+	 *  grades the OPTION; the agent approves the answer on the explanation. */
+	explanationRequired?: boolean;
 	answeredAt: string;
 }
 
@@ -499,6 +513,25 @@ export interface AnswerRequest {
  *  resting default — untouched and deliberate 50 are the same number. */
 export const CONFIDENCE_STOPS: readonly number[] = [0, 30, 50, 70, 90, 100];
 export const DEFAULT_CONFIDENCE_INDEX = 2;
+
+// ─── the required explanation (graded multiple choice, 2026-11) ─────────────
+
+/** The shortest explanation the dock accepts (trimmed characters). A floor
+ *  against empty/one-word submits, not a quality bar: the agent judges
+ *  whether the reasoning actually carries the chosen option. */
+export const MIN_EXPLANATION_CHARS = 8;
+
+/** Is the explanation required for this answer? Graded multiple choice
+ *  only (kind "quiz" = the quiz and probe tools), and never on "I don't
+ *  know" (an honest gap needs no justification). Ask is ungraded. */
+export function explanationRequiredFor(kind: QuestionKind, dontKnow: boolean): boolean {
+	return kind === "quiz" && !dontKnow;
+}
+
+/** Does this text satisfy the required-explanation floor? */
+export function explanationSatisfied(text: string | undefined): boolean {
+	return (text ?? "").trim().length >= MIN_EXPLANATION_CHARS;
+}
 
 // ─── dock selection (the client state machine, pure for tests) ─────────────
 
@@ -741,6 +774,13 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
 		if (!base.dontKnow && req.confidence !== undefined) {
 			base.confidence = Math.max(0, Math.min(100, Math.round(req.confidence)));
 		}
+		// The explanation gate (2026-11): the dock refused to submit without
+		// one, and the agent is told to approve on it (compactAnswerForModel).
+		// Stamped only when the floor is actually met, so the flag never
+		// promises reasoning the record does not carry.
+		if (explanationRequiredFor(qd.kind, base.dontKnow) && explanationSatisfied(base.thinking)) {
+			base.explanationRequired = true;
+		}
 	}
 	if (qd.kind === "explain") {
 		// No client grading — the model grades in its reply, against the
@@ -765,19 +805,40 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
  *  renders the question text + "skipped". Rides the same answer path —
  *  the teacher acknowledges the skip in its next turn, exactly like any
  *  answer. */
-export function dismissedAnswer(kind: QuestionKind, questionText: string): QuestionAnswerData {
+export function dismissedAnswer(
+	kind: QuestionKind,
+	questionText: string,
+	/** How the question was left (2026-11): "skipped" = Hopp over (sent as
+	 *  an ordinary answer, the agent moves on), "onHold" = Spør agenten
+	 *  (silent route, the agent re-poses later). Absent = the plain Esc
+	 *  dismissal. `tool` keeps the card's label (Kartlegging/Gjenkalling). */
+	how?: { reason?: "skipped" | "onHold"; tool?: string },
+): QuestionAnswerData {
 	return {
 		kind,
+		...(how?.tool ? { tool: how.tool } : {}),
 		questionText,
 		dontKnow: false,
 		answers: [],
 		dismissed: true,
+		...(how?.reason === "skipped" ? { skipped: true } : {}),
+		...(how?.reason === "onHold" ? { onHold: true } : {}),
 		answeredAt: new Date().toISOString(),
 	};
 }
 
 export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, unknown> {
-	if (ad.dismissed) return { kind: ad.kind, dismissed: true };
+	if (ad.dismissed) {
+		// A non-answer, three ways (2026-11): the bare flag is the Esc
+		// dismissal; `skipped` and `onHold` tell the agent WHICH non-answer
+		// (move on vs. answer the learner, then re-pose). Nothing else rides.
+		return {
+			kind: ad.kind,
+			dismissed: true,
+			...(ad.skipped === true ? { skipped: true } : {}),
+			...(ad.onHold === true ? { onHold: true } : {}),
+		};
+	}
 	const out: Record<string, unknown> = { kind: ad.kind };
 	if (ad.dontKnow) out.dontKnow = true;
 	// Array.isArray: the seam is called with `unknown` answers (test
@@ -791,6 +852,9 @@ export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, un
 	// incorrect and carries no confidence: both stay implicit.)
 	if (ad.correct !== undefined && !ad.dontKnow) out.correct = ad.correct;
 	if (ad.confidence !== undefined) out.confidence = ad.confidence;
+	// The explanation gate: `correct` grades the OPTION only; the agent
+	// approves the answer on `thinking` (prompt doctrine, question tools).
+	if (ad.explanationRequired === true) out.explanationRequired = true;
 	// Two DISTINCT thinking channels, clearly keyed so the model never
 	// conflates them (owner 2026-10-03): reasoning on the question vs
 	// thinking while reading the teaching. `note` is the pre-rename key —

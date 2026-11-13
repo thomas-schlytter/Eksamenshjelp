@@ -3,10 +3,10 @@
 import type { CacheRetention } from "@earendil-works/pi-ai";
 
 const OPTIONS = [
-	{ value: undefined, compact: "default", label: "Pi default", description: "Leave the option unset. Pi’s normal behavior and environment override apply." },
-	{ value: "none", compact: "not requested", label: "Don’t request caching", description: "Pass Pi’s native none preference. Providers may still cache automatically." },
-	{ value: "short", compact: "short", label: "Short retention", description: "Pass Pi’s native short preference. The duration depends on the provider and model." },
-	{ value: "long", compact: "long", label: "Long retention", description: "Pass Pi’s native long preference. Cache-write costs may be higher." },
+	{ value: undefined, compact: "standard", label: "Pi-standard", description: "Lar valget stå urørt. Pis vanlige oppførsel og miljøvariabler gjelder." },
+	{ value: "none", compact: "ikke forespurt", label: "Ikke be om caching", description: "Sender Pis innebygde valg «none». Leverandører kan likevel cache automatisk." },
+	{ value: "short", compact: "kort", label: "Kort varighet", description: "Sender Pis innebygde valg «short». Varigheten avhenger av leverandør og modell." },
+	{ value: "long", compact: "lang", label: "Lang varighet", description: "Sender Pis innebygde valg «long». Det kan koste mer å skrive til cachen." },
 ] as const;
 
 export function cacheRetentionLabel(value: CacheRetention | undefined): string {
@@ -19,8 +19,8 @@ export function CacheRetentionMenu({ value, onPick }: {
 }) {
 	return <>
 		<div className="border-b border-border px-2 pb-2">
-			<p className="text-card-foreground">Cache retention</p>
-			<p className="mt-1 text-muted-foreground">Controls the cache-retention preference sent to Pi. Support and duration depend on the provider and model. This does not guarantee a cache hit.</p>
+			<p className="text-card-foreground">Cache-varighet</p>
+			<p className="mt-1 text-muted-foreground">Styrer hvilken cache-varighet som sendes til Pi. Støtte og varighet avhenger av leverandør og modell. Dette garanterer ikke cache-treff.</p>
 		</div>
 		{OPTIONS.map((option) => <button
 			key={option.value ?? "default"}

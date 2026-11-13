@@ -128,7 +128,7 @@ export type DiscoverResult =
  *  body → honest error, never a silent empty list. */
 export async function discoverModels(baseUrl: string, apiKey?: string): Promise<DiscoverResult> {
 	const base = normalizeBaseUrl(baseUrl);
-	if (!base) return { ok: false, error: "Base URL must be a valid http(s) URL" };
+	if (!base) return { ok: false, error: "Base-URL må være en gyldig http(s)-adresse." };
 	const key = apiKey?.trim();
 	const controller = new AbortController();
 	const timer = setTimeout(() => controller.abort(), 15_000);
@@ -140,15 +140,15 @@ export async function discoverModels(baseUrl: string, apiKey?: string): Promise<
 		});
 		if (res.status >= 300 && res.status < 400) {
 			await res.body?.cancel();
-			return { ok: false, error: "Discovery redirects are not allowed", fatal: true };
+			return { ok: false, error: "Endepunktet videresender til en annen adresse. Det er ikke tillatt.", fatal: true };
 		}
-		if (!res.ok) { await res.body?.cancel(); return { ok: false, error: `Endpoint returned HTTP ${res.status}`, status: res.status }; }
+		if (!res.ok) { await res.body?.cancel(); return { ok: false, error: `Endepunktet svarte med HTTP ${res.status}.`, status: res.status }; }
 		const body = await readBoundedJson(res, 8 * 1024 * 1024);
 		const list = extractModels(body);
-		if (list === null) return { ok: false, error: "Endpoint response was not a model list" };
+		if (list === null) return { ok: false, error: "Svaret fra endepunktet var ikke en modell-liste." };
 		return { ok: true, models: list };
 	} catch (err) {
-		return { ok: false, error: err instanceof CustomBodyLimitError ? err.message : controller.signal.aborted ? "Endpoint timed out" : "Discovery request failed", fatal: err instanceof CustomBodyLimitError };
+		return { ok: false, error: err instanceof CustomBodyLimitError ? err.message : controller.signal.aborted ? "Endepunktet svarte ikke i tide." : "Kunne ikke hente modell-lista fra endepunktet.", fatal: err instanceof CustomBodyLimitError };
 	} finally {
 		clearTimeout(timer);
 	}
@@ -229,7 +229,7 @@ const MAX_TOKEN_KEYS = ["max_output_tokens"] as const;
 function extractModels(body: unknown): CustomModel[] | null {
 	const rows = modelRows(body);
 	if (rows === null) return null;
-	if (rows.length > 10_000) throw new CustomBodyLimitError("Model list exceeds 10000 entries");
+	if (rows.length > 10_000) throw new CustomBodyLimitError("Modell-lista har over 10 000 oppføringer.");
 	const byId = new Map<string, CustomModel>();
 	for (const row of rows) {
 		if (typeof row === "string") {

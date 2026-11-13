@@ -439,7 +439,7 @@ export function abortJob(jobId: string): AbortOutcome {
 
 	fireJobAbort(jobId);
 	stores.jobStore.updateJob(jobId, {
-		status: "error", error: "Aborted by learner", activity: "aborted",
+		status: "error", error: "Aborted by learner", activity: "avbrutt",
 		delivery: { kind: "abort", status: "pending" },
 	});
 	void deliverJobResult(buildAbortSteer(job)).catch(() => {
@@ -666,7 +666,7 @@ function normalizeLegacyResult(job: JobRecord): JobRecord {
 	if (job.delivery || job.status !== "running" || !job.result) return job;
 	const failed = isSubagentFailure(job.kind, job.result as never);
 	return stores.jobStore.updateJob(job.id, {
-		status: failed ? "error" : "done", activity: failed ? "failed" : "finished",
+		status: failed ? "error" : "done", activity: failed ? "mislyktes" : "ferdig",
 		delivery: { kind: "result", status: "pending" },
 	}) ?? job;
 }
@@ -751,7 +751,7 @@ export function recoverStaleJobs(): void {
 				} else if (job.status === "running" && !job.result) {
 					// The sub-agent loop itself died with the process: re-spawn.
 					if (!s.respawn) continue;
-					stores.jobStore.updateJob(job.id, { activity: "recovering: re-running" });
+					stores.jobStore.updateJob(job.id, { activity: "gjenoppretter: kjører på nytt" });
 					s.respawn(job.id);
 				}
 			}

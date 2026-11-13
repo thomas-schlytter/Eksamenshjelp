@@ -24,10 +24,12 @@ import { lsTool } from "./tools/ls.ts";
 import { findTool } from "./tools/find.ts";
 import { grepTool } from "./tools/grep.ts";
 import { healToolRecord } from "./tools/heal.ts";
+import { courseTools, type CourseToolContext } from "./tools/course.ts";
 import type { GraphStore } from "../core/ports.ts";
 
 export { jobTools };
 export type { ProbeDoneContext } from "./tools/probe.ts";
+export type { CourseToolContext } from "./tools/course.ts";
 
 /**
  * The agent-split tool composition (docs/probe-teach-split.md §1): the
@@ -276,6 +278,9 @@ export interface ProberToolContext extends ProbeDoneContext {
 	 *  master switch AND the agent.graphTools toggle (settings-resolution).
 	 *  Absent = the gate is closed, no map tools (tests drive this seam). */
 	graphStore?: GraphStore;
+	/** The session's course link (exam mode): present = topic_status is
+	 *  registered. Absent on sessions that belong to no course. */
+	course?: CourseToolContext;
 }
 
 /** The prober's tool set: probe quiz (no nodeId) + ask + the learner-fs
@@ -339,6 +344,8 @@ export function createProberTools(
 				...(ctx.graphStore
 					? proberGraphTools({ chatStore: ctx.chatStore, graphStore: ctx.graphStore })
 					: {}),
+				// Exam mode: the course's topic status, only in course sessions.
+				...(ctx.course ? courseTools(ctx.course) : {}),
 				...done,
 			},
 				withoutMechanics(enabled),
@@ -400,6 +407,9 @@ export interface TeacherToolContext extends PlanToolContext {
 	spawn: (job: JobRecord, input: ResearchInput | DemoInput | VisualInput | PdfInput) => void;
 	/** Retained search-status seam; research dispatch is available keylessly. */
 	searchAvailable?: () => boolean;
+	/** The session's course link (exam mode): present = topic_status is
+	 *  registered. Absent on sessions that belong to no course. */
+	course?: CourseToolContext;
 }
 
 /**
@@ -459,6 +469,8 @@ export function createTeacherTools(
 			grep: grepTool,
 			...planTools(ctx),
 			...jobTools({ chatId: ctx.chatId, jobStore: ctx.jobStore, spawn: ctx.spawn, searchAvailable: ctx.searchAvailable }),
+			// Exam mode: the course's topic status, only in course sessions.
+			...(ctx.course ? courseTools(ctx.course) : {}),
 		},
 		withoutMechanics(enabled),
 		),

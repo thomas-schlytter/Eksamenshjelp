@@ -55,7 +55,7 @@ it("a failed deletion keeps its original confirmation targets for retry even aft
 it("clearing ordinary source selection does not clear the caller's independent practice node picks", async () => {
 	let changes = 0; globalThis.fetch = async () => Response.json(directory());
 	await mount(<ChainTableOverlay open nodes={[]} chains={[]} sessions={{}} fileSources={{}} controlledSelection={new Set(["practice-node"])} onSelectionChange={() => { changes++; }} onClose={() => {}} />);
-	await click("cluster-checkbox-a"); assert.match(document.querySelector('[data-testid="chain-selected-summary"]')!.textContent!, /1 source/);
+	await click("cluster-checkbox-a"); assert.match(document.querySelector('[data-testid="chain-selected-summary"]')!.textContent!, /1 kilde/);
 	await click("chain-clear"); assert.equal(document.querySelector('[data-testid="chain-selection-bar"]'), null); assert.equal(changes, 0);
 });
 it("minimal home refreshes its snapshot and summary immediately after source deletion, without a reload", async () => {
@@ -68,8 +68,8 @@ it("minimal home refreshes its snapshot and summary immediately after source del
 		throw new Error("No synthetic cost response");
 	};
 	await mount(<MinimalHome />);
-	assert.match(document.querySelector('[data-testid="knowledge-summary"]')!.textContent!, /1 imported note/);
+	assert.match(document.querySelector('[data-testid="knowledge-summary"]')!.textContent!, /1 importert notat/);
 	await click("open-chain-table"); await click("cluster-checkbox-a"); await click("chain-delete"); await click("source-delete-confirm");
-	assert.match(document.querySelector('[data-testid="knowledge-summary"]')!.textContent!, /0 imported notes/);
+	assert.match(document.querySelector('[data-testid="knowledge-summary"]')!.textContent!, /0 importerte notater/);
 	assert.equal(document.querySelector('[data-testid="cluster-checkbox-a"]'), null);
 });

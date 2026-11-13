@@ -80,20 +80,20 @@ describe("version and contextual copy", () => {
 		assert.equal(updateStatusText(null), null);
 		assert.equal(updateStatusText(state()), null);
 		assert.equal(updateStatusText(state({ status: "disabled" })), null);
-		assert.equal(updateStatusText(state({ status: "checking" })), "Checking for updates…");
-		assert.equal(updateStatusText(state({ status: "downloading", version: "0.3.8" })), "Downloading version 0.3.8…");
-		assert.equal(updateStatusText(state({ status: "up-to-date" })), "No newer version was found at the last check.");
-		assert.equal(updateStatusText(state({ status: "downloaded", version: "0.3.8" })), "Version 0.3.8 is ready. It will install when you quit the app.");
-		assert.equal(updateStatusText(state({ status: "error" })), "Couldn’t check for updates. Try again later.");
-		assert.equal(updateStatusText(state({ status: "downloading" })), "Downloading an update…");
-		assert.equal(updateStatusText(state({ status: "downloaded" })), "An update is ready. It will install when you quit the app.");
+		assert.equal(updateStatusText(state({ status: "checking" })), "Ser etter oppdateringer…");
+		assert.equal(updateStatusText(state({ status: "downloading", version: "0.3.8" })), "Laster ned versjon 0.3.8…");
+		assert.equal(updateStatusText(state({ status: "up-to-date" })), "Fant ingen nyere versjon ved forrige sjekk.");
+		assert.equal(updateStatusText(state({ status: "downloaded", version: "0.3.8" })), "Versjon 0.3.8 er klar. Den installeres når du avslutter appen.");
+		assert.equal(updateStatusText(state({ status: "error" })), "Kunne ikke se etter oppdateringer. Prøv igjen senere.");
+		assert.equal(updateStatusText(state({ status: "downloading" })), "Laster ned en oppdatering…");
+		assert.equal(updateStatusText(state({ status: "downloaded" })), "En oppdatering er klar. Den installeres når du avslutter appen.");
 	});
 });
 
 describe("General update rows", () => {
 	it("browser/SSR shows version and installed-version release notes, without inactive controls or claims", () => {
 		const html = renderToStaticMarkup(<UpdateSettings {...props} />);
-		assert.ok(html.includes("Version 0.3.7"));
+		assert.ok(html.includes("Versjon 0.3.7"));
 		assert.ok(html.includes(`${props.homepage}/releases/tag/v0.3.7`));
 		assert.ok(!html.includes("update-check")); assert.ok(!html.includes("row-auto-update"));
 		assert.ok(!html.includes(MANUAL_UPDATE_HINT)); assert.ok(!html.includes("update-status"));
@@ -127,29 +127,29 @@ describe("General update rows", () => {
 		await b.push(state({ status: "checking", revision: 1 }));
 		assert.equal((q(host, "update-check") as HTMLButtonElement).disabled, true);
 		assert.equal(q(host, "update-check")!.getAttribute("aria-busy"), "true");
-		assert.equal(q(host, "update-status")!.textContent, "Checking for updates…");
+		assert.equal(q(host, "update-status")!.textContent, "Ser etter oppdateringer…");
 		await b.push(state({ status: "downloading", version: "0.3.8", revision: 2 }));
-		assert.equal(q(host, "update-status")!.textContent, "Downloading version 0.3.8…");
+		assert.equal(q(host, "update-status")!.textContent, "Laster ned versjon 0.3.8…");
 		assert.equal((q(host, "update-check") as HTMLButtonElement).disabled, true);
 		await b.push(state({ status: "downloaded", version: "0.3.8", revision: 3 }));
-		assert.equal(q(host, "update-check"), null); assert.ok(q(host, "update-status")!.textContent!.includes("quit the app"));
+		assert.equal(q(host, "update-check"), null); assert.ok(q(host, "update-status")!.textContent!.includes("avslutter appen"));
 		await click(q(host, "update-restart")); assert.equal(b.calls.install, 1);
 	});
 
 	it("up-to-date and failure statuses allow another manual check", async () => {
 		const b = bridge(); const host = await mount(<UpdateSettings {...props} />);
 		await b.push(state({ status: "up-to-date", revision: 1 }));
-		assert.equal(q(host, "update-status")!.textContent, "No newer version was found at the last check.");
+		assert.equal(q(host, "update-status")!.textContent, "Fant ingen nyere versjon ved forrige sjekk.");
 		await b.push(state({ status: "error", revision: 2 }));
 		assert.equal((q(host, "update-check") as HTMLButtonElement).disabled, false);
-		assert.equal(q(host, "update-status")!.textContent, "Couldn’t check for updates. Try again later.");
+		assert.equal(q(host, "update-status")!.textContent, "Kunne ikke se etter oppdateringer. Prøv igjen senere.");
 		await click(q(host, "update-check")); assert.equal(b.calls.check, 1);
 	});
 
 	it("bridge command rejection is handled without exposing raw diagnostics", async () => {
 		const b = bridge(); b.failCheck(); const host = await mount(<UpdateSettings {...props} />);
 		await click(q(host, "update-check"));
-		assert.equal(q(host, "update-status")!.textContent, "Couldn’t check for updates. Try again later.");
+		assert.equal(q(host, "update-status")!.textContent, "Kunne ikke se etter oppdateringer. Prøv igjen senere.");
 		assert.ok(!host.textContent!.includes("sensitive"));
 	});
 
@@ -166,7 +166,7 @@ describe("General update rows", () => {
 		it(`dismisses ${version ?? "an unnamed update"} without installing, keeps Settings available, and shows a new version`, async () => {
 			const b = bridge(state({ status: "downloaded", version, revision: 1 }));
 			const host = await mount(<><UpdateSettings {...props} /><UpdateBanner /></>);
-			const dismiss = host.querySelector<HTMLElement>("[aria-label='Dismiss update notification']");
+			const dismiss = host.querySelector<HTMLElement>("[aria-label='Lukk oppdateringsvarselet']");
 			await click(dismiss);
 			assert.equal(q(host, "update-banner"), null);
 			assert.equal(b.calls.install, 0, "dismiss must not restart or install");
@@ -185,7 +185,7 @@ describe("General update rows", () => {
 	it("dismissal survives status transitions but is forgotten when the banner remounts", async () => {
 		const b = bridge(state({ status: "downloaded", version: "0.4.1", revision: 1 }));
 		const host = await mount(<UpdateBanner />);
-		await click(host.querySelector("[aria-label='Dismiss update notification']"));
+		await click(host.querySelector("[aria-label='Lukk oppdateringsvarselet']"));
 		await b.push(state({ status: "checking", revision: 2 }));
 		await b.push(state({ status: "downloaded", version: "0.4.1", revision: 3 }));
 		assert.equal(q(host, "update-banner"), null, "the same staged version stays hidden");
@@ -221,7 +221,7 @@ describe("General update rows", () => {
 		const snapshot = deferred<UpdateState>(); bridge(state(), snapshot.promise);
 		const host = await mount(<UpdateSettings {...props} />);
 		await act(async () => { snapshot.reject(new Error("sensitive error")); });
-		assert.equal(q(host, "update-status")!.textContent, "Couldn’t check for updates. Try again later.");
+		assert.equal(q(host, "update-status")!.textContent, "Kunne ikke se etter oppdateringer. Prøv igjen senere.");
 		assert.ok(!host.textContent!.includes("sensitive"));
 	});
 });

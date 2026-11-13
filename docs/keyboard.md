@@ -11,10 +11,12 @@ Press **?** outside a text field for the in-app cheat sheet.
 | Toggle dictation | Mod+D |
 | Open settings | Mod+, |
 | Model selector | Mod+K |
+| Search the app (search palette) | Mod+P |
+| Help centre | F1 |
 | Cycle thinking level | Shift+Tab |
 | Toggle sessions sidebar | Mod+B |
 | Search sessions | Mod+Shift+F |
-| Graph view | Mod+G |
+| Knowledge map (`/kart`) | Mod+G |
 | New session | Mod+N |
 | Rename current session | F2 |
 | Toggle all your thinking in the session | Mod+T |
@@ -23,6 +25,8 @@ Press **?** outside a text field for the in-app cheat sheet.
 
 Surface-specific actions require their surface to be mounted. Bare shortcuts
 such as **?** and **F2** do not fire while typing; modifier shortcuts still do.
+**F1** is the one exception: it opens the help centre (`/hjelp`) from anywhere,
+text fields included. The in-app labels for these actions are Norwegian.
 
 **Settings → Keyboard** displays the registry and offers Rebind, per-action
 Reset, and Reset all controls. Overrides are stored on this device in
@@ -126,6 +130,14 @@ submission conventions above.
 
 ## Search and menus
 
+- **Search palette (Mod+P, or the sidebar's search button):** one field over
+  features, help answers, guided tours, courses and sessions. Focus stays in
+  the field. **↑/↓** walk the results with wrap; **Enter** opens the walked row
+  (the best match when nothing was walked); **Esc** or **Mod+P** closes. The
+  palette claims its own Esc, so it never reaches the turn-abort confirmation.
+- **Guided tours:** **→/←** step forward and back, **Tab** cycles the bubble's
+  buttons, **Esc** ends the tour. While a tour is open no other shortcut fires.
+
 - **Sessions search (Mod+Shift+F):** opens the sidebar if needed and focuses its
   search field. **↑/↓** walk the filtered sessions with wrap; **Enter** opens the
   walked row, or the first match if none was walked, then leaves the field.
@@ -149,6 +161,9 @@ submission conventions above.
 - [Registry and persistence](../src/core/keyboard.ts),
   [window dispatcher and cheat sheet](../components/keyboard-shortcuts.tsx),
   [Keyboard settings](../components/settings/keyboard-section.tsx).
+- [Search palette](../components/help/search-palette.tsx),
+  [tour overlay](../components/help/tour-overlay.tsx),
+  [help provider](../components/help/help-provider.tsx).
 - [Field cycle](../components/field-cycle.ts),
   [question dock](../components/question-dock.tsx),
   [practice dock](../components/practice-dock.tsx),

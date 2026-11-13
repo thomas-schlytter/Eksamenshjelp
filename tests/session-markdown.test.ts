@@ -10,7 +10,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { LhMessage } from "../src/core/native-messages.ts";
-import { messageMarkdown, sessionMarkdown } from "../src/core/session-markdown.ts";
+import { MARKDOWN_LABELS_EN, MARKDOWN_LABELS_NB, messageMarkdown, sessionMarkdown } from "../src/core/session-markdown.ts";
 import { messageViewLines } from "../src/core/coverage.ts";
 import { coverageSlots } from "../src/core/coverage.ts";
 
@@ -222,5 +222,54 @@ describe("sessionMarkdown", () => {
 			const hasMarkdown = messageMarkdown(message, message.id) !== null;
 			assert.equal(hasLines, isTeacher && hasMarkdown, `view lines follow teacher prose for ${message.id}`);
 		}
+	});
+});
+
+describe("sessionMarkdown — label tables (2026-11: the learner's export is Norwegian)", () => {
+	const messages = [
+		user("u1", "Lær meg derivasjon"),
+		teacher("a1", "Den deriverte er stigningstallet."),
+		result("r1", "q1", "quiz", { questionText: "Hva er f'(x)?", correct: true, dontKnow: false, note: "regnet ut" }),
+		result("r2", "q2", "probe", { questionText: "Skipped?", dismissed: true, skipped: true }),
+		result("r3", "q3", "explain", { questionText: "Held?", dismissed: true, onHold: true }),
+		result("r4", "q4", "recall", { questionText: "Closed?", dismissed: true }),
+		result("r5", "q5", "ask_user_question", { questionText: "Mål?", answers: ["Bestå"], other: "" }),
+		callMsg("a2", "p1", "problem", { statement: "Deriver x^2.", modelSolution: "2x" }),
+		result("r6", "p1", "problem", null),
+		callMsg("a3", "c1", "conclude", { outcome: "solvedWithHints", verdict: "Bra." }),
+		result("r7", "c1", "conclude", null),
+		result("r8", "g1", "grep", null),
+	];
+
+	it("the default table is the original English, byte for byte", () => {
+		const implicit = sessionMarkdown(messages, { title: "T" });
+		assert.equal(sessionMarkdown(messages, { title: "T", labels: MARKDOWN_LABELS_EN }), implicit);
+		for (const pin of [
+			"### Learner · u1", "### Teacher · a1", "### Quiz · r1", "**Q:** Hva er f'(x)?", "The learner answered correctly.",
+			"*(his thinking: regnet ut)*", "### Probe · r2", "### Recall check · r3", "### Recall · r4", "The learner skipped this check.",
+			"### Question · r5", "The learner chose: Bestå", "### Problem · r6", "### Concluded · r7", "**Solved with hints.** Bra.",
+			"> **Model solution**", "### Tool · r8", "*grep result delivered*",
+		]) assert.ok(implicit.includes(pin), pin);
+		assert.equal(implicit.split("The learner skipped this check.").length - 1, 3, "English never distinguishes the three non-answers");
+		assert.equal(messageMarkdown(messages[0]!, "u1"), "### Learner · u1\n\nLær meg derivasjon");
+	});
+
+	it("the Norwegian table translates every label and tells the three non-answers apart", () => {
+		const md = sessionMarkdown(messages, { title: "T", anchors: false, labels: MARKDOWN_LABELS_NB });
+		for (const pin of [
+			"### Student\n\nLær meg derivasjon", "### Lærer\n\nDen deriverte er stigningstallet.", "### Sjekk\n\n**Spørsmål:** Hva er f'(x)?",
+			"Studenten svarte riktig.", "*(tankegang: regnet ut)*", "### Kartlegging\n\n**Spørsmål:** Skipped?\n\nHoppet over.",
+			"### Forklar\n\n**Spørsmål:** Held?\n\nSatt på vent.", "### Gjenkalling\n\n**Spørsmål:** Closed?\n\nLukket uten svar.",
+			"### Spørsmål\n\n**Spørsmål:** Mål?\n\nStudenten valgte: Bestå", "### Oppgave\n\nDeriver x^2.",
+			"### Avsluttet\n\n**Løst med hint.** Bra.", "> **Løsningsforslag**\n>\n> 2x", "### Verktøy\n\n*resultat fra grep levert*",
+		]) assert.ok(md.includes(pin), pin);
+		for (const english of ["Learner", "Teacher", "The learner", "Quiz", "Probe", "Recall", "Concluded", "Model solution", "his thinking", "result delivered"]) {
+			assert.ok(!md.includes(english), `no English label: ${english}`);
+		}
+	});
+
+	it("both tables render the same blocks in the same order", () => {
+		const count = (md: string) => md.split("\n### ").length;
+		assert.equal(count(sessionMarkdown(messages, { labels: MARKDOWN_LABELS_NB })), count(sessionMarkdown(messages)));
 	});
 });

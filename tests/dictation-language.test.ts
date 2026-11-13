@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, describe, it } from "node:test";
-import { DICTATION_LANGUAGES, deepgramListenUrl, isDictationLanguage } from "../src/core/dictation.ts";
+import { DICTATION_LANGUAGES, deepgramListenUrl, dictationLanguageSearchTerms, isDictationLanguage } from "../src/core/dictation.ts";
 import { sanitizeUserSettings } from "../src/core/settings.ts";
 import { resolveSettings } from "../src/core/settings-resolution.ts";
 import { parseDictationSettingsBody } from "../src/server/settings-body.ts";
@@ -21,6 +21,17 @@ describe("Nova-3 dictation language contract", () => {
 		}
 		const labels = DICTATION_LANGUAGES.slice(1).map((item) => item.label);
 		assert.deepEqual(labels, [...labels].sort((a, b) => a.localeCompare(b, "en")));
+	});
+
+	it("search matches the Norwegian name, the English name and the code; the shown label stays Norwegian", () => {
+		const byCode = (code: string) => DICTATION_LANGUAGES.find((item) => item.code === code)!;
+		assert.deepEqual(dictationLanguageSearchTerms(byCode("pl")), ["pl", "Polsk", "Polish"]);
+		assert.deepEqual(dictationLanguageSearchTerms(byCode("de")), ["de", "Tysk", "German"]);
+		assert.deepEqual(dictationLanguageSearchTerms(byCode("de-CH")), ["de-CH", "Tysk (Sveits)", "German (Switzerland)"]);
+		assert.deepEqual(dictationLanguageSearchTerms(byCode("en-GB")), ["en-GB", "Engelsk (en-GB)", "English"]);
+		assert.deepEqual(dictationLanguageSearchTerms(byCode("multi")), ["multi", "Flerspråklig", "Multilingual"]);
+		assert.deepEqual(dictationLanguageSearchTerms(byCode("no")), ["no", "Norsk", "Norwegian"]);
+		assert.ok(DICTATION_LANGUAGES.every((item) => item.english.length > 0 && !/[æøå]/i.test(item.english)), "every row has an English alias");
 	});
 
 	it("only language varies in the streaming URL; all tuned parameters survive", () => {

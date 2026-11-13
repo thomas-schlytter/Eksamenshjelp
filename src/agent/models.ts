@@ -172,7 +172,7 @@ export function piEngineForSpec(spec: ResolvedModelSpec, background: boolean | (
 				// Pi retains the setup of an operation already in flight.
 				const current = piModels();
 				const currentModel = current.getModel(spec.provider, spec.id);
-				if (!currentModel) return lazyStream(requestModel, async () => { throw new Error("The selected custom model is unavailable."); });
+				if (!currentModel) return lazyStream(requestModel, async () => { throw new Error("Den valgte egendefinerte modellen er ikke tilgjengelig."); });
 				const currentLevel = thinkingPreference
 					? clampThinkingLevel(currentModel, thinkingPreference)
 					: defaultThinkingLevel(currentModel);

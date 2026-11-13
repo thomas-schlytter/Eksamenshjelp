@@ -47,7 +47,7 @@ for (const [name, results] of [
 	["invalid error", [{ ...completed(), error: 42 }, completed(1)]],
 	["invalid notice", [{ ...completed(), notice: 42 }, completed(1)]],
 	["missing failure error", [{ ...completed(), ok: false, outcome: "failed" }, completed(1)]],
-] as const) it(`malformed response (${name}) warns to inspect before retrying`, () => { assert.throws(() => parseNotesImportResults({ results }, files), /Check the graph before retrying/); });
+] as const) it(`malformed response (${name}) warns to inspect before retrying`, () => { assert.throws(() => parseNotesImportResults({ results }, files), /Sjekk kunnskapskartet før du prøver igjen/); });
 
 it("POST includes captured files and relative identities, preserving provider details", async () => {
 	const file = new File(["two"], "same.md"); Object.defineProperty(file, "webkitRelativePath", { value: "Course/Week/same.md" });
@@ -74,14 +74,14 @@ for (const outcome of ["completed", "failed", "partial", "aborted", "busy"] as c
 	assert.doesNotMatch(html, /<button|<section|<ul|border|bg-card|rounded|shadow|Retry|Dismiss|Import complete/);
 	if (outcome === "completed") { assert.equal(html, ""); assert.deepEqual(current.errors, []); }
 	else {
-		assert.deepEqual(current.errors, [`${file.name}: ${result.error}\nprovider_key_missing — openai — OPENAI_API_KEY — cheap, strong`]);
+		assert.deepEqual(current.errors, [`${file.name}: ${result.error}\nprovider_key_missing · openai · OPENAI_API_KEY · cheap, strong`]);
 		assert.match(html, /&lt;script&gt;notes.md: &lt;img&gt;synthetic failure/); assert.match(html, /role="alert"/); assert.doesNotMatch(html, /<script>|<img>/);
 	}
 });
 for (const details of [{ code: "models_not_configured", missing: ["cheap", "strong", "vision"] }, { code: "provider_key_missing", provider: "openai", slots: ["cheap"] }, { code: "provider_key_missing" }, {}]) it(`configuration details survive (${JSON.stringify(details)})`, async () => {
 	globalThis.fetch = async () => Response.json({ results: [{ requestIndex: 0, filePath: "same.md", ok: false, outcome: "failed", error: "Existing raw error", ...details }] });
 	await mount(); await submit([files[0]!]);
-	const suffix = details.code === "models_not_configured" ? "\nmodels_not_configured — cheap, strong, vision" : details.provider ? "\nprovider_key_missing — openai — cheap" : details.code ? "\nprovider_key_missing" : "";
+	const suffix = details.code === "models_not_configured" ? "\nmodels_not_configured · cheap, strong, vision" : details.provider ? "\nprovider_key_missing · openai · cheap" : details.code ? "\nprovider_key_missing" : "";
 	assert.deepEqual(current.errors, [`same.md: Existing raw error${suffix}`]);
 });
 
@@ -104,7 +104,7 @@ for (const kind of ["network", "non-JSON", "non-2xx", "malformed", "duplicate in
 		return Response.json({ results: kind === "duplicate index" ? [completed(), completed()] : [] });
 	};
 	await mount(); await submit();
-	const message = kind === "network" ? "synthetic offline" : kind === "non-2xx" ? "Import request failed (HTTP 503): synthetic refused. Check the graph before retrying." : "Invalid import response. Check the graph before retrying.";
+	const message = kind === "network" ? "synthetic offline" : kind === "non-2xx" ? "Importen mislyktes (HTTP 503): synthetic refused. Sjekk kunnskapskartet før du prøver igjen." : "Ugyldig svar fra importen. Sjekk kunnskapskartet før du prøver igjen.";
 	assert.deepEqual(current.errors, files.map((file) => `${file.name}: ${message}`));
 	assert.equal(calls, 2); assert.equal(finishes, 1); assert.equal(current.importing, false);
 });
@@ -128,7 +128,7 @@ it("PDF notices and failures survive per-file requests, in selection order", asy
 for (const [status, error] of [[413, "Too big. Max 25 MB."], [413, "Import request is too large. Select fewer files."], [400, "Could not read the upload. It may be incomplete; please select the files again."]] as const) it(`server refusal remains readable (${error})`, async () => {
 	globalThis.fetch = async () => Response.json({ results: [], error }, { status });
 	await mount(); await submit();
-	assert.deepEqual(current.errors, files.map((file) => `${file.name}: Import request failed (HTTP ${status}): ${error} Check the graph before retrying.`));
+	assert.deepEqual(current.errors, files.map((file) => `${file.name}: Importen mislyktes (HTTP ${status}): ${error} Sjekk kunnskapskartet før du prøver igjen.`));
 	assert.deepEqual(current.notices, []); assert.equal(current.importing, false);
 });
 it("25 MiB is per file, not per selection; oversized files fail locally while smaller siblings upload", async () => {
@@ -137,7 +137,7 @@ it("25 MiB is per file, not per selection; oversized files fail locally while sm
 	await mount();
 	const half = new Uint8Array(MAX_IMPORT_BYTES / 2 + 1);
 	await submit([new File([new Uint8Array(MAX_IMPORT_BYTES + 1)], "textbook.pdf"), new File([half], "a.pdf"), new File([half], "b.pdf")]);
-	assert.deepEqual(sent, ["a.pdf", "b.pdf"]); assert.deepEqual(current.errors, ["textbook.pdf: Too big. Max 25 MB."]);
+	assert.deepEqual(sent, ["a.pdf", "b.pdf"]); assert.deepEqual(current.errors, ["textbook.pdf: For stor. Maks 25 MB."]);
 });
 it("picker stays enabled during imports, offers Files/Folder, and keeps PDF support", () => {
 	const html = renderToStaticMarkup(<NotesImportControl importing onImportFiles={() => {}} />);

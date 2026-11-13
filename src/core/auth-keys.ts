@@ -33,19 +33,19 @@ export const AUTH_KEYS: readonly AuthKeyInfo[] = [
 	{
 		id: "DEEPGRAM_API_KEY",
 		label: "Deepgram",
-		description: "Speech-to-text key for dictation — needs ≥ Member permission in the Deepgram console to mint tokens.",
+		description: "Tale-til-tekst-nøkkel for diktering. Krever minst Member-tilgang i Deepgram-konsollen for å lage tokener.",
 		docsUrl: "https://console.deepgram.com/",
 	},
 	{
 		id: "TAVILY_API_KEY",
 		label: "Tavily",
-		description: "Web-search engine for the researcher sub-agent (AI-native search API). Setting the key activates it — no engine toggle needed.",
+		description: "Nettsøk for research-agenten (søke-API laget for AI). Søket slås på når nøkkelen er lagt inn.",
 		docsUrl: "https://app.tavily.com/",
 	},
 	{
 		id: "BRAVE_API_KEY",
 		label: "Brave Search",
-		description: "Web-search engine for the researcher sub-agent — the alternative to Tavily. Setting the key activates it.",
+		description: "Nettsøk for research-agenten, alternativet til Tavily. Søket slås på når nøkkelen er lagt inn.",
 		docsUrl: "https://brave.com/search/api/",
 	},
 ] as const;
@@ -132,7 +132,7 @@ export const AUTH_PROVIDER_KEYS: readonly AuthProviderInfo[] = [
 export const CUSTOM_PROVIDER = {
 	id: "custom",
 	envVar: "CUSTOM_OPENAI_API_KEY",
-	label: "Custom endpoint",
+	label: "Egendefinert endepunkt",
 } as const;
 
 /** Every distinct env var a model-provider key rides in (the write side's
@@ -165,12 +165,12 @@ export function validateKeyShape(id: string, rawValue: string): KeyShapeResult {
 	const nonEmpty = (min: number) =>
 		value.length >= min && !/\s/.test(value)
 			? { ok: true as const }
-			: { ok: false as const, error: `${id} must be at least ${min} characters with no whitespace` };
+			: { ok: false as const, error: `${id} må være minst ${min} tegn, uten mellomrom` };
 	switch (id) {
 		case "TAVILY_API_KEY":
 			return value.startsWith("tvly-")
 				? nonEmpty(20)
-				: { ok: false, error: `${id} must start with "tvly-" (Tavily's key format)` };
+				: { ok: false, error: `${id} må begynne med «tvly-» (Tavilys nøkkelformat)` };
 		case "BRAVE_API_KEY":
 			// No public format — a length floor + paste hygiene only.
 			return nonEmpty(20);
@@ -178,7 +178,7 @@ export function validateKeyShape(id: string, rawValue: string): KeyShapeResult {
 			// No public format — the length floor only catches truncated pastes.
 			return nonEmpty(20);
 		default:
-			return { ok: false, error: `unknown key "${id}" (supported: ${[...AUTH_KEY_IDS].join(", ")})` };
+			return { ok: false, error: `ukjent nøkkel «${id}» (støttede: ${[...AUTH_KEY_IDS].join(", ")})` };
 	}
 }
 
@@ -187,7 +187,7 @@ export function validateKeyShape(id: string, rawValue: string): KeyShapeResult {
 export function genericProviderKeyGuard(id: string, rawValue: string): KeyShapeResult {
 	const value = rawValue.trim();
 	if (value.length >= 12 && !/\s/.test(value)) return { ok: true };
-	return { ok: false, error: `${id} must be at least 12 characters with no whitespace` };
+	return { ok: false, error: `${id} må være minst 12 tegn, uten mellomrom` };
 }
 
 /** A masked key never leaves the server as plaintext (owner decision:

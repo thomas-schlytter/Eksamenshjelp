@@ -29,7 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 /**
  * Rename (2026-09-17): the header's click-to-edit title commits here.
  * Validation is a single rule — a non-empty string after trim (the store's
- * "Untitled session" floor is never reached from this route). updatedAt is
+ * "Økt uten navn" floor is never reached from this route). updatedAt is
  * deliberately NOT bumped: a rename must not reorder the sidebar (same
  * rule as the settings PUT).
  */

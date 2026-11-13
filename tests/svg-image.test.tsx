@@ -22,7 +22,7 @@ function assertImageBoundary(holder: Element, source: string) {
 	assert.equal(holder.children.length, 1, "no figure markup alongside the image");
 	assert.equal(holder.querySelector("svg, style, script, foreignObject, a, [onload], [onclick]"), null,
 		"generated elements and CSS never enter the app document");
-	assert.equal(image.getAttribute("alt"), "Figure");
+	assert.equal(image.getAttribute("alt"), "Figur");
 	assert.equal(image.getAttribute("draggable"), "false", "native image dragging must not interfere with panning");
 	const src = image.getAttribute("src")!;
 	assert.ok(src.startsWith(PREFIX));
@@ -124,7 +124,7 @@ describe("generated SVG image boundary", () => {
 		const holder = document.querySelector("[data-lh-overlay-chart]")!;
 		assert.equal(assertImageBoundary(holder, FIGURE).className, "block h-auto w-full");
 		assert.match(holder.parentElement!.getAttribute("style")!, /width:320px/);
-		for (const label of ["Zoom in", "Zoom out", "Fit diagram to view", "Close"]) {
+		for (const label of ["Zoom inn", "Zoom ut", "Tilpass diagrammet til visningen", "Lukk"]) {
 			assert.ok(document.querySelector(`button[aria-label="${label}"]`));
 		}
 	});
@@ -188,7 +188,7 @@ it("the fullscreen button opens the same SVG image and inversion; download keeps
 		assert.ok(downloaded);
 		assert.equal(await downloaded.text(), originalSvg);
 		assert.equal(downloaded.type, "image/svg+xml");
-		assert.deepEqual(clicked, { name: "figure.svg", href: "blob:figure-test" });
+		assert.deepEqual(clicked, { name: "figur.svg", href: "blob:figure-test" });
 		assert.equal(revoked, "blob:figure-test");
 	} finally {
 		try {

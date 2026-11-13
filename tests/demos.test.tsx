@@ -237,7 +237,7 @@ describe("demo bridge", () => {
 		assert.equal(state.error, "x is not defined");
 		assert.equal(state.height, 80, "error does not clobber height");
 		state = reduceDemoBridgeState(state, { type: "demo-error" });
-		assert.equal(state.error, "unknown error");
+		assert.equal(state.error, "ukjent feil");
 		// unknown types and non-objects ignored
 		assert.deepEqual(reduceDemoBridgeState(state, { type: "something-else" }), state);
 		assert.deepEqual(reduceDemoBridgeState(state, "demo-resize"), state);
@@ -264,7 +264,7 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /Research agent/);
+		assert.match(html, /Research-agent/);
 		assert.match(html, /web_search: (&quot;|")plato/);
 		assert.ok(!html.includes("Dispatched (job j1.)") || true, "ack text is not the display");
 	});
@@ -275,8 +275,8 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /Research agent/);
-		assert.match(html, /Dispatched…/);
+		assert.match(html, /Research-agent/);
+		assert.match(html, /Startet…/);
 	});
 
 	it("settles to a quiet finished one-liner when the worker is done", () => {
@@ -285,8 +285,8 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /Research agent/);
-		assert.match(html, /finished/);
+		assert.match(html, /Research-agent/);
+		assert.match(html, /ferdig/);
 		assert.ok(!html.includes("web_search"), "no stale activity line once settled");
 	});
 
@@ -296,7 +296,7 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /failed/);
+		assert.match(html, /mislyktes/);
 	});
 
 	it("renders nothing for a still-streaming tool input", () => {
@@ -326,7 +326,7 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<PdfJobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /PDF reader/);
+		assert.match(html, /PDF-leser/);
 		assert.match(html, /pdf_render/);
 	});
 
@@ -346,8 +346,8 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<PdfJobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /PDF reader/);
-		assert.match(html, /finished/);
+		assert.match(html, /PDF-leser/);
+		assert.match(html, /ferdig/);
 	});
 });
 
@@ -363,7 +363,7 @@ describe("steer card rendering (the delivered artifact)", () => {
 		assert.match(html, /demo-resize/);
 		assert.match(html, /demo-error/);
 		assert.match(html, /Damped oscillator/);
-		assert.match(html, /interactive demo/i);
+		assert.match(html, /interaktiv demo/i);
 		// the model-facing protocol text never renders for the learner
 		assert.ok(!html.includes("do NOT wait"), "no protocol glue in the bubble");
 	});
@@ -386,7 +386,7 @@ describe("steer card rendering (the delivered artifact)", () => {
 		);
 		const html = renderToStaticMarkup(<SubagentSteerCard message={projectNative([steer])[0] as never} />);
 		assert.ok(html.includes(encodeURIComponent(svg)), "the image URL contains the original SVG");
-		assert.match(html, /Figure/);
+		assert.match(html, /Figur/);
 		// Natural sizing (owner, 2026-10-07): a DECLARED width (200) means the
 		// holder hugs + centers rather than stretching full-width.
 		assert.match(html, /w-fit/, "holder hugs the declared size");
@@ -404,7 +404,7 @@ describe("steer card rendering (the delivered artifact)", () => {
 		const html = renderToStaticMarkup(<SubagentSteerCard message={view as never} />);
 		assert.match(html, /job-aborted-badge/);
 		assert.match(html, /research/, "the job's kind, lower-cased like the complete-badge idiom");
-		assert.match(html, /aborted by the learner/);
+		assert.match(html, /avbrutt av deg/);
 		// the teacher-facing protocol text never renders for the learner
 		assert.ok(!html.includes("no brief is coming"), "no protocol glue in the chip");
 		// the badge renders off the PART, not metadata (the custom-message scheme)
@@ -426,9 +426,9 @@ describe("steer card rendering (the delivered artifact)", () => {
 		);
 		const html = renderToStaticMarkup(<SubagentSteerCard message={projectNative([steer])[0] as never} />);
 		assert.match(html, /Research/);
-		assert.match(html, /complete/);
-		assert.match(html, /2 sources/);
-		assert.match(html, /view brief/, "the expansion affordance is offered");
+		assert.match(html, /ferdig/);
+		assert.match(html, /2 kilder/);
+		assert.match(html, /vis sammendrag/, "the expansion affordance is offered");
 		// the one-liner is a native <details> — collapsed by default, so the
 		// brief + sources ride in the DOM but never clutter the transcript
 		// until the learner opens them (the wave-1 "view full research" ask)
@@ -451,8 +451,8 @@ describe("steer card rendering (the delivered artifact)", () => {
 		);
 		const html = renderToStaticMarkup(<SubagentSteerCard message={projectNative([steer])[0] as never} />);
 		assert.match(html, /PDF/);
-		assert.match(html, /reading complete/);
-		assert.match(html, /read 1 page/, "the badge counts READ pages, not search hits");
+		assert.match(html, /ferdig lest/);
+		assert.match(html, /leste 1 side/, "the badge counts READ pages, not search hits");
 		assert.match(html, /<details[^>]*data-testid="pdf-complete-badge"/, "a real disclosure like the research badge");
 		assert.ok(!/<details[^>]*open/.test(html), "collapsed by default");
 		assert.ok(html.includes("power rule"), "the brief rides inside the details");
@@ -482,7 +482,7 @@ describe("steer card rendering (the delivered artifact)", () => {
 	it("renders a fallback note when the artifact part is missing", () => {
 		const msg = { id: "s", role: "user", parts: [{ type: "text", text: "x" }], metadata: { subagentResult: { jobId: "j", kind: "research", toolCallId: "c" } } };
 		const html = renderToStaticMarkup(<SubagentSteerCard message={msg as never} />);
-		assert.match(html, /could not be displayed/);
+		assert.match(html, /kunne ikke vises/);
 	});
 });
 
@@ -498,7 +498,7 @@ describe("artifact chrome — scrollbar, invert toggles, downloads (release poli
 		assert.match(html, /toggle-invert-demo-brightness/, "the invert switch (house Toggle)");
 		assert.match(html, /data-testid="demo-download"/);
 		assert.ok(!html.includes("hue-rotate"), "inversion is OFF by default — a manual toggle only");
-		assert.match(html, /interactive demo/, "the kind label lives in the caption header");
+		assert.match(html, /interaktiv demo/, "the kind label lives in the caption header");
 		assert.match(html, /Wave interference/, "the title rides beside the kind label");
 	});
 
@@ -520,12 +520,12 @@ describe("artifact chrome — scrollbar, invert toggles, downloads (release poli
 		assert.ok(!root.includes("rounded-xl border"), "no card container");
 		// Image BEFORE the caption row; the caption label and the controls follow it.
 		const svgAt = html.indexOf('data-testid="visual-svg"');
-		const captionAt = html.indexOf(">Figure<");
+		const captionAt = html.indexOf(">Figur<");
 		assert.ok(svgAt !== -1 && captionAt !== -1 && svgAt < captionAt, "the caption row sits below the image");
 		assert.ok(captionAt < html.indexOf("visual-download"), "the controls ride the caption row");
 		// The invert affordance: the contrast-circle disc + the tooltip.
 		assert.ok(html.includes("size-3"), "the icon disc");
-		assert.ok(html.includes('title="Invert colors"'), "the tooltip names the toggle");
+		assert.ok(html.includes('title="Inverter farger"'), "the tooltip names the toggle");
 		// The half-moon is ACTUALLY filled (owner catch: lucide's Contrast
 		// renders it hollow — fill="none" default; ours fills currentColor).
 		assert.ok(
@@ -844,7 +844,7 @@ describe("demo/visual job runners", () => {
 
 		const done = jobStore.getJob(job.id)!;
 		assert.equal(done.status, "done");
-		assert.equal(done.activity, "finished", "the worker finishes independently of delivery");
+		assert.equal(done.activity, "ferdig", "the worker finishes independently of delivery");
 		const result = done.result as { title: string; html: string; tested: boolean; notes?: string };
 		assert.equal(result.title, "Compound interest");
 		assert.equal(result.html, GOOD_HTML);
@@ -1073,8 +1073,8 @@ describe("tool + renderer registry wiring", () => {
 		assert.match(html, /read/);
 		assert.match(html, /notes\/calculus\.md/);
 		// expandable payload: input JSON + output text
-		assert.match(html, /Input/);
-		assert.match(html, /Output/);
+		assert.match(html, /Inndata/);
+		assert.match(html, /Utdata/);
 		assert.match(html, /The derivative measures force\./);
 		assert.ok(html.includes("<details"), "collapsed by default via a details element");
 	});
@@ -1089,7 +1089,7 @@ describe("tool + renderer registry wiring", () => {
 		};
 		const html = renderToStaticMarkup(<ToolCallCard part={imgPart as never} />);
 		assert.match(html, /Read image file \[image\/png\]\./);
-		assert.match(html, /1 image attached to the model/);
+		assert.match(html, /1 bilde lagt ved til modellen/);
 		assert.ok(!html.includes("AAAA"), "the image payload itself never renders");
 
 		const errPart = {
@@ -1100,7 +1100,7 @@ describe("tool + renderer registry wiring", () => {
 			errorText: "ENOENT: no such file",
 		};
 		const errHtml = renderToStaticMarkup(<ToolCallCard part={errPart as never} />);
-		assert.match(errHtml, /Error/);
+		assert.match(errHtml, /Feil/);
 		assert.match(errHtml, /ENOENT/);
 		assert.match(errHtml, /text-red-500/);
 	});

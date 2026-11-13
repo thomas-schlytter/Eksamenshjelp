@@ -93,6 +93,6 @@ test("a saved CLI background job is refused before model execution while opt-in 
 	assert.equal(calls, 0);
 	const refused = jobStore.getJob(job.id)!;
 	assert.equal(refused.status, "error");
-	assert.match(JSON.stringify(refused.result), /Enable and set it up in Settings/);
+	assert.match(JSON.stringify(refused.result), /Slå det på og sett det opp under Innstillinger/);
 	assert(!JSON.stringify(refused.result).includes("add one in Settings → Keys"));
 });

@@ -25,6 +25,6 @@ export async function claudeCodeInstallationResponse(
 		|| (supplied !== null && supplied !== origin)) {
 		return Response.json({ error: "Claude Code checks require a same-origin LearnHarness request." }, { status: 403, headers });
 	}
-	if (!enabled()) return Response.json({ error: "Claude Code is disabled." }, { status: 403, headers });
+	if (!enabled()) return Response.json({ error: "Claude Code er slått av." }, { status: 403, headers });
 	return Response.json(await inspect(), { headers });
 }

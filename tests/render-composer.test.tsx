@@ -33,7 +33,7 @@ function render(
 describe("Composer", () => {
 	it("chat placeholder + send button", () => {
 		const html = render();
-		assert.match(html, /Ask, answer, or steer the lesson/, "the default — active sessions");
+		assert.match(html, /Spør, svar eller styr økta/, "the default — active sessions");
 		assert.ok(html.includes('aria-label="Send"'), "send button present");
 	});
 
@@ -46,9 +46,9 @@ describe("Composer", () => {
 	it("busy with text: the button STAYS Send (click = steer); busy and empty: it becomes Stop", () => {
 		const steering = render({ busy: true, canSend: true });
 		assert.ok(steering.includes('aria-label="Send"'), "the steer affordance is clickable mid-turn");
-		assert.ok(!steering.includes('aria-label="Stop"'), "no morph while there is text to steer with");
+		assert.ok(!steering.includes('aria-label="Stopp"'), "no morph while there is text to steer with");
 		const idleStop = render({ busy: true, canSend: false });
-		assert.ok(idleStop.includes('aria-label="Stop"'), "empty composer: stop replaces send while streaming");
+		assert.ok(idleStop.includes('aria-label="Stopp"'), "empty composer: stop replaces send while streaming");
 	});
 
 	it("send button radius is 10px = 25% of the 40px button (concentric with the shell)", () => {
@@ -65,7 +65,7 @@ describe("Composer", () => {
 	it("THE NEXT MORPH (owner round 16 refinement): empty composer in the pause → wide green Next problem", () => {
 		const html = render({ canSend: false, nextProblem: true });
 		assert.ok(html.includes('data-testid="next-problem-button"'), "the morphed button");
-		assert.match(html, /Next problem/, "the label");
+		assert.match(html, /Neste oppgave/, "the label");
 		assert.ok(html.includes("bg-green-600"), "green — the correct-answer register");
 		assert.ok(!html.includes('aria-label="Send"'), "the square send is gone in the pause");
 	});
@@ -78,7 +78,7 @@ describe("Composer", () => {
 
 	it("busy outranks the morph — stop stays reachable", () => {
 		const html = render({ busy: true, canSend: false, nextProblem: true });
-		assert.ok(html.includes('aria-label="Stop"'), "stop wins the empty lane mid-turn");
+		assert.ok(html.includes('aria-label="Stopp"'), "stop wins the empty lane mid-turn");
 		assert.ok(!html.includes('data-testid="next-problem-button"'), "no next morph mid-turn");
 	});
 });

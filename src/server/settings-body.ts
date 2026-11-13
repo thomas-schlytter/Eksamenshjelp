@@ -324,7 +324,7 @@ export function parseGraphSettingsBody(body: unknown): SettingsBodyResult<GraphS
 			// cost more per extracted token than the content is worth.
 			return {
 				ok: false,
-				error: `extractionChunkTokens must be at least ${EXTRACTION_CHUNK_TOKENS_FLOOR} (smaller batches waste the per-run graph overhead)`,
+				error: `extractionChunkTokens må være minst ${EXTRACTION_CHUNK_TOKENS_FLOOR} (mindre bolker sløser med den faste kostnaden per kjøring)`,
 			};
 		}
 		settings.extractionChunkTokens = floored;
@@ -388,7 +388,7 @@ export function parseCompactionSettingsBody(body: unknown): SettingsBodyResult<C
 		if (floored < COMPACTION_THRESHOLD_FLOOR) {
 			return {
 				ok: false,
-				error: `thresholdTokens must be at least ${COMPACTION_THRESHOLD_FLOOR} (compaction keeps a ~20k-token recent tail — smaller budgets would churn it)`,
+				error: `thresholdTokens må være minst ${COMPACTION_THRESHOLD_FLOOR} (komprimeringen beholder de siste ca. 20k tokenene, så en lavere grense gir bare komprimering om og om igjen)`,
 			};
 		}
 		settings.thresholdTokens = floored;
@@ -401,7 +401,7 @@ export function parseDictationSettingsBody(body: unknown): SettingsBodyResult<Di
 	const raw = asRecord(body);
 	if (!raw) return { ok: false, error: "Invalid JSON body" };
 	if (raw.language === undefined) return { ok: true, settings: {} };
-	if (!isDictationLanguage(raw.language)) return { ok: false, error: "Unsupported dictation language" };
+	if (!isDictationLanguage(raw.language)) return { ok: false, error: "Dikteringsspråket støttes ikke." };
 	return { ok: true, settings: { language: raw.language } };
 }
 

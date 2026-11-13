@@ -462,7 +462,7 @@ describe("Retry refusal and revalidation", () => {
 		const res = await turn(engine, chat.id, { type: "retry" });
 		assert.equal(res.status, 400);
 		const body = await res.json() as { error: string };
-		assert.equal(body.error, "fetch failed\n\nThis response cannot be retried after compaction. Send a new message to continue.");
+		assert.equal(body.error, "fetch failed\n\nDette svaret kan ikke prøves på nytt etter komprimering. Send en ny melding for å fortsette.");
 		assert.deepEqual(chatStore.getChat(chat.id), snapshot);
 		assert.equal(contexts.length, 0);
 		assert.equal(new SessionModel({ chatId: chat.id, initialMessages: before }).getState().error?.message, "fetch failed");
@@ -489,7 +489,7 @@ describe("Retry refusal and revalidation", () => {
 			try {
 				const res = await turn(engine, chat.id, { type: "retry" });
 				assert.equal(res.status, 400);
-				if (later === "compaction") assert.match(await res.text(), /fetch failed.*cannot be retried after compaction/);
+				if (later === "compaction") assert.match(await res.text(), /fetch failed.*kan ikke prøves på nytt etter komprimering/);
 				assert.deepEqual(read(chat.id)!.messages, [...before, appended]);
 				assert.equal(contexts.length, 0);
 				assert.equal(isTurnRunning(chat.id), false);
@@ -595,7 +595,7 @@ describe("Retry eligibility and temporary omissions (pure)", () => {
 		for (const messages of [[user, failure, marker], [user, failure, marker, block], [user, failure, block, marker]]) {
 			assert.equal(endsInFailedTurn(messages), false);
 			assert.equal(failedResponseAtEnd(messages)?.id, failure.id, "only the Retry button disappears, not the banner");
-			assert.throws(() => retryDrops(messages), /fetch failed[\s\S]*cannot be retried after compaction/);
+			assert.throws(() => retryDrops(messages), /fetch failed[\s\S]*kan ikke prøves på nytt etter komprimering/);
 		}
 		assert.deepEqual([...retryDrops([user, failed("old"), marker, failed("new")])], ["new"], "a failure after compaction can retry its already-compacted starting state");
 	});

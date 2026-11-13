@@ -13,23 +13,27 @@ const AUTHORIZE = `${ISSUER}/api/accounts/authorize`;
 const TOKEN = `${ISSUER}/api/accounts/oauth/token`;
 const JWKS = `${ISSUER}/.well-known/jwks.json`;
 const SCOPES = ["openid", "profile", "email", "offline_access", "resource.invoke", "chatgpt.tokens.use.direct"];
+// Wire value: the settings UI matches this exact string and shows its own Norwegian copy.
 const REVOCATION_WARNING = "Account disconnected locally. Remote revocation could not be confirmed.";
 const random = () => crypto.randomBytes(32).toString("base64url");
 const fail = (code) => Object.assign(new Error(code), { code });
+// Brukervendt (norsk). Serverens feilklassifisering (src/agent/chatgpt-stream.ts)
+// leser disse tekstene: behold nøkkelordene tillatelse, utløpt, bakgrunn, avbrutt,
+// frakoblet og katalog, og unngå dem i de andre meldingene.
 const publicError = (err) => ({
-	cancelled: "ChatGPT sign-in cancelled.",
-	timeout: "ChatGPT sign-in timed out. Try again.",
-	storage: "ChatGPT credentials could not be read or saved. Check local file access, then reconnect before making requests.",
-	identity: "ChatGPT sign-in could not be verified. Select the intended saved account and try again.",
-	scope: "ChatGPT plan permission is missing. Reconnect and authorize ChatGPT plan use.",
-	disconnected: "This ChatGPT connection is disconnected. Reconnect in Providers.",
-	background: "ChatGPT background use is off in this app. Enable Allow background use for all ChatGPT accounts in Providers, or explicitly select an API-key model for that workload.",
-	catalog: "The ChatGPT account model catalog is unavailable. Retry the connection; no API-key fallback was used.",
-	expired: "The ChatGPT session expired. Reconnect in Providers.",
-	network: "ChatGPT could not be reached. Check your connection and try again.",
-	pending: "A ChatGPT sign-in is already pending.",
-	unavailable: "ChatGPT sign-in is unavailable in browser-only mode.",
-}[err?.code] || "ChatGPT sign-in failed. Try again; no API-key fallback was used.");
+	cancelled: "ChatGPT-innloggingen ble avbrutt.",
+	timeout: "ChatGPT-innloggingen tok for lang tid. Prøv igjen.",
+	storage: "Innloggingsdataene for ChatGPT kunne ikke leses eller lagres. Sjekk tilgangen til lokale filer, og koble til på nytt før du sender forespørsler.",
+	identity: "ChatGPT-innloggingen kunne ikke bekreftes. Velg den lagrede kontoen du mente, og prøv igjen.",
+	scope: "ChatGPT mangler tillatelse til å bruke abonnementet. Koble til på nytt og godkjenn bruk av ChatGPT-abonnementet.",
+	disconnected: "Denne ChatGPT-tilkoblingen er frakoblet. Koble til på nytt under Leverandører.",
+	background: "Bruk i bakgrunnen er slått av for ChatGPT i denne appen. Slå på «Tillat bruk i bakgrunnen» for alle ChatGPT-kontoer under Leverandører, eller velg selv en modell med API-nøkkel til den jobben.",
+	catalog: "Modellkatalogen for ChatGPT-kontoen er utilgjengelig. Prøv tilkoblingen på nytt. Ingen API-nøkkel ble brukt i stedet.",
+	expired: "ChatGPT-innloggingen er utløpt. Koble til på nytt under Leverandører.",
+	network: "Fikk ikke kontakt med ChatGPT. Sjekk nettforbindelsen og prøv igjen.",
+	pending: "En ChatGPT-innlogging pågår allerede.",
+	unavailable: "ChatGPT-innlogging er ikke tilgjengelig når appen bare kjører i nettleseren.",
+}[err?.code] || "ChatGPT-innloggingen mislyktes. Prøv igjen. Ingen API-nøkkel ble brukt i stedet.");
 
 const nonempty = (v) => typeof v === "string" && v.length > 0 && !/[\x00-\x20\x7f]/.test(v);
 const planScopes = (tokens) => !!tokens?.accessToken && SCOPES.every((scope) => tokens.scopes.includes(scope));
@@ -292,9 +296,9 @@ function createChatGPT({ store, openExternal, fetch: request = globalThis.fetch,
 				if (req.method !== "GET" || callback.origin !== new URL(redirectUri).origin || callback.pathname !== "/auth/callback" || req.headers.host !== new URL(redirectUri).host || consumed) { res.writeHead(404).end(); return; }
 				const params = callback.searchParams;
 				// Reject duplicate parameters and unsolicited callbacks without consuming a valid pending attempt.
-				if (["state", "code", "client_id", "error"].some((key) => params.getAll(key).length > 1) || params.get("state") !== expectedState) { res.writeHead(400).end("Sign-in could not be verified."); return; }
+				if (["state", "code", "client_id", "error"].some((key) => params.getAll(key).length > 1) || params.get("state") !== expectedState) { res.writeHead(400).end("Innloggingen kunne ikke bekreftes."); return; }
 				consumed = true;
-				res.writeHead(200, { "content-type": "text/plain; charset=utf-8" }).end("Return to LearnHarness to view the sign-in result. You may close this tab.");
+				res.writeHead(200, { "content-type": "text/plain; charset=utf-8" }).end("Gå tilbake til LearnHarness for å se resultatet av innloggingen. Du kan lukke denne fanen.");
 				cleanup();
 				try {
 					if (params.has("error")) throw fail(params.get("error") === "access_denied" ? "cancelled" : "identity");

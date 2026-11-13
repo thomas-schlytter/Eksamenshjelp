@@ -31,6 +31,7 @@ import { runPiTurn } from "./pi/ui-stream.ts";
 import { collectToolCallIds } from "./pi/call-ids.ts";
 import { providerEventNote } from "../agent/provider-events.ts";
 import { effectiveSettings, stores } from "./stores.ts";
+import { courseToolContextFor } from "./courses.ts";
 import { searchAvailable, searchProvider } from "./search.ts";
 import { providerKeyPresent } from "./keys.ts";
 import { CLAUDE_CODE_PROVIDER } from "../core/contracts/claude-code.ts";
@@ -89,7 +90,7 @@ function connectionBackgroundAllowed(provider: string): boolean {
 }
 
 function settlementErrorText(error: unknown): string {
-	return error instanceof TurnPersistenceError ? error.message : "An error occurred.";
+	return error instanceof TurnPersistenceError ? error.message : "Det oppsto en feil.";
 }
 
 const jobRunner = createJobRunner({
@@ -248,7 +249,7 @@ export async function handleChatInput(
 	if (isSubscriptionProvider(conversation.provider)) {
 		await refreshConnectionCatalog(conversation.provider);
 		if (input.type === "steers" && !connectionBackgroundAllowed(conversation.provider)) {
-			return Response.json({ error: "Background use is off for this connection. Automatic follow-up remains deferred in its queue." }, { status: 403 });
+			return Response.json({ error: "Bruk i bakgrunnen er slått av for denne tilkoblingen. Den automatiske oppfølgingen blir stående i køen." }, { status: 403 });
 		}
 	}
 	if (!providerKeyPresent(conversation.provider)) {
@@ -343,7 +344,7 @@ export async function handleChatInput(
 		try { stores.chatStore.saveMessages(chatId, merged); }
 		catch (err) {
 			console.error(`[chat ${chatId}] write-ahead persist failed:`, err);
-			return new Response("Your input could not be saved. Please try again.", { status: 500 });
+			return new Response("Meldingen din kunne ikke lagres. Prøv igjen.", { status: 500 });
 		}
 		emit("record-changed", { chatId });
 		return settledTurnResponse(); // the cheap terminal — no beginTurn, no turn
@@ -354,7 +355,7 @@ export async function handleChatInput(
 	// double-run the teacher and clobber the first turn's persist.
 	if (!beginTurn(chatId)) {
 		console.info(`[chat ${chatId}] turn already in flight — request rejected`);
-		return Response.json({ error: "A turn is already running for this session" }, { status: 409 });
+		return Response.json({ error: "En tur kjører allerede i denne økta." }, { status: 409 });
 	}
 
 	// Write-ahead persistence: the input's native appends go on disk BEFORE
@@ -376,7 +377,7 @@ export async function handleChatInput(
 	} catch (err) {
 		console.error(`[chat ${chatId}] write-ahead persist failed:`, err);
 		endTurn(chatId);
-		return new Response("Your input could not be saved. Please try again.", { status: 500 });
+		return new Response("Meldingen din kunne ikke lagres. Prøv igjen.", { status: 500 });
 	}
 	// Visibility bookkeeping is not the canonical save. Its failure must
 	// neither misreport a saved input as lost nor prevent the turn running.
@@ -455,6 +456,11 @@ export async function handleChatInput(
 		// prompt fresh per turn, swapping in any enabled override segments.
 		promptSwitches: effective.agent.prompts,
 	};
+	// EXAM MODE: a session started from a course ("fag") gets topic_status
+	// in whichever registry this turn builds; the port keeps the agent layer
+	// off the course store. No course link = no tool.
+	const courseContext = courseToolContextFor(record.course, chatId);
+	const courseTool = courseContext ? { course: courseContext } : {};
 	// PRACTICE BRANCH (owner design, 2026-10-04): a kind:"practice"
 	// session builds the practitioner from turn 1 — no prober→teacher
 	// split, no plan/question/job tools; the whole registry is
@@ -483,6 +489,7 @@ export async function handleChatInput(
 							searchAvailable,
 						},
 						...(graphToolsEnabled(effective) ? { graph: { chatStore: stores.chatStore, graphStore: stores.graphStore } } : {}),
+						...courseTool,
 					},
 					agentOpts,
 				)
@@ -496,6 +503,7 @@ export async function handleChatInput(
 						// The registry drop's signal (2026-09-20): no live engine
 						// = no research tool in the teacher's registry.
 						searchAvailable,
+						...courseTool,
 					},
 					agentOpts,
 				)
@@ -514,6 +522,7 @@ export async function handleChatInput(
 						// knowledge graph through tools when the gate opens —
 						// graph master switch AND the agent.graphTools toggle.
 						...(graphToolsEnabled(effective) ? { graphStore: stores.graphStore } : {}),
+						...courseTool,
 					},
 					agentOpts,
 				);
@@ -562,7 +571,7 @@ export async function handleChatInput(
 				if (conversation.provider === "chatgpt") return chatGPTStreamError(String(error));
 				if (isSubscriptionProvider(conversation.provider)) return nativeSubscriptionError(conversation.provider, String(error));
 				console.error(`[chat ${chatId}] turn error:`, error);
-				return "An error occurred.";
+				return "Det oppsto en feil.";
 			},
 			onSettleError: settlementErrorText,
 			onSettleFailure: (error, reportedErrorText) => {
@@ -683,7 +692,7 @@ export async function handleChatInput(
 		// must cost zero permanently-held slots beyond the one live view. The
 		// turn itself is a server-side process (ruling 2026-09-25) — it never
 		// needed this connection, only a view did.
-		if (stagedAutomatic && requestCycle && !(await requestCycle.admission)) return Response.json({ error: "Automatic follow-up remains deferred in its queue." }, { status: 403 });
+		if (stagedAutomatic && requestCycle && !(await requestCycle.admission)) return Response.json({ error: "Den automatiske oppfølgingen blir stående i køen." }, { status: 403 });
 		return Response.json({ ok: true });
 	} catch (err) {
 		// The stream never started, so no onFinish will fire — clear the registry
@@ -693,6 +702,6 @@ export async function handleChatInput(
 		// turn here too - nothing was handed (the loop never ticked).
 		unregisterLiveAgent(chatId);
 		console.error(`[chat ${chatId}] turn failed to start:`, err);
-		return Response.json({ error: "Failed to start the turn" }, { status: 500 });
+		return Response.json({ error: "Kunne ikke starte turen." }, { status: 500 });
 	}
 }

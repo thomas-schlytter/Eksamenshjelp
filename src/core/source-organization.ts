@@ -60,7 +60,7 @@ export function canMoveFolder(state: SourceOrganization, id: string, parentId: s
 
 /** Reject unsupported/corrupt data rather than overwrite organization on a write. */
 export function parseSourceOrganization(raw: unknown): SourceOrganization {
-	const fail = (): never => { throw new Error("Could not read source organization. Its data is invalid or newer than this app."); };
+	const fail = (): never => { throw new Error("Kunne ikke lese kildeorganiseringen. Dataene er ugyldige eller nyere enn denne appen."); };
 	if (!raw || typeof raw !== "object") return fail();
 	const r = raw as Partial<SourceOrganization>;
 	if (r.version !== 1 || !Array.isArray(r.folders) || !r.placements || typeof r.placements !== "object" || Array.isArray(r.placements)) return fail();
@@ -81,19 +81,19 @@ export function parseSourceOrganization(raw: unknown): SourceOrganization {
 }
 
 export function parseOrganizationAction(raw: unknown): OrganizationAction {
-	if (!raw || typeof raw !== "object") throw new Error("Invalid source organization action.");
+	if (!raw || typeof raw !== "object") throw new Error("Ugyldig handling for kildeorganisering.");
 	const r = raw as Record<string, unknown>;
-	const id = () => { if (typeof r.id !== "string" || !r.id) throw new Error("A source or folder ID is required."); return r.id; };
-	const name = () => { if (typeof r.name !== "string" || !r.name.trim()) throw new Error("Name must be a non-empty string."); return r.name.trim(); };
-	const parent = () => { if (r.parentId !== null && typeof r.parentId !== "string") throw new Error("Invalid parent folder."); return r.parentId; };
+	const id = () => { if (typeof r.id !== "string" || !r.id) throw new Error("Kilde- eller mappe-ID mangler."); return r.id; };
+	const name = () => { if (typeof r.name !== "string" || !r.name.trim()) throw new Error("Navnet kan ikke være tomt."); return r.name.trim(); };
+	const parent = () => { if (r.parentId !== null && typeof r.parentId !== "string") throw new Error("Ugyldig overordnet mappe."); return r.parentId; };
 	switch (r.action) {
 		case "create-folder": return { action: r.action, name: name(), parentId: parent() };
 		case "rename-folder": case "rename-source": return { action: r.action, id: id(), name: name() };
 		case "delete-folder": return { action: r.action, id: id() };
 		case "move":
-			if (r.kind !== "source" && r.kind !== "folder") throw new Error("Invalid move kind.");
+			if (r.kind !== "source" && r.kind !== "folder") throw new Error("Ugyldig flyttetype.");
 			return { action: r.action, id: id(), kind: r.kind, parentId: parent() };
-		default: throw new Error("Unknown source organization action.");
+		default: throw new Error("Ukjent handling for kildeorganisering.");
 	}
 }
 
@@ -101,24 +101,24 @@ export function parseOrganizationAction(raw: unknown): OrganizationAction {
 export function applyOrganizationAction(state: SourceOrganization, action: Exclude<OrganizationAction, { action: "rename-source" }>,
 	sourceIds: ReadonlySet<string>, newFolder: { id: string; createdAt: string }): SourceOrganization {
 	const next = structuredClone(state);
-	if ("parentId" in action && action.parentId !== null && !next.folders.some((f) => f.id === action.parentId)) throw new Error("Parent folder no longer exists.");
+	if ("parentId" in action && action.parentId !== null && !next.folders.some((f) => f.id === action.parentId)) throw new Error("Den overordnede mappen finnes ikke lenger.");
 	if (action.action === "create-folder") {
 		next.folders.push({ ...newFolder, name: action.name, parentId: action.parentId });
 		return next;
 	}
 	if (action.action === "move" && action.kind === "source") {
-		if (!sourceIds.has(action.id)) throw new Error("Source no longer exists.");
+		if (!sourceIds.has(action.id)) throw new Error("Kilden finnes ikke lenger.");
 		next.placements = { ...next.placements, [action.id]: { ...placementOf(next, action.id), folderId: action.parentId } };
 		return next;
 	}
 	const folder = next.folders.find((f) => f.id === action.id);
-	if (!folder) throw new Error("Folder no longer exists.");
+	if (!folder) throw new Error("Mappen finnes ikke lenger.");
 	if (action.action === "rename-folder") folder.name = action.name;
 	else if (action.action === "move") {
-		if (!canMoveFolder(next, action.id, action.parentId)) throw new Error("A folder cannot be moved into itself or its descendants.");
+		if (!canMoveFolder(next, action.id, action.parentId)) throw new Error("En mappe kan ikke flyttes inn i seg selv eller en av undermappene sine.");
 		folder.parentId = action.parentId;
 	} else {
-		if (!folderIsEmpty(next, action.id, sourceIds)) throw new Error("Only empty folders can be removed. Move their entries out first.");
+		if (!folderIsEmpty(next, action.id, sourceIds)) throw new Error("Bare tomme mapper kan fjernes. Flytt innholdet ut først.");
 		next.folders = next.folders.filter((f) => f.id !== action.id);
 		for (const [id, p] of Object.entries(next.placements)) if (p.folderId === action.id) next.placements[id] = { ...p, folderId: null };
 	}

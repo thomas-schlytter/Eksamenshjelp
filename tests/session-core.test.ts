@@ -508,7 +508,7 @@ describe("provider-error banner (live and saved)", () => {
 
 	it("uses the existing fallback wording when the saved failure has no error text", () => {
 		const withoutText = { ...failed(), errorMessage: undefined } as LhMessage;
-		assert.equal(model({ initialMessages: [withoutText] }).getState().error?.message, "An error occurred.");
+		assert.equal(model({ initialMessages: [withoutText] }).getState().error?.message, "Det oppsto en feil.");
 		assert.equal(model().getState().error, null);
 	});
 
@@ -730,7 +730,7 @@ describe("truncated stream recovery", () => {
 		assert.equal(posts, 1);
 		assert.equal(streams, 2);
 		assert.equal(m.status, "error");
-		assert.equal(m.getState().error?.message, "The connection dropped before the turn completed.");
+		assert.equal(m.getState().error?.message, "Forbindelsen ble brutt før svaret var ferdig.");
 	});
 
 	it("reports the approved connection error when the recovery record read fails", async () => {
@@ -743,7 +743,7 @@ describe("truncated stream recovery", () => {
 		} });
 		await m.send({ type: "text", text: "go" });
 		assert.equal(m.status, "error");
-		assert.equal(m.getState().error?.message, "The connection dropped before the turn completed.");
+		assert.equal(m.getState().error?.message, "Forbindelsen ble brutt før svaret var ferdig.");
 	});
 
 	it("accepts turn-settled when the original turn finished during the disconnection", async () => {
@@ -792,7 +792,7 @@ describe("truncated stream recovery", () => {
 		} });
 		await m.send({ type: "text", text: "go" });
 		assert.equal(m.status, "error");
-		assert.equal(m.getState().error?.message, "The connection dropped before the turn completed.");
+		assert.equal(m.getState().error?.message, "Forbindelsen ble brutt før svaret var ferdig.");
 	});
 
 	it("preserves malformed-event diagnostics rather than calling them network drops", async () => {
@@ -801,7 +801,7 @@ describe("truncated stream recovery", () => {
 		await m.send({ type: "text", text: "go" });
 		assert.equal(streams, 1);
 		assert.equal(m.status, "error");
-		assert.notEqual(m.getState().error?.message, "The connection dropped before the turn completed.");
+		assert.notEqual(m.getState().error?.message, "Forbindelsen ble brutt før svaret var ferdig.");
 		assert.match(m.getState().error!.message, /JSON|property name/);
 	});
 
@@ -811,7 +811,7 @@ describe("truncated stream recovery", () => {
 		await m.send({ type: "text", text: "go" });
 		assert.equal(streams, 2);
 		assert.equal(m.status, "error");
-		assert.equal(m.getState().error?.message, "The connection dropped before the turn completed.");
+		assert.equal(m.getState().error?.message, "Forbindelsen ble brutt før svaret var ferdig.");
 	});
 
 	it("a superseded consume cannot recover or overwrite its replacement's state", async () => {
@@ -1620,6 +1620,147 @@ describe("the dismissal pause (needsContinuation + endsInDismissal)", () => {
 	it("a normal answer is not a dismissal (the predicate stays honest)", () => {
 		const messages = [userText("u1", "topic"), assistantWithCall("a1", "call-q1", "quiz"), resultMsg("call-q1", "quiz")];
 		assert.equal(endsInDismissal(messages), false);
+	});
+
+	// ── Hopp over / Spør agenten (2026-11) ──
+	it("a SKIP is no pause: it rode the answer event and owes the agent's reaction", () => {
+		const skipped = {
+			...newAnswerResult("call-q1", "quiz", dismissedAnswer("quiz", "Pick a planet", { reason: "skipped", tool: "quiz" })),
+			id: "s_call-q1",
+		} as unknown as LhMessage;
+		const messages = [userText("u1", "topic"), assistantWithCall("a1", "call-q1", "quiz"), skipped];
+		assert.equal(endsInDismissal(messages), false, "the wake pipeline must not hold deliveries behind a skip");
+		assert.equal(needsContinuation(messages), true, "a reload after a lost skip turn continues, like any answer");
+	});
+
+	it("a HOLD is the pause: silent, nothing wakes until the learner writes", () => {
+		const held = {
+			...newAnswerResult("call-q1", "quiz", dismissedAnswer("quiz", "Pick a planet", { reason: "onHold", tool: "quiz" })),
+			id: "h_call-q1",
+		} as unknown as LhMessage;
+		const messages = [userText("u1", "topic"), assistantWithCall("a1", "call-q1", "quiz"), held];
+		assert.equal(endsInDismissal(messages), true);
+		assert.equal(needsContinuation(messages), false);
+	});
+});
+
+describe("Hopp over / Spør agenten through the session model (2026-11)", () => {
+	const question = {
+		id: "a1", role: "assistant", stopReason: "toolUse", timestamp: 1,
+		content: [{ type: "toolCall", id: "q1", name: "probe", arguments: {
+			question: "Q?", options: [{ label: "Yes", value: "yes" }, { label: "No", value: "no" }], correctAnswer: "yes", explanation: "Yes.",
+		} }],
+	} as unknown as LhMessage;
+
+	it("a skip is ONE answer event on /api/chat — it starts the turn, and the card shows at once", async () => {
+		const posts: Array<{ url: string; body: { input: { type: string; toolCallId: string; answer: Record<string, unknown> } } }> = [];
+		const m = new SessionModel({ chatId: "chat_x", initialMessages: [question], fetch: (async (url: RequestInfo | URL, init?: RequestInit) => {
+			if (init?.method === "POST") posts.push({ url: String(url), body: JSON.parse(String(init.body)) });
+			if (String(url) === "/api/chat") return Response.json({ ok: true });
+			if (String(url) === "/api/chats/chat_x") return Response.json({ messages: [question] });
+			return sseResponse("[DONE]");
+		}) as typeof globalThis.fetch });
+		const key = pendingQuestionOf(m.getState().nativeMessages)!.key;
+		await m.submitAnswer("probe", "q1", dismissedAnswer("quiz", "Q?", { reason: "skipped", tool: "probe" }), key);
+		assert.equal(posts.length, 1);
+		assert.equal(posts[0]!.url, "/api/chat", "the ordinary answer route, never the silent one");
+		assert.equal(posts[0]!.body.input.type, "answer");
+		assert.equal(posts[0]!.body.input.toolCallId, "q1");
+		assert.equal(posts[0]!.body.input.answer.dismissed, true);
+		assert.equal(posts[0]!.body.input.answer.skipped, true);
+	});
+
+	it("a hold is the SILENT route: no turn, the composer returns (nothing pends), the card reads on-hold", async () => {
+		const posts: Array<{ url: string; body: { input: { type: string; answer: Record<string, unknown> } } }> = [];
+		const m = new SessionModel({ chatId: "chat_x", initialMessages: [question], fetch: (async (url: RequestInfo | URL, init?: RequestInit) => {
+			posts.push({ url: String(url), body: JSON.parse(String(init?.body)) });
+			return Response.json({ ok: true });
+		}) as typeof globalThis.fetch });
+		const key = pendingQuestionOf(m.getState().nativeMessages)!.key;
+		await m.dismissQuestion("q1", dismissedAnswer("quiz", "Q?", { reason: "onHold", tool: "probe" }), key);
+		assert.deepEqual(posts.map((p) => p.url), ["/api/chats/chat_x/dismiss"]);
+		assert.equal(posts[0]!.body.input.type, "dismiss");
+		assert.equal(posts[0]!.body.input.answer.onHold, true);
+		assert.equal(m.status, "ready", "no turn started");
+		assert.equal(pendingQuestionOf(m.getState().nativeMessages), null, "the dock is released at once");
+		const tail = m.getState().nativeMessages.at(-1) as unknown as { role: string; toolName: string; details: { onHold?: boolean } };
+		assert.equal(tail.role, "toolResult");
+		assert.equal(tail.toolName, "probe");
+		assert.equal(tail.details.onHold, true, "chat.tsx derives the held-question placeholder from this tail");
+	});
+
+	/** A model whose reattach stream stays open until `release()` — the
+	 *  window between a posed question and the turn's end. */
+	function streamingModel(record: LhMessage[] = [question]) {
+		const dismissals: Array<{ toolCallId: string; answer: Record<string, unknown> }> = [];
+		let release!: () => void;
+		const open = new Promise<void>((resolve) => { release = resolve; });
+		const m = new SessionModel({ chatId: "chat_x", initialMessages: record, fetch: (async (url: RequestInfo | URL, init?: RequestInit) => {
+			if (String(url).endsWith("/dismiss")) {
+				dismissals.push(JSON.parse(String(init?.body)).input);
+				return Response.json({ ok: true });
+			}
+			if (String(url).endsWith("/stream")) {
+				await open;
+				return sseResponse("[DONE]");
+			}
+			return Response.json({ messages: record, turnInFlight: false });
+		}) as typeof globalThis.fetch });
+		return { m, dismissals, release };
+	}
+
+	it("a hold clicked while the stream is still open is queued and applied ONCE when the stream settles", async () => {
+		const { m, dismissals, release } = streamingModel();
+		const consuming = m.resumeStream(false);
+		assert.equal(m.status, "submitted");
+		const key = pendingQuestionOf(m.getState().nativeMessages)!.key;
+		const hold = dismissedAnswer("quiz", "Q?", { reason: "onHold", tool: "probe" });
+		await m.dismissQuestion("q1", hold, key);
+		await m.dismissQuestion("q1", hold, key); // an impatient second click
+		assert.equal(dismissals.length, 0, "the silent route never runs against an open stream");
+		assert.notEqual(pendingQuestionOf(m.getState().nativeMessages), null, "the dock is still there while it waits");
+		release();
+		await consuming;
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.equal(m.status, "ready");
+		assert.equal(dismissals.length, 1, "one click, one dismissal, no second press needed");
+		assert.equal(dismissals[0]!.toolCallId, "q1");
+		assert.equal(dismissals[0]!.answer.onHold, true);
+		assert.equal(pendingQuestionOf(m.getState().nativeMessages), null);
+	});
+
+	it("a queued hold is applied at once when the view detaches the stream (the abort path)", async () => {
+		const { m, dismissals } = streamingModel();
+		void m.resumeStream(false);
+		const key = pendingQuestionOf(m.getState().nativeMessages)!.key;
+		await m.dismissQuestion("q1", dismissedAnswer("quiz", "Q?", { reason: "onHold", tool: "probe" }), key);
+		m.stop();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.equal(dismissals.length, 1);
+		assert.equal(pendingQuestionOf(m.getState().nativeMessages), null, "the composer is back");
+		m.stop();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.equal(dismissals.length, 1, "never replayed");
+	});
+
+	it("a queued hold never lands on another question occurrence, and unkeyed calls are not queued", async () => {
+		const { m, dismissals } = streamingModel();
+		void m.resumeStream(false);
+		const oldKey = pendingQuestionOf(m.getState().nativeMessages)!.key;
+		const hold = dismissedAnswer("quiz", "Q?", { reason: "onHold", tool: "probe" });
+		await m.dismissQuestion("q1", hold, oldKey);
+		// The record moves on: the same call id is posed again by a newer message.
+		m.setMessages([question, { ...question, id: "new-question" } as LhMessage]);
+		m.stop();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.equal(dismissals.length, 0, "the older occurrence's hold is dropped, not retargeted");
+
+		const second = streamingModel();
+		void second.m.resumeStream(false);
+		await second.m.dismissQuestion("q1", hold);
+		second.m.stop();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+		assert.equal(second.dismissals.length, 0);
 	});
 });
 

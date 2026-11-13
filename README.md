@@ -6,78 +6,97 @@
   </picture>
 </p>
 
-<p align="center"><strong>An agent harness for learning.</strong></p>
+<p align="center"><strong>Eksamensrettet AI-hjelp for NTNU-studenter.</strong></p>
 
 <p align="center">
-  <a href="https://learnharness.ai">Download</a> ·
-  <a href="#how-it-works">How it works</a> ·
-  <a href="docs/development.md">Documentation</a> ·
-  <a href="https://github.com/amosblomqvist/learnharness/issues">Issues</a> ·
-  <a href="https://discord.gg/5tCHHQEB2e">Discord</a>
+  <a href="#slik-fungerer-det">Slik fungerer det</a> ·
+  <a href="#kom-i-gang">Kom i gang</a> ·
+  <a href="#bygger-på-learnharness">Opphav</a> ·
+  <a href="docs/development.md">Utviklerdokumentasjon</a>
 </p>
 
-LearnHarness uses AI agents to plan and teach lessons from your current understanding to your goal. It builds a detailed picture of what you understand and how you reason. That picture is updated as you learn.
+Dette er en norsk, eksamensrettet versjon av LearnHarness for studenter ved NTNU. Du velger fag med fagkode, appen henter konteksten selv fra NTNUs emnesider, og du kan legge til ditt eget materiale. Eksamensmodus kartlegger hva du kan, og lager en fargekodet plan fram mot eksamen.
 
-Instead of just giving you an explanation, it uses your answers and thinking to decide what you need next. Teaching builds understanding one reasoning step at a time. Practice makes it usable. A persistent knowledge graph carries it across sessions.
+Appen er gratis og har åpen kildekode. Alt i appen er på norsk bokmål.
 
-![LearnHarness teaching session](docs/assets/teaching-session.png)
+> **Bygger på [LearnHarness](https://github.com/amosblomqvist/learnharness) av Amos Blomqvist.** Læringsmotoren, kunnskapskartet og skrivebordsappen kommer fra originalprosjektet. Denne versjonen legger til fag, eksamensmodus, hjelpesenter og norsk språk. Se [Bygger på LearnHarness](#bygger-på-learnharness).
 
-## How it works
+![En læringsøkt i LearnHarness](docs/assets/teaching-session.png)
 
-1. **Measure.** Before teaching, the agent finds where your understanding ends on each part the lesson depends on. Your answers, confidence, and thinking show it where to start.
-2. **Plan.** It works out a dependency map from that starting point to your goal. You can see the plan, and the lesson adapts when your understanding turns out different.
-3. **Teach.** Each step builds on something you already understand. You predict, get an explanation, and check your understanding. Confusions are repaired before anything is built on them. The aim is for the goal to feel obviously true, not merely familiar.
-4. **Practice.** Separate sessions pose varied problems that require the right knowledge to come to mind without being named first. Problems and hints adapt to your reasoning.
+*Skjermbildene er fra den originale, engelske utgaven av LearnHarness.*
 
-**Think out loud.** The thinking fields let you explain your reasoning, uncertainties, and reactions in your own words. This is how the agent gets a detailed picture rather than just a record of right and wrong answers. You can type or use dictation.
+## Slik fungerer det
 
-The agent can also research questions in the background, create visual explanations, and build interactive demonstrations.
+1. **Velg fag.** Søk opp faget med fagkode, for eksempel `TTK4100`. Appen henter emnebeskrivelsen fra NTNUs emnesider: faglig innhold, læringsutbytte og eksamensinformasjon. Finnes ikke faget hos NTNU, kan du legge det inn manuelt.
+2. **Legg til eget materiale (valgfritt).** Filer, mapper, lenker og notater du legger til, blir en del av konteksten agenten bruker i faget. Appen kan ikke logge inn i Canvas, så tidligere eksamener og løsningsforslag laster du ned selv og drar inn.
+3. **Kartlegg.** Appen lager en temaliste for faget. Du setter farge på hvert tema selv på ett minutt, eller lar AI-en stille spørsmål på tvers av temaene og sette fargene for deg.
+4. **Følg planen.** Du får en plan dag for dag fram mot eksamensdatoen. Hvert tema har en farge og en tekst: grå «Ikke kartlagt», rød «Kan ikke ennå», gul «Usikker» og grønn «Kan dette».
+5. **Lær og øv.** Hvert tema har to handlinger. **Lær** bygger forståelsen steg for steg, med utgangspunkt i det du allerede kan. **Øv** gir deg oppgaver å løse, gjerne i eksamensform.
 
-## Knowledge that carries forward
+**Tenk høyt.** I tankefeltene kan du forklare hvordan du resonnerer, og hva du er usikker på. Da får agenten et bedre bilde enn bare riktig eller galt svar. Du kan skrive eller bruke diktering.
 
-What you are taught accumulates as propositions and reasoning chains: individual claims and the premises that lead to them. The graph shows this structure, with links back to the source sessions. You can also import notes.
+Står du fast på et spørsmål, kan du hoppe over det eller spørre agenten før du svarer.
 
-Future teaching sessions can read the graph instead of starting from scratch. Practice sessions can draw their material from it. It stores the ideas and their connections, not ratings of your ability.
+Agenten kan også gjøre research i bakgrunnen, lage visualiseringer og bygge interaktive demoer.
 
-![LearnHarness knowledge graph](docs/assets/knowledge-graph.png)
+## Kunnskapskartet
 
-## Download and get started
+Det du lærer, samles som påstander og resonnementskjeder: enkeltpåstander og premissene som leder fram til dem. Kunnskapskartet viser denne strukturen, med lenker tilbake til øktene de kom fra. Du kan også importere notater.
 
-**[Download from learnharness.ai](https://learnharness.ai)** · [GitHub Releases](https://github.com/amosblomqvist/learnharness/releases)
+Senere økter kan lese kartet i stedet for å begynne fra bunnen av, og øvingsøkter kan hente stoff fra det. Kartet lagrer ideene og sammenhengene mellom dem, ikke karakterer på hvor flink du er.
 
-- **macOS (Apple Silicon):** signed and notarized DMG. Drag the app to Applications.
-- **Windows (x64):** run the installer. It is currently unsigned; Windows may show an “unknown publisher” or SmartScreen warning.
-- **Linux (x64):** make the AppImage executable and open it, or install the Debian/Ubuntu `.deb`.
+![Kunnskapskartet i LearnHarness](docs/assets/knowledge-graph.png)
 
-Choose your models, then start a session with what you want to understand. You can use provider API keys, supported subscription connections in the desktop app, an installed [Claude Code CLI](docs/claude-code.md), or a [custom OpenAI-compatible endpoint](docs/custom-providers.md), including a local model server. Optional dictation and web search use separate service keys.
+## Hjelpesenter
 
-Advanced users can set a [prompt-cache retention preference](docs/compaction-accounting.md#prompt-cache-retention) for each model slot under **Settings → Agent → Models → Show advanced settings**. Leaving it at **Pi default** preserves existing provider behavior; longer retention can increase cache-write costs.
+Hjelpesenteret i appen har søk i funksjoner, spørsmål og svar, og interaktive veivisere som viser deg rundt. Du kan også åpne søket fra sidemenyen, uansett hvor du er i appen.
 
-All three platforms support in-app updates.
+## Kom i gang
 
-**Dictation:** Create a [Deepgram API key](https://console.deepgram.com/) with the **Member role or higher** ([required for token minting](https://developers.deepgram.com/reference/auth/tokens/grant)) and add it under **Settings → Providers → Dictation**. Choose the language below the key; **Multilingual** supports automatic recognition and mixed-language speech. A `403 Insufficient permissions` error during token minting can indicate an insufficient key role.
-
-## Your keys, your data
-
-- **Your keys and models.** No LearnHarness subscription or markup. Billing depends on your provider, CLI configuration, subscription, or local setup. The live cost meter estimates known API costs, not subscription, CLI, or custom-endpoint charges.
-- **Local storage.** Your chats, graph, settings, and API keys live on your machine. Learning records are plain files you can inspect.
-- **External services.** Models run through your configured providers. Model requests send the context needed for the task; web research and dictation also contact external services. Local storage does not mean offline processing.
-- **Inspectable behavior.** System prompts are visible and editable. The app is open source under the AGPL-3.0 license.
-
-## Development and support
+Denne versjonen kjører du fra kildekoden:
 
 ```bash
 npm install
 npm run dev        # http://localhost:3000
-npm test           # deterministic, no LLM, no network
+npm test           # deterministisk, uten LLM og uten nettverk
 ```
 
-See the [development guide](docs/development.md) for setup and checks, [architecture](docs/architecture.md) for the shipped runtime, [keyboard reference](docs/keyboard.md) for shortcuts, and [desktop release guide](docs/desktop-release.md) for packaging and updates.
+Velg modeller første gang du åpner appen, og legg deretter til et fag.
 
-Questions, bug reports, and feature requests: [GitHub Issues](https://github.com/amosblomqvist/learnharness/issues).
+Den originale LearnHarness-appen (på engelsk, uten NTNU-funksjonene) kan lastes ned fra [learnharness.ai](https://learnharness.ai) eller [GitHub Releases](https://github.com/amosblomqvist/learnharness/releases).
 
-## License
+### Egne nøkler og modeller
 
-[AGPL-3.0](LICENSE)
+Appen har ingen egen konto og ingen innebygd AI-tjeneste. Du kobler til modeller selv, på én av disse måtene:
 
-The app is free and open forever. If we ever charge for anything, it will be for convenience — managed keys, hosting — never for features you can run locally.
+- API-nøkler fra en leverandør
+- støttede abonnementstilkoblinger i skrivebordsappen
+- en installert [Claude Code CLI](docs/claude-code.md)
+- et [egendefinert OpenAI-kompatibelt endepunkt](docs/custom-providers.md), for eksempel en lokal modellserver
+
+Diktering og nettsøk er valgfritt og bruker egne tjenestenøkler.
+
+**Diktering:** Lag en [Deepgram API-nøkkel](https://console.deepgram.com/) med rollen **Member eller høyere** ([kreves for å utstede tokener](https://developers.deepgram.com/reference/auth/tokens/grant)), og legg den inn under **Innstillinger → Leverandører → Diktering**. Språket velger du under nøkkelen.
+
+## Personvern og lokal lagring
+
+- **Dine nøkler og modeller.** Det finnes ikke noe LearnHarness-abonnement og ikke noe påslag. Hva du betaler, avhenger av leverandøren, CLI-oppsettet, abonnementet eller det lokale oppsettet ditt. Kostnadsmåleren i appen anslår kjente API-kostnader, ikke kostnader for abonnement, CLI eller egendefinerte endepunkter.
+- **Lokal lagring.** Fagene, øktene, kunnskapskartet, innstillingene og API-nøklene dine ligger på din egen maskin. Det du har lært, lagres som vanlige filer du kan se på.
+- **Eksterne tjenester.** Modellene kjører hos leverandørene du har satt opp, og forespørslene sender med den konteksten oppgaven trenger. Appen henter emneinformasjon fra NTNUs emnesider. Research på nettet og diktering kontakter også eksterne tjenester. Lokal lagring betyr ikke at alt behandles uten nett.
+- **Innsyn.** System-promptene er synlige og kan redigeres, og kildekoden er åpen.
+
+## Utvikling
+
+Se [utviklerguiden](docs/development.md) for oppsett og kontroller, [arkitekturen](docs/architecture.md) for hvordan appen er bygd opp, [tastaturreferansen](docs/keyboard.md) for snarveier og [guiden for skrivebordsutgivelser](docs/desktop-release.md) for pakking og oppdateringer. Utviklerdokumentasjonen under `docs/` er på engelsk og beskriver i hovedsak originalprosjektet.
+
+## Bygger på LearnHarness
+
+Dette prosjektet er en videreutvikling av **[LearnHarness](https://github.com/amosblomqvist/learnharness)**, laget av **Amos Blomqvist**. Læringsmetodikken, agentene, kunnskapskartet, skrivebordsappen og det aller meste av koden er hans arbeid. Nettsiden til originalprosjektet er [learnharness.ai](https://learnharness.ai).
+
+Denne versjonen legger til fag med fagkode og kontekst fra NTNU, eksamensmodus med kartlegging og fargekodet plan, hjelpesenteret og norsk språk i appen. Den er ikke en offisiell utgave av LearnHarness og er ikke tilknyttet NTNU.
+
+Feil og ønsker som gjelder originalappen, hører hjemme i [GitHub Issues](https://github.com/amosblomqvist/learnharness/issues) hos originalprosjektet.
+
+## Lisens
+
+[AGPL-3.0](LICENSE), samme lisens som originalprosjektet. Endringene i denne versjonen er lisensiert på samme vilkår.

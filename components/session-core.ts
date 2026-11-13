@@ -81,7 +81,7 @@ async function turnInFlight(model: SessionModel): Promise<boolean | null> {
 	}
 }
 
-const STREAM_DROPPED = "The connection dropped before the turn completed.";
+const STREAM_DROPPED = "Forbindelsen ble brutt før svaret var ferdig.";
 
 /** Mark transport failures without confusing JSON/application bugs with drops. */
 class StreamReadError extends Error {
@@ -264,6 +264,12 @@ export class SessionModel {
 	private latestRequest: AbortController | null = null;
 	/** Synchronous ready check for the gate (send/read mount logic). */
 	readyRef = true;
+	/** A dismissal asked for while the local stream was still open (the
+	 * window between a posed question and the turn's end). It is applied
+	 * once, the moment the status returns to ready, and only if the SAME
+	 * question occurrence still owns the dock (dismissQuestion's own key
+	 * check). Latest wins; an error drops it. */
+	private queuedDismissal: { toolCallId: string; answer: QuestionAnswerData; questionKey: string } | null = null;
 
 	constructor(opts: SessionModelOptions) {
 		this.chatId = opts.chatId;
@@ -299,7 +305,7 @@ export class SessionModel {
 		const providerError =
 			latest !== undefined &&
 			!this.incompleteUsageIds.has(latest.id) && (!live || latest.id === this.liveFailureId)
-				? { message: latest.errorMessage ?? "An error occurred." }
+				? { message: latest.errorMessage ?? "Det oppsto en feil." }
 				: null;
 		return {
 			messages: projectView(messages, live),
@@ -327,6 +333,12 @@ export class SessionModel {
 		this.statusValue = status;
 		this.readyRef = status === "ready";
 		this.onChange?.();
+		if (status === "error") this.queuedDismissal = null;
+		else if (status === "ready" && this.queuedDismissal) {
+			const queued = this.queuedDismissal;
+			this.queuedDismissal = null;
+			void this.dismissQuestion(queued.toolCallId, queued.answer, queued.questionKey);
+		}
 	}
 
 	private setError(message: string | null): void {
@@ -373,7 +385,7 @@ export class SessionModel {
 		if (event.type === "error") {
 			// Loop-level failure (agent.continue threw outside the stream) —
 			// raw text (owner ruling, Wave D): the banner shows exactly this.
-			this.setError(String(event.errorText ?? "An error occurred."));
+			this.setError(String(event.errorText ?? "Det oppsto en feil."));
 			return false;
 		}
 		const agent = event as unknown as AgentEvent;
@@ -453,7 +465,7 @@ export class SessionModel {
 				const result = agent.result as
 					| { content?: Array<{ type?: string; text?: string }>; details?: unknown }
 					| null;
-				const text = result?.content?.find((c) => c.type === "text")?.text ?? "The tool call failed.";
+				const text = result?.content?.find((c) => c.type === "text")?.text ?? "Verktøykallet mislyktes.";
 				this.mutate(() => {
 					this.executions = new Map(this.executions).set(agent.toolCallId, {
 						isError: agent.isError,
@@ -484,7 +496,7 @@ export class SessionModel {
 	/** Consume one SSE body to its [DONE] terminal. The turn-settled
 	 *  terminal (stream-route only) fires the settle hook and ends. */
 	async consumeStream(res: Response, controller = this.consumeAbort, allowRecovery = true): Promise<void> {
-		if (!res.body) throw new Error("The turn stream body is empty.");
+		if (!res.body) throw new Error("Svaret fra serveren var tomt.");
 		const reader = res.body.getReader();
 		let sawEvent = false;
 		let sawDone = false;
@@ -623,7 +635,7 @@ export class SessionModel {
 			}
 			const res = await this.fetchView(`/api/chats/${encodeURIComponent(this.chatId)}/stream`, controller.signal, !allowRecovery);
 			if (this.consumeAbort !== controller) return;
-			if (!res.ok) throw new Error((await res.text()) || "Failed to attach to the running turn.");
+			if (!res.ok) throw new Error((await res.text()) || "Kunne ikke koble til svaret som pågår.");
 			await this.consumeStream(res, controller, allowRecovery);
 		} catch (err) {
 			if (this.consumeAbort !== controller || controller.signal.aborted) return; // intentionally cancelled
@@ -663,12 +675,12 @@ export class SessionModel {
 			try {
 				const res = await this.fetch(`/api/chats/${encodeURIComponent(this.chatId)}`, { signal: controller.signal });
 				if (this.consumeAbort !== controller) return false;
-				if (!res.ok) throw new Error((await res.text()) || "An error occurred.");
+				if (!res.ok) throw new Error((await res.text()) || "Det oppsto en feil.");
 				const record = await res.json() as { messages?: LhMessage[]; turnInFlight?: boolean; turnError?: string };
 				if (this.consumeAbort !== controller) return false;
 				// No verified record/liveness: retain the draft and never guess
 				// whether a lost acknowledgement meant the input was accepted.
-				if (!Array.isArray(record.messages) || typeof record.turnInFlight !== "boolean") throw new Error("An error occurred.");
+				if (!Array.isArray(record.messages) || typeof record.turnInFlight !== "boolean") throw new Error("Det oppsto en feil.");
 				this.setMessages(record.messages, record.turnError);
 				if (record.turnInFlight) {
 					await this.resumeStream(false);
@@ -728,13 +740,13 @@ export class SessionModel {
 			// connection is Diet A's whole job.
 			const res = await this.postInputEvent(input);
 			if (res.status === 409) {
-				throw new Error("A turn is already running — try again in a moment.");
+				throw new Error("Agenten jobber allerede med et svar. Prøv igjen om et øyeblikk.");
 			}
 			if (!res.ok) {
 				// Keep model/key refusal envelopes verbatim: the page's refusal
 				// flow parses them. Retry's 400s are ordinary user-facing
 				// guidance, so show their error text without JSON syntax.
-				let message = (await res.text()) || `The send failed (${res.status}).`;
+				let message = (await res.text()) || `Sendingen mislyktes (${res.status}).`;
 				if ((input.type === "retry" || input.type === "retry-question") && res.status === 400) {
 					try {
 						const refusal = JSON.parse(message) as { error?: unknown } | null;
@@ -826,7 +838,7 @@ export class SessionModel {
 				return;
 			}
 			dropSteer();
-			this.setError((await res.text()) || `The steer failed (${res.status}).`);
+			this.setError((await res.text()) || `Meldingen kunne ikke sendes (${res.status}).`);
 		} catch (err) {
 			dropSteer();
 			this.setError((err as Error).message);
@@ -847,8 +859,18 @@ export class SessionModel {
 	 * durable record wins: the error surfaces, the record-changed sync
 	 * (or any later refetch) replaces the optimistic append with truth. */
 	async dismissQuestion(toolCallId: string, answer: QuestionAnswerData, questionKey?: string): Promise<void> {
-		if (!this.readyRef) return;
 		const subject = pendingQuestionOf([...this.base, ...this.tail]);
+		if (!this.readyRef) {
+			// The stream is still open (question posed, turn not yet settled):
+			// the silent route cannot run now, but the click must not be lost.
+			// Queue it for the settle; only a render-scoped (keyed) dismissal
+			// of the question that is pending right now may wait.
+			if (this.statusValue !== "error" && questionKey !== undefined &&
+				subject?.key === questionKey && subject.toolCallId === toolCallId) {
+				this.queuedDismissal = { toolCallId, answer, questionKey };
+			}
+			return;
+		}
 		if (questionKey !== undefined && (subject?.key !== questionKey || subject.toolCallId !== toolCallId)) return;
 		const tool = pendingCallTool([...this.base, ...this.tail], toolCallId) ?? "quiz";
 		this.mutate(() => {
@@ -860,7 +882,7 @@ export class SessionModel {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ input: { type: "dismiss", toolCallId, answer } }),
 			});
-			if (!res.ok) throw new Error(`The dismissal failed (${res.status}).`);
+			if (!res.ok) throw new Error(`Spørsmålet kunne ikke lukkes (${res.status}).`);
 		} catch (err) {
 			this.setError((err as Error).message);
 		}
@@ -881,7 +903,7 @@ export class SessionModel {
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ input: { type: "dismiss-problem", problemCallId } }),
 			});
-			if (!res.ok) throw new Error(`The dismissal failed (${res.status}).`);
+			if (!res.ok) throw new Error(`Oppgaven kunne ikke forkastes (${res.status}).`);
 		} catch (err) {
 			this.setError((err as Error).message);
 		}

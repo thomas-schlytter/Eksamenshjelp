@@ -4,7 +4,7 @@ export class CustomBodyLimitError extends Error {}
 export async function readBoundedJson(message: Request | Response, limit: number, allowEmptyObject = false): Promise<unknown> {
 	if (Number(message.headers.get("content-length")) > limit) {
 		await message.body?.cancel();
-		throw new CustomBodyLimitError("JSON body exceeds the allowed byte limit");
+		throw new CustomBodyLimitError("JSON-innholdet er større enn tillatt.");
 	}
 	const reader = message.body?.getReader();
 	if (!reader) {
@@ -19,7 +19,7 @@ export async function readBoundedJson(message: Request | Response, limit: number
 			const { done, value } = await reader.read();
 			if (done) break;
 			bytes += value.byteLength;
-			if (bytes > limit) throw new CustomBodyLimitError("JSON body exceeds the allowed byte limit");
+			if (bytes > limit) throw new CustomBodyLimitError("JSON-innholdet er større enn tillatt.");
 			text += decoder.decode(value, { stream: true });
 		}
 		if (bytes === 0 && allowEmptyObject) return {};

@@ -67,7 +67,7 @@ it("folder selection means all its graph contents even while a search hides some
 });
 it("empty folder selection enables Delete outside practice, and practice never selects organizational folders", () => {
 	const html = render({ selectedFolders: new Set(["empty"]) });
-	assert.match(html, /1 folder/); assert.match(html, /data-testid="chain-delete"/);
+	assert.match(html, /1 mappe/); assert.match(html, /data-testid="chain-delete"/);
 	const practice = render({ selectMode: true });
 	assert.match(practice, /data-testid="folder-checkbox-empty"[^>]*disabled|disabled=""[^>]*data-testid="folder-checkbox-empty"/);
 	assert.doesNotMatch(practice, /data-testid="chain-delete"/);
@@ -90,7 +90,7 @@ it("source and folder names are searchable without needing any extracted nodes",
 });
 it("source confirmation explains shared-node survival and makes conversation deletion an unchecked opt-in", () => {
 	const html = renderToStaticMarkup(<DeleteSourceBody sources={directory.sources} folders={[]} deleteSessions={false} onDeleteSessions={() => {}} busy={false} failure="" onClose={() => {}} onRun={() => {}} />);
-	assert.match(html, /Knowledge supported by other sources survives/); assert.match(html, /can be extracted again/);
-	assert.match(html, /graph contributions and extraction coverage are cleared/); assert.match(html, /Also delete the 1 selected session/);
+	assert.match(html, /Kunnskap som andre kilder også støtter, beholdes/); assert.match(html, /kan trekkes ut på nytt/);
+	assert.match(html, /bidragene deres til kunnskapskartet og uttrekksdekningen/); assert.match(html, /Slett også den valgte økta/);
 	assert.doesNotMatch(html.match(/<input[^>]+>/)?.[0] ?? "", /checked/);
 });

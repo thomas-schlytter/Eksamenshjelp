@@ -7,14 +7,16 @@ import { markUnadmittedUsage, type SubscriptionDispatchLifecycle } from "./subsc
 import { capturePreparedBackgroundPayload } from "./background-capture.ts";
 
 export function nativeSubscriptionError(provider: string, message: string): string {
-	const label = NATIVE_SUBSCRIPTIONS.find((p) => p.logicalId === provider)?.label ?? "Subscription";
-	const suffix = " No API-key fallback was used.";
-	if (/background/i.test(message)) return `${label} background use is off in this app. Enable it in Providers to run this work.${suffix}`;
-	if (/quota|429|limit/i.test(message)) return `${label} usage limit reached. Check your provider account and try again later.${suffix}`;
-	if (/expired|invalid_grant|401|refresh/i.test(message)) return `${label} authorization could not be refreshed. Retry or reconnect in Providers.${suffix}`;
-	if (/cancel|abort|closed|disconnect/i.test(message)) return `${label} request cancelled or connection closed.${suffix}`;
-	if (/catalog|model|stale|changed/i.test(message)) return `The selected ${label} model or connection is unavailable. Refresh Providers and explicitly choose an available model.${suffix}`;
-	return `${label} request failed. Check the connection, account access and provider limits, then retry.${suffix}`;
+	const label = NATIVE_SUBSCRIPTIONS.find((p) => p.logicalId === provider)?.label ?? "Abonnementet";
+	// Learner-facing (Norwegian). The desktop shell's public errors arrive
+	// already localized, hence the Norwegian keywords beside the English ones.
+	const suffix = " Ingen API-nøkkel ble brukt i stedet.";
+	if (/background|bakgrunn/i.test(message)) return `Bruk i bakgrunnen er slått av for ${label} i denne appen. Slå det på under Leverandører for å kjøre dette.${suffix}`;
+	if (/quota|429|limit/i.test(message)) return `Bruksgrensen for ${label} er nådd. Sjekk kontoen hos leverandøren og prøv igjen senere.${suffix}`;
+	if (/expired|invalid_grant|401|refresh|fornye/i.test(message)) return `Innloggingen for ${label} kunne ikke fornyes. Prøv igjen, eller koble til på nytt under Leverandører.${suffix}`;
+	if (/cancel|abort|closed|disconnect|avbrutt/i.test(message)) return `Forespørselen til ${label} ble avbrutt, eller tilkoblingen ble lukket.${suffix}`;
+	if (/catalog|model|stale|changed|katalog/i.test(message)) return `Den valgte modellen eller tilkoblingen for ${label} er ikke tilgjengelig. Oppdater Leverandører og velg en tilgjengelig modell.${suffix}`;
+	return `Forespørselen til ${label} mislyktes. Sjekk tilkoblingen, kontotilgangen og grensene hos leverandøren, og prøv igjen.${suffix}`;
 }
 export function subscriptionHistory(context: TranscriptContext, logical: Model<Api>, nativeId: string): TranscriptContext {
 	const messages = transformMessages(context.messages, logical);

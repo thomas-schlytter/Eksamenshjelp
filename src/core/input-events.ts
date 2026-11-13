@@ -265,8 +265,8 @@ export function questionRecoveryAppends(
 ): LhMessage[] {
 	const calls = questionCallsOf(messages);
 	const target = calls.find(call => call.messageId === input.messageId && call.contentIndex === input.contentIndex && call.toolCallId === input.toolCallId);
-	if (!target || target.status !== "malformed") throw new ChatInputError("This malformed question is no longer available to retry. Refresh the session.");
-	if (calls.some(call => call.status === "answerable")) throw new ChatInputError("Answer or discard the remaining question before retrying this one.");
+	if (!target || target.status !== "malformed") throw new ChatInputError("Dette spørsmålet kan ikke lenger hentes på nytt. Last økta inn på nytt.");
+	if (calls.some(call => call.status === "answerable")) throw new ChatInputError("Svar på eller forkast det gjenstående spørsmålet før du prøver dette på nytt.");
 	return calls.filter(call => call.status === "malformed").map(call => ({
 		id: newMessageId(), role: "toolResult", toolCallId: call.toolCallId, toolName: call.tool,
 		content: [{ type: "text", text: `Tool call "${call.tool}" could not be displayed as a complete question. The learner requested a replacement, not an answer. Re-issue the question with complete, valid arguments.` }],
@@ -307,7 +307,7 @@ export function retryDrops(messages: readonly LhMessage[]): Set<string> {
 	if (ids.size === 0) {
 		const failure = failedResponseAtEnd(messages);
 		if (failure) {
-			throw new ChatInputError(`${failure.errorMessage ?? "An error occurred."}\n\nThis response cannot be retried after compaction. Send a new message to continue.`);
+			throw new ChatInputError(`${failure.errorMessage ?? "Det oppsto en feil."}\n\nDette svaret kan ikke prøves på nytt etter komprimering. Send en ny melding for å fortsette.`);
 		}
 		throw new ChatInputError("retry input requires a failed turn to retry");
 	}

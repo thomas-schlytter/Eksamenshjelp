@@ -804,13 +804,13 @@ describe("session deletion (deleteChatTraces + deleteChatSession, wave 6)", () =
 
 	it("deleteChatSession: the orchestration's gates and the sync block", async () => {
 		// 404 — unknown chat.
-		assert.deepEqual(await deleteChatSession("chat_missing_delete", "delete-nodes"), { ok: false, status: 404, code: "not_found", error: "No such session" });
+		assert.deepEqual(await deleteChatSession("chat_missing_delete", "delete-nodes"), { ok: false, status: 404, code: "not_found", error: "Økta finnes ikke." });
 
 		const { dA } = buildTwoSessionScenario();
 		// 409 — a turn in flight.
 		beginTurn(dA.id);
 		const turnedAway = await deleteChatSession(dA.id, "delete-nodes");
-		assert.deepEqual(turnedAway, { ok: false, status: 409, code: "turn_in_flight", error: "A turn is running in this session — try again when it finishes", jobIds: [] });
+		assert.deepEqual(turnedAway, { ok: false, status: 409, code: "turn_in_flight", error: "En tur kjører i denne økta. Prøv igjen når den er ferdig.", jobIds: [] });
 		endTurn(dA.id);
 		// 409 — running background jobs; a refused delete keeps its notice.
 		rememberTurnFailure(dA.id, "The reply could not be saved.");
@@ -836,7 +836,7 @@ describe("session deletion (deleteChatTraces + deleteChatSession, wave 6)", () =
 		assert.doesNotMatch(await settledTurnResponse(dA.id).text(), /"type":"error"/, "deletion clears its transient notice");
 		assert.equal(jobStore.getJob(doneJob.id), null, "the chat's job records are gone");
 		// And a second call is an honest 404.
-		assert.deepEqual(await deleteChatSession(dA.id, "delete-nodes"), { ok: false, status: 404, code: "not_found", error: "No such session" });
+		assert.deepEqual(await deleteChatSession(dA.id, "delete-nodes"), { ok: false, status: 404, code: "not_found", error: "Økta finnes ikke." });
 	});
 });
 
@@ -940,7 +940,7 @@ describe("single-node deletion (deleteNodeTraces + deleteGraphNode, node interlu
 			ok: false,
 			status: 404,
 			code: "not_found",
-			error: "No such node",
+			error: "Noden finnes ikke.",
 		});
 
 		// 409 — ANY registered extraction run: a mid-flight run could
@@ -962,7 +962,7 @@ describe("single-node deletion (deleteNodeTraces + deleteGraphNode, node interlu
 				ok: false,
 				status: 409,
 				code: "extraction_running",
-				error: "An extraction is running — try again when it finishes",
+				error: "Et uttrekk pågår. Prøv igjen når det er ferdig.",
 			});
 		} finally {
 			g.__lhExtractionRuns = realRuns;
@@ -985,7 +985,7 @@ describe("single-node deletion (deleteNodeTraces + deleteGraphNode, node interlu
 		assert.ok(outcome.graphRevision >= revisionBefore, "the version stamp moved");
 		assert.equal(graphStore.readNodes().some((n) => n.id === "n_orch"), false);
 		// And a second call is an honest 404.
-		assert.deepEqual(deleteGraphNode("n_orch"), { ok: false, status: 404, code: "not_found", error: "No such node" });
+		assert.deepEqual(deleteGraphNode("n_orch"), { ok: false, status: 404, code: "not_found", error: "Noden finnes ikke." });
 	});
 });
 

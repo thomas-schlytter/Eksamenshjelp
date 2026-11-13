@@ -46,6 +46,7 @@ import {
 import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.ts";
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
 import { parseQuestionInput } from "./tool-parts.ts";
+import { courseContextDetails, courseContextText, type ChatCourseLink, type Course } from "./courses.ts";
 
 /** The hard-invariant wording for an aborted turn's unanswered calls —
  *  carried over verbatim from the pre-native era so the model's view
@@ -69,6 +70,7 @@ export interface LhMarkerMessage {
 	role: "custom";
 	customType:
 		| "graph-context"
+		| "course-context"
 		| "probe-handoff"
 		| "subagent-steer"
 		| "subagent-abort"
@@ -303,6 +305,25 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
 		content: lines.join("\n"),
 		display: true,
 		details: { propositions: picks, chains },
+		timestamp: Date.now(),
+	};
+}
+
+/** The session's course context (exam mode): like graph-context, a
+ *  SEPARATE custom message before the learner's first message. The model
+ *  reads `content` (course facts, topic list with status, focus topic,
+ *  mode and the learner's sources — core/courses.ts courseContextText);
+ *  `details` feeds the transcript's compact course card. Written once at
+ *  session creation, so it is a snapshot: later status changes reach the
+ *  model through its own topic_status calls, not through this marker. */
+export function newCourseContextMessage(course: Course, link: ChatCourseLink, todayIso: string): LhMarkerMessage {
+	return {
+		id: newMessageId(),
+		role: "custom",
+		customType: "course-context",
+		content: courseContextText(course, link, todayIso),
+		display: true,
+		details: courseContextDetails(course, link),
 		timestamp: Date.now(),
 	};
 }
@@ -813,8 +834,10 @@ export function answeredCallIds(messages: readonly LhMessage[]): Set<string> {
  *  dismissal pause and the continuation fold both read it. */
 function isDismissedResult(m: LhMessage): boolean {
 	if ((m as { role?: string }).role !== "toolResult") return false;
-	const details = (m as { details?: unknown }).details as { dismissed?: unknown } | undefined;
-	return details?.dismissed === true;
+	const details = (m as { details?: unknown }).details as { dismissed?: unknown; skipped?: unknown } | undefined;
+	// "Hopp over" (skipped) rode the ordinary answer event and OWES the
+	// agent's reaction turn: it is a non-answer, never a pause.
+	return details?.dismissed === true && details.skipped !== true;
 }
 
 /** The dismissal pause (owner design 2026-10-03, "A2"): the record ends
@@ -847,13 +870,13 @@ export function nativeInputCause(message: AgentMessage, history: readonly AgentM
 	if (message.role === "custom") {
 		if (["probe-handoff", "subagent-steer", "subagent-abort"].includes(message.customType)) return "automatic";
 		if (["practice-thinking", "practice-next"].includes(message.customType)) return "learner";
-		return ["graph-context", "plan-block", "problem-dismissed", "compaction"].includes(message.customType) ? "neutral" : "unrecognizable";
+		return ["graph-context", "course-context", "plan-block", "problem-dismissed", "compaction"].includes(message.customType) ? "neutral" : "unrecognizable";
 	}
 	if (message.role === "toolResult") {
 		if (message.isError && (message.details as { questionRecovery?: unknown } | null)?.questionRecovery === true) {
 			return questionCallsOf(history as readonly LhMessage[]).some(call => call.status === "malformed" && call.toolCallId === message.toolCallId && call.tool === message.toolName) ? "learner" : "unrecognizable";
 		}
-		if (!(QUESTION_TOOLS as readonly string[]).includes(message.toolName) || message.isError || message.details == null || (message.details as { dismissed?: boolean }).dismissed) return "neutral";
+		if (!(QUESTION_TOOLS as readonly string[]).includes(message.toolName) || message.isError || message.details == null || isDismissedResult(message as LhMessage)) return "neutral";
 		const details = message.details as Partial<QuestionAnswerData>;
 		if (!["quiz", "ask", "explain"].includes(details.kind ?? "") || typeof details.questionText !== "string" || typeof details.dontKnow !== "boolean" || !Array.isArray(details.answers) || typeof details.answeredAt !== "string") return "unrecognizable";
 		const calls = history.flatMap((m) => m.role === "assistant" ? m.content.filter((b) => b.type === "toolCall" && b.id === message.toolCallId) : []);

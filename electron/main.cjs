@@ -588,47 +588,59 @@ function installMenu() {
 		{
 			label: app.name,
 			submenu: [
-				{ role: "about" },
+				{ role: "about", label: `Om ${app.name}` },
 				// Manual checks report their result in Settings → General.
-				{ label: "Check for Updates…", click: () => checkForUpdatesFromMenu() },
+				{ label: "Se etter oppdateringer…", click: () => checkForUpdatesFromMenu() },
 				{ type: "separator" },
-				{ role: "hide" },
-				{ role: "hideOthers" },
+				{ role: "hide", label: `Skjul ${app.name}` },
+				{ role: "hideOthers", label: "Skjul andre" },
 				{ type: "separator" },
-				{ role: "quit" },
+				{ role: "quit", label: `Avslutt ${app.name}` },
 			],
 		},
-		{ label: "Edit", submenu: [{ role: "undo" }, { role: "redo" }, { type: "separator" }, { role: "cut" }, { role: "copy" }, { role: "paste" }, { role: "selectAll" }] },
+		{ label: "Rediger", submenu: [{ role: "undo", label: "Angre" }, { role: "redo", label: "Gjør om" }, { type: "separator" }, { role: "cut", label: "Klipp ut" }, { role: "copy", label: "Kopier" }, { role: "paste", label: "Lim inn" }, { role: "selectAll", label: "Marker alt" }] },
 		{
-			label: "View",
+			label: "Vis",
 			submenu: [
-				{ role: "reload" },
-				{ role: "toggleDevTools" },
+				{ role: "reload", label: "Last inn på nytt" },
+				{ role: "toggleDevTools", label: "Utviklerverktøy" },
 				{ type: "separator" },
 				// OWNED zoom (see applyZoom): the roles change zoomLevel
 				// silently; these broadcast the factor and re-seat the
 				// traffic lights. The renderer's --lh-zoom depends on
 				// hearing every change.
 				{
-					label: "Actual Size",
+					label: "Faktisk størrelse",
 					accelerator: "CommandOrControl+0",
 					click: () => applyZoom(BrowserWindow.getAllWindows()[0], 1),
 				},
 				{
-					label: "Zoom In",
+					label: "Zoom inn",
 					accelerator: "CommandOrControl+Plus",
 					click: () => zoomStep(BrowserWindow.getAllWindows()[0], +1),
 				},
 				{
-					label: "Zoom Out",
+					label: "Zoom ut",
 					accelerator: "CommandOrControl+-",
 					click: () => zoomStep(BrowserWindow.getAllWindows()[0], -1),
 				},
 				{ type: "separator" },
-				{ role: "togglefullscreen" },
+				{ role: "togglefullscreen", label: "Fullskjerm av/på" },
 			],
 		},
-		{ role: "windowMenu" },
+		{
+			// The windowMenu role's default items are English-only; "window" keeps
+			// the macOS window list while the items carry Norwegian labels.
+			role: "window",
+			label: "Vindu",
+			submenu: [
+				{ role: "minimize", label: "Minimer" },
+				{ role: "zoom", label: "Zoom" },
+				...(process.platform === "darwin"
+					? [{ type: "separator" }, { role: "front", label: "Legg alle øverst" }]
+					: [{ role: "close", label: "Lukk" }]),
+			],
+		},
 	];
 	Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -691,7 +703,7 @@ async function main() {
 	// child is the only recipient of credential leases over inherited IPC.
 	ipcMain.handle("lh:chatgpt:control", async (event, command) => {
 		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) return { error: "Untrusted desktop request." };
-		if (!chatgpt || !serverProcess?.connected) return { available: false, pending: false, activeId: null, accounts: [], error: "ChatGPT sign-in requires the desktop app's private server connection. Browser-only and externally launched development servers keep API-key connections." };
+		if (!chatgpt || !serverProcess?.connected) return { available: false, pending: false, activeId: null, accounts: [], error: "ChatGPT-innlogging krever skrivebordsappens private servertilkobling. I nettleseren og med eksternt startede utviklingsservere kan du fortsatt bruke tilkoblinger med API-nøkkel." };
 		return chatGPTControl(command, chatgpt);
 	});
 
@@ -699,7 +711,7 @@ async function main() {
 		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
 		if (!subscriptions || !serverProcess?.connected) {
 			if (command?.op === "status") return [];
-			throw new Error("Subscription sign-in requires the desktop app's private server connection.");
+			throw new Error("Innlogging med abonnement krever skrivebordsappens private servertilkobling.");
 		}
 		return subscriptionControl(command, subscriptions);
 	});

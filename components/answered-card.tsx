@@ -24,9 +24,22 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	const answer = answerForPresentation(savedAnswer, input);
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
 	if (answer.dismissed) {
+		// Three non-answers, three honest labels (2026-11): "Hopp over" (the
+		// agent moved on), "Spør agenten" (on hold, it comes back), and the
+		// plain Esc dismissal. None is a verdict, so none is colored.
+		const how = answer.skipped ? "skipped" : answer.onHold ? "on-hold" : "dismissed";
 		return (
-			<div className="rounded-xl border bg-card p-4 text-sm text-muted-foreground">
-				<span className="font-medium">{answer.questionText}</span> — skipped
+			<div
+				data-testid="answered-card-dismissed"
+				data-dismissal={how}
+				className="flex items-start justify-between gap-3 rounded-xl border bg-card p-4 text-sm text-muted-foreground"
+			>
+				<span className="min-w-0 font-medium">
+					<ToolContentResponse>{answer.questionText}</ToolContentResponse>
+				</span>
+				<span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide">
+					{how === "skipped" ? "Hoppet over" : how === "on-hold" ? "Satt på vent" : "Lukket uten svar"}
+				</span>
 			</div>
 		);
 	}
@@ -35,6 +48,10 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	const isExplain = answer.kind === "explain";
 	const selectedIdx = new Set(answer.answers.map((a) => a.index));
 	const correctIdx = new Set(answer.correctIndices ?? []);
+	// The explanation gate (2026-11): a right OPTION is not yet an approved
+	// answer; the agent's next reply judges the explanation. The card says
+	// exactly that instead of a bare "riktig".
+	const awaitingExplanationReview = isQuiz && answer.explanationRequired === true && answer.correct === true;
 	// The question's own context rides the ORIGINAL CALL, not the answer
 	// snapshot (owner, 2026-10-12): the details line — and, for ask
 	// questions, option descriptions — re-render from the persisted
@@ -51,9 +68,9 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 		    captured while reading are chronologically PRIOR to the question —
 		    rendered as its own user-side block ABOVE the card, the unified
 		    ThinkingBlock, instead of an inset inside the answer. Same muted
-		    rail as before; the label is now plain "Your thinking". */}
+		    rail as before; the label is now plain "Din tankegang". */}
 		{answer.readingThinking && (
-			<ThinkingBlock testId="reading-thinking-block" label="YOUR THINKING" text={answer.readingThinking} defaultOpen />
+			<ThinkingBlock testId="reading-thinking-block" label="DIN TANKEGANG" text={answer.readingThinking} defaultOpen />
 		)}
 		{/* [&>*:last-child]:mb-0 (owner round, 2026-10-07): on ask cards the
 		    thinking row is the last child — its my-3 stacked with the card's
@@ -68,23 +85,25 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			    cards label Probe/Recall — the phase boundary visible in the
 			    transcript. No `tool` on old records: kind labels as before. */}
 				{answer.tool === "probe"
-					? "Probe"
+					? "Kartlegging"
 					: answer.tool === "recall"
-						? "Recall"
+						? "Gjenkalling"
 						: isQuiz
-								? answer.questionType === "predict"
-									? "Prediction"
-									: "Check"
-									: isExplain
-										? "Explain"
-											: "Question"}
+							? answer.questionType === "predict"
+								? "Forutsi"
+								: "Sjekk"
+							: isExplain
+								? "Forklar"
+								: "Spørsmål"}
 				{isQuiz &&
 					(answer.dontKnow ? (
-						<span className="rounded bg-muted px-1.5 py-0.5">didn't know</span>
+						<span className="rounded bg-muted px-1.5 py-0.5">visste ikke</span>
 					) : answer.correct ? (
-						<span className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-500">correct</span>
+						<span data-testid="verdict-chip" className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-500">
+							{awaitingExplanationReview ? "riktig valg" : "riktig"}
+						</span>
 					) : (
-						<span className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">incorrect</span>
+						<span data-testid="verdict-chip" className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">feil</span>
 					))}
 			</div>
 			<div className="mb-3 font-medium">
@@ -178,7 +197,12 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				</div>
 			)}
 			{answer.dontKnow && isQuiz && (
-				<div className="mt-2 text-sm text-muted-foreground">Answered “I don't know”.</div>
+				<div className="mt-2 text-sm text-muted-foreground">Svarte «Vet ikke».</div>
+			)}
+			{awaitingExplanationReview && (
+				<div className="mt-2 text-sm text-muted-foreground" data-testid="explanation-review-note">
+					Riktig valg. Læreren vurderer forklaringen din.
+				</div>
 			)}
 
 			{(answer.thinking ?? answer.note) && (
@@ -188,7 +212,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				    the accent lift read too light); rail only, heights identical. */
 				<ThinkingBlock
 					testId="your-thinking"
-					label="YOUR THINKING"
+					label="DIN TANKEGANG"
 					text={answer.thinking ?? answer.note ?? ""}
 					inCard
 				/>
@@ -208,11 +232,11 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 						onClick={() => setWhyOpen((v) => !v)}
 						className="text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
 					>
-						{whyOpen ? "Hide why" : "Why"}
+						{whyOpen ? "Skjul forklaringen" : "Hvorfor"}
 					</button>
 					{whyOpen && (
 						<div className="mt-1.5 rounded-lg bg-muted py-2 text-sm text-foreground/50">
-							<span className="font-medium text-muted-foreground">Why: </span>
+							<span className="font-medium text-muted-foreground">Hvorfor: </span>
 							{/* Keep the first paragraph beside the label, not every paragraph:
 							   later paragraphs must retain their recovered document structure. */}
 							<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.explanation}</ToolContentResponse>
@@ -226,7 +250,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			    the model's next reply IS the grading. */}
 			{isExplain && answer.committed && (
 				<div className="mt-3 rounded-lg bg-muted py-2 text-sm text-muted-foreground">
-					<span className="font-medium text-foreground">The answer: </span>
+					<span className="font-medium text-foreground">Svaret: </span>
 					<ToolContentResponse className="inline [&>p:first-child]:inline [&>p:first-child]:m-0">{answer.committed}</ToolContentResponse>
 				</div>
 			)}

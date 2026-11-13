@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
 	try { return Response.json(sourceDirectory.read()); }
-	catch { return Response.json({ error: "Could not read source organization." }, { status: 500 }); }
+	catch { return Response.json({ error: "Kunne ikke lese kildeoversikten." }, { status: 500 }); }
 }
 
 export async function DELETE(request: Request) {
@@ -13,7 +13,7 @@ export async function DELETE(request: Request) {
 	catch (error) {
 		if (error instanceof SourceDeletionError) return Response.json({ error: error.message, code: error.code }, { status: error.status });
 		if (error instanceof SourceOrganizationInputError) return Response.json({ error: error.message }, { status: 400 });
-		return Response.json({ error: "Could not finish source deletion. Some entries may already have been removed; refresh or retry." }, { status: 500 });
+		return Response.json({ error: "Kunne ikke fullføre slettingen. Noe kan allerede være fjernet. Last inn på nytt eller prøv igjen." }, { status: 500 });
 	} finally {
 		emit("sources-changed", {}); emit("chats-changed", {}); emit("activity-changed", {});
 	}
@@ -23,6 +23,6 @@ export async function POST(request: Request) {
 	try { return Response.json(sourceDirectory.change(await readOrganizationAction(request))); }
 	catch (error) {
 		const input = error instanceof SourceOrganizationInputError;
-		return Response.json({ error: input ? error.message : "Could not save source organization." }, { status: input ? 400 : 500 });
+		return Response.json({ error: input ? error.message : "Kunne ikke lagre kildeoversikten." }, { status: input ? 400 : 500 });
 	}
 }

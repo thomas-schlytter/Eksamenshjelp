@@ -198,7 +198,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		const run = KIND_RUNNERS[job.kind];
 		if (!run) {
 			console.error(`[job ${jobId}] unknown kind: ${job.kind}`);
-			jobStore.updateJob(jobId, { status: "error", error: `unknown kind ${job.kind}`, activity: "failed" });
+			jobStore.updateJob(jobId, { status: "error", error: `unknown kind ${job.kind}`, activity: "mislyktes" });
 			return;
 		}
 		const engine = pickEngine(job.kind);
@@ -311,7 +311,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		jobStore.updateJob(jobId, {
 			result,
 			status: failed ? "error" : "done",
-			activity: failed ? "failed" : "finished",
+			activity: failed ? "mislyktes" : "ferdig",
 			delivery: { kind: "result", status: "pending" },
 		});
 		// The saved result now belongs to the session. Do not keep the worker,
@@ -327,7 +327,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		if (!job || job.status !== "running") return null;
 		const chat = chatStore.getChat(job.chatId);
 		if (!chat) {
-			jobStore.updateJob(jobId, { status: "error", error: `Chat not found: ${job.chatId}`, activity: "failed" });
+			jobStore.updateJob(jobId, { status: "error", error: `Chat not found: ${job.chatId}`, activity: "mislyktes" });
 			return null;
 		}
 		return { job, chatId: job.chatId };
@@ -369,7 +369,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		const pdfDir = await fs.mkdtemp(path.join(os.tmpdir(), "lh-research-"));
 
 		try {
-			jobStore.updateJob(jobId, { activity: "researching" });
+			jobStore.updateJob(jobId, { activity: "gjør research" });
 			const brief = await runResearcherAgent(prompt, {
 				engine: model,
 				search: deps.searchProvider,
@@ -420,7 +420,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		const brief = typeof input?.brief === "string" ? input.brief : "";
 
 		try {
-			jobStore.updateJob(jobId, { activity: "building demo" });
+			jobStore.updateJob(jobId, { activity: "bygger demo" });
 			const result = await runDemoBuilder(
 				{ title, brief },
 				{
@@ -456,7 +456,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		const brief = typeof input?.brief === "string" ? input.brief : "";
 
 		try {
-			jobStore.updateJob(jobId, { activity: "drawing figure" });
+			jobStore.updateJob(jobId, { activity: "tegner figur" });
 			const result = await runVisualMaker(
 				{ brief },
 				{
@@ -495,7 +495,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		const question = typeof input?.question === "string" ? input.question : "";
 
 		try {
-			jobStore.updateJob(jobId, { activity: "reading pdf" });
+			jobStore.updateJob(jobId, { activity: "leser PDF" });
 			const result = await runPdfReaderAgent(
 				{ path, question },
 			{

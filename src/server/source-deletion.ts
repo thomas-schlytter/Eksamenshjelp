@@ -19,7 +19,7 @@ export function parseSourceDeletion(raw: unknown): SourceDeletionRequest {
 	};
 	if (typeof r.deleteSessions !== "boolean") throw new SourceDeletionError("Session deletion must be explicitly selected or declined.");
 	const result = { sourceIds: ids(r.sourceIds), folderIds: ids(r.folderIds), deleteSessions: r.deleteSessions };
-	if (!result.sourceIds.length && !result.folderIds.length) throw new SourceDeletionError("Select at least one source or folder.");
+	if (!result.sourceIds.length && !result.folderIds.length) throw new SourceDeletionError("Velg minst én kilde eller mappe.");
 	return result;
 }
 
@@ -30,7 +30,7 @@ export function deleteSources(raw: unknown): SourceDirectory & { graphRevision: 
 	const request = parseSourceDeletion(raw);
 	const directory = sourceDirectory.read(); // validate organization before any destructive write
 	const targets = directory.sources.filter((s) => request.sourceIds.includes(s.id));
-	if (targets.length && extractionStatuses().length) throw new SourceDeletionError("An extraction is running — try again when the activity dock drains.", 409, "extraction_running");
+	if (targets.length && extractionStatuses().length) throw new SourceDeletionError("Et uttrekk pågår. Prøv igjen når aktivitetsfeltet er tomt.", 409, "extraction_running");
 	if (request.deleteSessions) for (const entry of targets) if (entry.kind === "chat") {
 		const blocker = runningWorkBlocker(entry.id);
 		if (blocker) throw new SourceDeletionError(blocker.error, blocker.status, blocker.code);

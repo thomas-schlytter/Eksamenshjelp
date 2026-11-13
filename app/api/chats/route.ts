@@ -1,7 +1,7 @@
 import { chainsForSelection, formatChainLine } from "@/src/core";
 import { newGraphContextMessage, type GraphContextPick } from "@/src/core";
-import { compactionInFlight, createChat, isTurnRunning, listChats, readSettingsRecord, stores, titleFromPrompt } from "@/src/server";
-import type { ChatListItem } from "@/src/core";
+import { compactionInFlight, courseContextMessageFor, createChat, isTurnRunning, listChats, parseChatCourseLink, readSettingsRecord, stores, titleFromPrompt } from "@/src/server";
+import type { ChatListItem, LhMessage } from "@/src/core";
 
 /** The session picker's list: record-derived summaries (phase, pending
  *  question) + live liveness — a running turn marks the session busy
@@ -20,12 +20,16 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-	const body = (await req.json().catch(() => ({}))) as { title?: unknown; kind?: unknown; graphContext?: unknown };
+	const body = (await req.json().catch(() => ({}))) as { title?: unknown; kind?: unknown; course?: unknown; graphContext?: unknown };
 	const title = typeof body.title === "string" ? body.title : "";
 	// Practice sessions (owner, 2026-10-04): kind "practice" marks the
 	// record — the practice agent + its tools from turn 1, no extraction.
 	const kind = body.kind === "practice" ? ("practice" as const) : undefined;
-	const chat = createChat(titleFromPrompt(title || "Untitled session"), kind);
+	// Exam mode: a session started from a course ("fag") carries the link
+	// from birth. A link to a course that does not exist is dropped, and
+	// the session is created as an ordinary one.
+	const course = parseChatCourseLink(body.course);
+	const chat = createChat(titleFromPrompt(title || "Økt uten navn"), kind, course ?? undefined);
 	// PER-SESSION MODELS (owner, 2026-09-28): a session owns its model +
 	// thinking level from birth — stamped verbatim from the STRONG slot,
 	// the new-session default. From here the strong slot never reaches
@@ -59,13 +63,20 @@ export async function POST(req: Request) {
 					)
 					.slice(0, 64)
 			: [];
+	// The opening context, in order: the course context first (what the
+	// session is for), then the map picks. Both are separate custom
+	// messages BEFORE the learner's first message.
+	const opening: LhMessage[] = [];
+	const courseContext = course ? courseContextMessageFor(course) : null;
+	if (courseContext) opening.push(courseContext);
 	if (picks.length > 0) {
 		const byId = new Map(stores.graphStore.readNodes().map((n) => [n.id, n]));
 		const pickedNodes = picks.map((p) => byId.get(p.id)).filter((n) => n !== undefined);
 		const chainLines = chainsForSelection(pickedNodes, stores.graphStore.readChains()).map((c) =>
 			formatChainLine(c, Object.fromEntries(byId)),
 		);
-		stores.chatStore.saveMessages(chat.id, [newGraphContextMessage(picks, chainLines)]);
+		opening.push(newGraphContextMessage(picks, chainLines));
 	}
+	if (opening.length > 0) stores.chatStore.saveMessages(chat.id, opening);
 	return Response.json({ id: chat.id, title: chat.title });
 }

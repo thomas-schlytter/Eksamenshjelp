@@ -29,19 +29,24 @@ export type AbortMode = "turn" | "question" | "problem";
 
 const COPY: Record<AbortMode, { title: string; line: string; action: string }> = {
 	turn: {
-		title: "Abort this turn?",
-		line: "The partial answer stays in the transcript.",
-		action: "Abort",
+		title: "Stoppe svaret?",
+		line: "Det agenten har skrevet så langt, blir stående i økta.",
+		action: "Stopp svaret",
 	},
+	// The Esc dismissal next to the dock's two buttons (2026-11): the line
+	// says what THIS does and names the two gentler ways out, so nobody
+	// closes a question when they meant to skip it or ask about it.
 	question: {
-		title: "Dismiss this question?",
-		line: "Skipped — the teacher moves on without it.",
-		action: "Dismiss",
+		title: "Lukke spørsmålet?",
+		line:
+			"Spørsmålet lukkes uten svar, og agenten venter på neste melding fra deg. " +
+			"Vil du bare gå videre, bruk «Hopp over». Lurer du på noe først, bruk «Spør agenten», så kommer spørsmålet tilbake etterpå.",
+		action: "Lukk spørsmålet",
 	},
 	problem: {
-		title: "Discard this problem?",
-		line: "The problem is dropped — no solution is revealed.",
-		action: "Discard",
+		title: "Forkaste oppgaven?",
+		line: "Oppgaven legges bort, og løsningen vises ikke.",
+		action: "Forkast",
 	},
 };
 
@@ -81,7 +86,7 @@ export function AbortTurnBody({
 				</h2>
 				<p className="mt-1.5 text-xs text-muted-foreground" data-testid="abort-turn-line">
 					{copy.line}
-					{busy && mode !== "turn" ? " The working turn stops too." : ""}
+					{busy && mode !== "turn" ? " Svaret agenten jobber med, stoppes også." : ""}
 				</p>
 				<div className="mt-4 flex justify-end gap-2">
 					<button
@@ -90,7 +95,7 @@ export function AbortTurnBody({
 						onClick={onClose}
 						className="rounded-sm px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
 					>
-						Cancel
+						Avbryt
 					</button>
 					<button
 						type="button"

@@ -14,7 +14,8 @@ import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { ComposerActions, NodePickerControl } from "@/components/composer-actions";
 import { OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { SessionStarter } from "@/components/start-session";
-import type { ChatSettings, GraphSnapshot } from "@/src/core";
+import { CourseLinkChip } from "@/components/courses/course-chip";
+import type { ChatCourseLink, GraphSnapshot } from "@/src/core";
 
 /** The draft's pick set (owner round 10): the SAME shape the home pick
  *  bar lifts — resolved nodes as the learner SAW them at pick time. */
@@ -47,6 +48,8 @@ export async function startDraftSession(
 	picks?: readonly DraftPick[],
 	starter = new SessionStarter(),
 	settingsIdentity?: string,
+	/** The fag link (?fag=KODE, optionally &tema=id): rides the create. */
+	course?: ChatCourseLink,
 ): Promise<string | null> {
 	const t = text.trim();
 	if (!t) return null;
@@ -55,9 +58,12 @@ export async function startDraftSession(
 	// same contract as the home screen's practice send (the marker with
 	// [id] name: statement lines, target validation's truth set).
 	return starter.start(
-		mode === "practice"
-			? { title: t, kind: "practice", ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
-			: { title: t },
+		{
+			...(mode === "practice"
+				? { title: t, kind: "practice" as const, ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
+				: { title: t }),
+			...(course ? { course } : {}),
+		},
 		fetchLike,
 		settingsIdentity,
 	);
@@ -76,6 +82,7 @@ export function DraftShell({
 	startError = false,
 	setupCta,
 	mode = "teach",
+	course,
 	picks = [],
 	onOpenPicker,
 	onClearPicks,
@@ -90,6 +97,9 @@ export function DraftShell({
 	 *  created session carries kind:"practice" and the copy changes
 	 *  (the practice agent opens; no probing). */
 	mode?: "teach" | "practice";
+	/** The fag this draft is linked to: shown as a chip above the box (a
+	 *  link back to the fag page) and named in the empty state. */
+	course?: Pick<ChatCourseLink, "code">;
 	/** The first-run CTA (fix wave chunk B): the same "Set up your models"
 	 *  affordance home carries, rendered above the draft shell — passed by
 	 *  NewSession, which owns the configured state and the SetupDialog. */
@@ -170,11 +180,13 @@ export function DraftShell({
 						<Conversation className="h-full min-w-0 flex-1" initial="instant">
 							<ConversationContent className="min-h-full gap-0 p-0">
 								<ConversationEmptyState
-									title={mode === "practice" ? "New practice session" : "New session"}
+									title={mode === "practice" ? "Ny øvingsøkt" : "Ny økt"}
 									description={
 										mode === "practice"
-											? "Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."
-											: "The teacher will open by probing what you already know."
+											? "Velg noder fra kunnskapskartet, beskriv hva du vil øve på, eller ta med din egen oppgave."
+											: course
+												? `Økta kobles til ${course.code}. Læreren starter med å kartlegge hva du kan fra før.`
+												: "Læreren starter med å kartlegge hva du kan fra før."
 									}
 								/>
 							</ConversationContent>
@@ -183,8 +195,13 @@ export function DraftShell({
 						<div className="bg-background pb-4">
 							<div className={DOCK}>
 								<ComposerActions
-									picker={(picks.length > 0 || mode === "practice") && (
-										<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
+									picker={(course || picks.length > 0 || mode === "practice") && (
+										<>
+											{course && <CourseLinkChip code={course.code} />}
+											{(picks.length > 0 || mode === "practice") && (
+												<NodePickerControl count={picks.length} onOpen={onOpenPicker} onClear={onClearPicks} />
+											)}
+										</>
 									)}
 									setup={setupCta}
 								/>
@@ -204,7 +221,7 @@ export function DraftShell({
 										// input (owner refinement round, 2026-09-24) — no lesson has
 										// started yet, so the composer must not read like one is in
 										// flight.
-										placeholder={mode === "practice" ? "What do you want to practice?" : "What do you want to learn?"}
+										placeholder={mode === "practice" ? "Hva vil du øve på?" : "Hva vil du lære?"}
 									/>
 								</div>
 								<StatsBar
@@ -229,7 +246,13 @@ export function DraftShell({
 	);
 }
 
-export function NewSession({ initialConfigured, mode = "teach" }: { initialConfigured: boolean; mode?: "teach" | "practice" }) {
+export function NewSession({ initialConfigured, mode = "teach", course }: {
+	initialConfigured: boolean;
+	/** One mode outwardly («Ny økt»); ?mode=practice is the knowledge
+	 *  map's and the fag page's door to an øvingsøkt. */
+	mode?: "teach" | "practice";
+	course?: ChatCourseLink;
+}) {
 	const router = useRouter();
 	const [text, setText] = useState("");
 	/* The draft MIRROR ("nothing gets lost" round, 2026-10-01): the shell's
@@ -306,7 +329,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 		setBusy(true);
 		setStartError(false);
 		void startDraftSession(draft, fetch, mode === "practice" ? "practice" : undefined, mode === "practice" ? picksRef.current : undefined,
-			starterRef.current, JSON.stringify(catalog?.slots.strong))
+			starterRef.current, JSON.stringify(catalog?.slots.strong), course)
 			.then((target) => {
 				if (target) router.push(target);
 				else { startingRef.current = false; setBusy(false); }
@@ -316,7 +339,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 				setBusy(false);
 				setStartError(true);
 			});
-	}, [router, configured, zeroKeys, catalog, mode]);
+	}, [router, configured, zeroKeys, catalog, mode, course]);
 
 	return (
 		<>
@@ -327,6 +350,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 				onChange={applyText}
 				onSend={send}
 				mode={mode}
+				course={course}
 				picks={picks}
 				onOpenPicker={openPicker}
 				onClearPicks={() => applyPicks([])}
@@ -366,7 +390,7 @@ export function NewSession({ initialConfigured, mode = "teach" }: { initialConfi
 								onClick={() => setSetupOpen(true)}
 								className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
 							>
-								Set up your models
+								Sett opp modellene dine
 							</button>
 						)
 					)

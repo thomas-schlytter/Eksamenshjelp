@@ -160,16 +160,17 @@ export function findPendingToolCall(messages: UIMessage[], authority?: string | 
  * renders it as the quiet transcript shimmer.
  */
 const ACTIVITY_LABELS: Record<string, string> = {
-	read: "Reading a file…",
-	ls: "Listing a directory…",
-	find: "Finding files…",
-	grep: "Searching file contents…",
-	research: "Dispatching research…",
-	demo: "Building a demo…",
-	visual: "Making a visual…",
-	pdf: "Reading a PDF…",
-	plan_init: "Drawing up the plan…",
-	probe_done: "Concluding the assessment…",
+	read: "Leser en fil…",
+	ls: "Lister en mappe…",
+	find: "Finner filer…",
+	grep: "Søker i filinnhold…",
+	research: "Starter research…",
+	demo: "Bygger en demo…",
+	visual: "Lager en visualisering…",
+	pdf: "Leser en PDF…",
+	plan_init: "Setter opp planen…",
+	probe_done: "Avslutter kartleggingen…",
+	topic_status: "Oppdaterer temastatus…",
 };
 
 /** The activity label for ONE running tool (owner, streaming round
@@ -178,8 +179,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
  *  bottom line. Question tools are excluded here: their input-streaming
  *  part renders in the dock, never a live card. */
 export function toolActivityLabel(tool: string): string {
-	if ((QUESTION_TOOLS as readonly string[]).includes(tool)) return "Writing a question…";
-	return ACTIVITY_LABELS[tool] ?? "Working…";
+	if ((QUESTION_TOOLS as readonly string[]).includes(tool)) return "Skriver et spørsmål…";
+	return ACTIVITY_LABELS[tool] ?? "Jobber…";
 }
 
 export function streamingToolActivity(messages: UIMessage[]): string | null {

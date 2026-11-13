@@ -51,7 +51,7 @@ export async function subscriptionControlsResponse(request: Request): Promise<Re
 		if (typeof fields.op !== "string" || !allowed.includes(fields.op)) return error("Unsupported control.", 400);
 		return Response.json(await webSubscriptionOwner().control(providerId as string, fields, subscriptionRequestOrigin(request)!), { headers: HEADERS });
 	} catch {
-		return error("The subscription connection could not be changed. Retry or reconnect in Providers.", 400);
+		return error("Kunne ikke endre abonnementstilkoblingen. Prøv igjen, eller koble til på nytt under Leverandører.", 400);
 	}
 }
 /** One-use same-origin navigation. Full provider authorization URLs go only to
@@ -61,8 +61,8 @@ export async function subscriptionBrowserResponse(request: Request): Promise<Res
 	const origin = subscriptionRequestOrigin(request);
 	if (!origin || (request.method === "POST" ? !authorized(request) : request.headers.get("sec-fetch-site") !== "same-origin")) return error("Open sign-in from LearnHarness.", 403);
 	const id = new URL(request.url).searchParams.get("id");
-	if (!id || !/^[0-9a-f-]{36}$/.test(id)) return error("This sign-in action is no longer available.", 410);
+	if (!id || !/^[0-9a-f-]{36}$/.test(id)) return error("Denne innloggingen er ikke lenger tilgjengelig.", 410);
 	const target = await webSubscriptionOwner().takeBrowserAction(id, origin);
-	if (!target) return error("This sign-in action is no longer available.", 410);
+	if (!target) return error("Denne innloggingen er ikke lenger tilgjengelig.", 410);
 	return new Response(null, { status: 303, headers: { ...HEADERS, Location: target } });
 }

@@ -540,7 +540,7 @@ export function PlanDiagram({
 						: {}),
 			}}
 			role="img"
-			aria-label="Plan diagram"
+			aria-label="Plandiagram"
 		>
 			<defs>
 				<marker
@@ -680,11 +680,11 @@ export function PlanBlock({ data, onOpen }: { data: PlanBlockData; onOpen: () =>
 	const statusMap = useMemo(() => new Map(data.nodes.map((n) => [n.id, n.status] as const)), [data]);
 	const statusOf = (id: string): PlanNodeStatus => statusMap.get(id) ?? "upcoming";
 	return (
-		<Hint label="Open the full plan" side="bottom">
+		<Hint label="Åpne hele planen" side="bottom">
 <button
 			type="button"
 			data-testid="plan-block-full"
-			aria-label="Open the full plan"
+			aria-label="Åpne hele planen"
 			onClick={onOpen}
 			className="block w-full text-left"
 		>
@@ -887,19 +887,19 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 			className="absolute inset-0 z-40 flex flex-col bg-background/80 p-4 backdrop-blur-sm"
 			role="dialog"
 			aria-modal="true"
-			aria-label="The full plan"
+			aria-label="Hele planen"
 			onClick={(e) => {
 				if (e.target === e.currentTarget) onClose();
 			}}
 		>
 			<div className="mb-2 flex items-center gap-2">
-				<span className="text-sm font-medium">The plan</span>
-				<span className="text-xs text-muted-foreground">live — statuses derive from your check outcomes</span>
-				<Hint label="Close" binding="escape" side="left">
+				<span className="text-sm font-medium">Planen</span>
+				<span className="text-xs text-muted-foreground">oppdateres fortløpende, statusene følger resultatene dine</span>
+				<Hint label="Lukk" binding="escape" side="left">
 <button
 					type="button"
 					onClick={onClose}
-					aria-label="Close"
+					aria-label="Lukk"
 					data-testid="plan-popup-close"
 					className="ml-auto rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 				>
@@ -947,22 +947,22 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 							/>
 						</div>
 						<div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-2">
-							<span className="text-xs text-muted-foreground/60">Drag to pan · scroll to zoom</span>
+							<span className="text-xs text-muted-foreground/60">Dra for å flytte · rull for å zoome</span>
 							<div className="flex gap-1">
-								<Hint label="Zoom out" side="bottom">
+								<Hint label="Zoom ut" side="bottom">
 <button
 									type="button"
-									aria-label="Zoom out"
+									aria-label="Zoom ut"
 									onClick={() => stepZoom(1 / 1.25)}
 									className="pointer-events-auto flex size-7 items-center justify-center rounded-md border border-border/70 bg-card/80 text-muted-foreground backdrop-blur transition-colors hover:bg-accent hover:text-foreground"
 								>
 									<MinusIcon className="size-3.5" />
 								</button>
 </Hint>
-								<Hint label="Fit plan to screen" side="bottom">
+								<Hint label="Tilpass planen til skjermen" side="bottom">
 <button
 									type="button"
-									aria-label="Fit plan to screen"
+									aria-label="Tilpass planen til skjermen"
 									onClick={fitView}
 									data-testid="plan-popup-fit"
 									className="pointer-events-auto flex size-7 items-center justify-center rounded-md border border-border/70 bg-card/80 text-muted-foreground backdrop-blur transition-colors hover:bg-accent hover:text-foreground"
@@ -970,10 +970,10 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 									<MaximizeIcon className="size-3.5" />
 								</button>
 </Hint>
-								<Hint label="Zoom in" side="bottom">
+								<Hint label="Zoom inn" side="bottom">
 <button
 									type="button"
-									aria-label="Zoom in"
+									aria-label="Zoom inn"
 									onClick={() => stepZoom(1.25)}
 									className="pointer-events-auto flex size-7 items-center justify-center rounded-md border border-border/70 bg-card/80 text-muted-foreground backdrop-blur transition-colors hover:bg-accent hover:text-foreground"
 								>
@@ -985,7 +985,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 					</>
 				) : (
 					<div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-						No plan in this session yet.
+						Ingen plan i denne økta ennå.
 					</div>
 				)}
 			</div>

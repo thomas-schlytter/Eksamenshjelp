@@ -16,7 +16,7 @@ const revisionKey = Symbol.for("learnharness.custom-provider-revision");
 const globals = globalThis as typeof globalThis & { [revisionKey]?: Buffer };
 const secret = globals[revisionKey] ??= randomBytes(32);
 const failure = (error: string, status = 400) => Response.json({ error }, { status });
-const stale = () => failure("Custom configuration or credentials changed. Reload configuration and retry.", 409);
+const stale = () => failure("Det egendefinerte oppsettet eller innloggingsdataene er endret. Last inn oppsettet på nytt og prøv igjen.", 409);
 
 function snapshot(inspectKey = false) {
 	const record = readSettings() ?? { version: 1 };
@@ -76,7 +76,7 @@ function commit(cp: CustomProviderSettings | undefined, binding?: CustomAuthBind
 		if (published && oldAuth) {
 			try { persistCustomAuth(oldAuth.binding, oldAuth.fileKey()); } catch { /* durable nonce mismatch fails closed after restart */ }
 		}
-		throw new Error("Unable to save custom configuration. Reload configuration and retry.");
+		throw new Error("Kunne ikke lagre det egendefinerte oppsettet. Last inn oppsettet på nytt og prøv igjen.");
 	}
 	syncCustomProvider();
 }
@@ -91,7 +91,7 @@ export async function customProviderMutation(request: Request): Promise<Response
 		if (!body || typeof body !== "object" || Array.isArray(body)) return failure("Invalid JSON body");
 		const raw = body as Record<string, unknown>;
 		const before = snapshot(raw.authMode === "apiKey");
-		if (!before.auth.readable) return failure("Custom authorization storage is unavailable. No changes were saved.", 500);
+		if (!before.auth.readable) return failure("Lageret for innloggingsdata er utilgjengelig. Ingen endringer ble lagret.", 500);
 		if (request.headers.get("if-match") !== before.etag) return stale();
 		if (request.method === "DELETE") {
 			commit(undefined, { version: 1, id: randomBytes(16).toString("hex"), authMode: "disabled" });
@@ -100,32 +100,32 @@ export async function customProviderMutation(request: Request): Promise<Response
 		if (request.method === "PATCH") {
 			const parsed = parseCustomModelOverridesBody(raw);
 			if (!parsed.ok) return failure(parsed.error);
-			if (!before.cp?.baseUrl) return failure("No custom endpoint configured", 409);
+			if (!before.cp?.baseUrl) return failure("Det er ikke satt opp noe egendefinert endepunkt.", 409);
 			const overrides = sanitizeCustomModelOverrides(parsed.settings, before.cp.models?.map((m) => m.id));
 			commit({ ...before.cp, overrides });
 			return response({ ok: true, overrides });
 		}
 		if (request.method !== "POST") return failure("Unsupported method", 405);
 		const base = normalizeBaseUrl(typeof raw.baseUrl === "string" ? raw.baseUrl : "");
-		if (!base) return failure("Base URL must be http(s), with no credentials, query or fragment.");
-		if (raw.authMode !== "keyless" && raw.authMode !== "apiKey") return failure("Choose Keyless or API key authentication.");
+		if (!base) return failure("Base-URL må være http(s), uten brukernavn og passord, spørrestreng eller fragment.");
+		if (raw.authMode !== "keyless" && raw.authMode !== "apiKey") return failure("Velg autentisering uten nøkkel eller med API-nøkkel.");
 		const authMode = raw.authMode;
 		if (raw.key !== undefined && typeof raw.key !== "string") return failure("API key must be a string.");
 		const supplied = typeof raw.key === "string" ? raw.key.trim() : undefined;
-		if (authMode === "apiKey" && supplied === "") return failure("Choose Keyless to clear authentication.");
+		if (authMode === "apiKey" && supplied === "") return failure("Velg uten nøkkel for å fjerne autentiseringen.");
 		const envOwned = before.auth.source === "env";
-		if (envOwned && supplied) return failure("Environment owns the effective key. Change the environment or explicitly reuse that key.");
+		if (envOwned && supplied) return failure("Nøkkelen som gjelder, kommer fra miljøvariabelen. Endre miljøet, eller velg å gjenbruke den nøkkelen.");
 		// A shadowed file key is not the key that will run. Require consent for
 		// the actual environment key when authorizing a different endpoint.
 		const hasNewEffectiveKey = Boolean(supplied) && !envOwned;
 		const changedTarget = before.cp?.baseUrl !== base;
 		if (authMode === "apiKey" && (changedTarget || !customKeyAuthorized(before.cp, before.auth)) && !hasNewEffectiveKey && raw.reuseKey !== true) {
-			return failure("Enter a new key or explicitly allow reuse of the effective existing key for this URL.");
+			return failure("Skriv inn en ny nøkkel, eller tillat gjenbruk av den eksisterende nøkkelen for denne URL-en.");
 		}
 		const effectiveKey = authMode === "apiKey" ? (envOwned ? before.key : supplied || before.key) : undefined;
-		if (authMode === "apiKey" && !effectiveKey) return failure("API key mode requires an effective key.");
+		if (authMode === "apiKey" && !effectiveKey) return failure("Med API-nøkkel må det finnes en nøkkel.");
 		const manualModels = parseModelIds(raw.manualModels);
-		if (manualModels.length > 10_000) return failure("Model list exceeds 10000 entries");
+		if (manualModels.length > 10_000) return failure("Modell-lista har over 10 000 oppføringer.");
 		const found = await discoverModels(base, effectiveKey);
 		if (!found.ok && (found.fatal || found.status === 401 || found.status === 403)) return failure(found.error, 502);
 		if (!found.ok && !manualModels.length) return failure(`${found.error}. If this endpoint has no /models list, add model IDs manually.`, 502);
@@ -135,7 +135,7 @@ export async function customProviderMutation(request: Request): Promise<Response
 		if (before.etag !== now.etag || JSON.stringify(before.auth) !== JSON.stringify(now.auth)) return stale();
 		const discovered = found.ok ? found.models : !changedTarget ? before.cp?.models ?? [] : [];
 		const models = mergeManualModels(discovered, manualModels);
-		if (models.length > 10_000) return failure("Model list exceeds 10000 entries");
+		if (models.length > 10_000) return failure("Modell-lista har over 10 000 oppføringer.");
 		const overrides = sanitizeCustomModelOverrides(!changedTarget ? before.cp?.overrides : undefined, models.map((m) => m.id));
 		const id = randomBytes(16).toString("hex");
 		const fileKey = authMode === "keyless" ? undefined : supplied && !envOwned ? supplied : now.auth.fileKey;
@@ -144,6 +144,6 @@ export async function customProviderMutation(request: Request): Promise<Response
 		commit({ baseUrl: base, authMode, credentialBindingId: id, models, overrides, ...(manualModels.length ? { manualModels } : {}) }, binding, fileKey);
 		return response({ ok: true, models });
 	} catch (error) {
-		return failure(error instanceof CustomBodyLimitError ? "Configuration body exceeds 64 KiB." : error instanceof SyntaxError ? "Invalid JSON body." : "Unable to save custom configuration. Reload configuration and retry.", error instanceof CustomBodyLimitError ? 413 : error instanceof SyntaxError ? 400 : 500);
+		return failure(error instanceof CustomBodyLimitError ? "Oppsettet er større enn 64 KiB." : error instanceof SyntaxError ? "Invalid JSON body." : "Kunne ikke lagre det egendefinerte oppsettet. Last inn oppsettet på nytt og prøv igjen.", error instanceof CustomBodyLimitError ? 413 : error instanceof SyntaxError ? 400 : 500);
 	}
 }

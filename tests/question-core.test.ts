@@ -17,6 +17,9 @@ import {
 	CONFIDENCE_STOPS,
 	DEFAULT_CONFIDENCE_INDEX,
 	isCorrect,
+	explanationRequiredFor,
+	explanationSatisfied,
+	MIN_EXPLANATION_CHARS,
 	normalizeOptions,
 	quizInputProblems,
 	explainInputBase,
@@ -577,6 +580,95 @@ describe("dismissedAnswer (the ESC-abort record)", () => {
 			kind: "quiz",
 			dismissed: true,
 		});
+	});
+});
+
+// ─── the three non-answers + the explanation gate (2026-11) ─────────────────
+
+describe("skipped / onHold (Hopp over, Spør agenten)", () => {
+	it("a skip is a dismissal that says WHICH one — and keeps the card's tool label", () => {
+		const ad = dismissedAnswer("quiz", "Pick one", { reason: "skipped", tool: "probe" });
+		assert.equal(ad.dismissed, true, "bakoverkompatibelt: every older fold still reads a non-answer");
+		assert.equal(ad.skipped, true);
+		assert.equal(ad.onHold, undefined);
+		assert.equal(ad.tool, "probe");
+		assert.equal(ad.dontKnow, false, "a skip is never 'Vet ikke' (that one is graded wrong)");
+		assert.equal(ad.correct, undefined, "and never a verdict");
+		assert.deepEqual(ad.answers, []);
+	});
+
+	it("a hold is the other one", () => {
+		const ad = dismissedAnswer("explain", "Why?", { reason: "onHold", tool: "recall" });
+		assert.equal(ad.dismissed, true);
+		assert.equal(ad.onHold, true);
+		assert.equal(ad.skipped, undefined);
+	});
+
+	it("the plain Esc dismissal carries neither flag (the record shape is unchanged)", () => {
+		const ad = dismissedAnswer("ask", "What drives you?");
+		assert.ok(!("skipped" in ad) && !("onHold" in ad) && !("tool" in ad));
+	});
+
+	it("the MODEL format: exactly {kind, dismissed, skipped|onHold} — nothing else leaks", () => {
+		assert.deepEqual(compactAnswerForModel(dismissedAnswer("quiz", "Pick one", { reason: "skipped", tool: "quiz" })), {
+			kind: "quiz",
+			dismissed: true,
+			skipped: true,
+		});
+		assert.deepEqual(compactAnswerForModel(dismissedAnswer("explain", "Why?", { reason: "onHold", tool: "explain" })), {
+			kind: "explain",
+			dismissed: true,
+			onHold: true,
+		});
+		// The reading channel rides the record (the card), never the model's non-answer.
+		const withReading = { ...dismissedAnswer("quiz", "Pick one", { reason: "skipped" }), readingThinking: "hm" };
+		assert.deepEqual(compactAnswerForModel(withReading), { kind: "quiz", dismissed: true, skipped: true });
+	});
+});
+
+describe("the required explanation (graded multiple choice)", () => {
+	it("required for quiz-kind answers only, and never on 'Vet ikke'", () => {
+		assert.equal(explanationRequiredFor("quiz", false), true, "quiz + probe are both kind quiz");
+		assert.equal(explanationRequiredFor("quiz", true), false, "an honest gap needs no justification");
+		assert.equal(explanationRequiredFor("ask", false), false, "ask is ungraded");
+		assert.equal(explanationRequiredFor("explain", false), false, "free recall IS the explanation");
+	});
+
+	it("the floor is a few words after trimming, not a quality bar", () => {
+		assert.equal(MIN_EXPLANATION_CHARS, 8);
+		assert.equal(explanationSatisfied(undefined), false);
+		assert.equal(explanationSatisfied("   "), false);
+		assert.equal(explanationSatisfied("  fordi  "), false, "padding does not count");
+		assert.equal(explanationSatisfied("den er nærmest"), true);
+	});
+
+	it("buildAnswer stamps explanationRequired only when the explanation is really there", () => {
+		const given = buildAnswer(quizData(), { values: ["mercury"], thinking: "It has the smallest orbit." });
+		assert.equal(given.explanationRequired, true);
+		assert.equal(given.correct, true, "the client still grades the option");
+		// Below the floor (a non-dock caller, an old draft): the flag never
+		// promises reasoning the record does not carry.
+		assert.equal(buildAnswer(quizData(), { values: ["mercury"], thinking: "guess" }).explanationRequired, undefined);
+		assert.equal(buildAnswer(quizData(), { values: ["mercury"] }).explanationRequired, undefined);
+		// 'Vet ikke' and ask never carry it, whatever was typed.
+		assert.equal(buildAnswer(quizData(), { dontKnow: true, thinking: "I really have no idea here." }).explanationRequired, undefined);
+		const ask = quizData({ kind: "ask", correctIndices: undefined, explanation: undefined });
+		assert.equal(buildAnswer(ask, { values: ["mercury"], thinking: "Because I like it best." }).explanationRequired, undefined);
+	});
+
+	it("the MODEL format carries explanationRequired beside correct and thinking", () => {
+		const ad = buildAnswer(quizData(), { values: ["venus"], confidence: 90, thinking: "It is the brightest planet." });
+		assert.deepEqual(compactAnswerForModel(ad), {
+			kind: "quiz",
+			answers: [{ index: 2, label: "Venus" }],
+			correct: false,
+			confidence: 90,
+			explanationRequired: true,
+			thinking: "It is the brightest planet.",
+		});
+		// Records from before the gate replay without the flag.
+		const old = { ...ad, explanationRequired: undefined };
+		assert.ok(!("explanationRequired" in compactAnswerForModel(old)));
 	});
 });
 

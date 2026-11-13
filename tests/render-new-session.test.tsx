@@ -119,7 +119,7 @@ describe("DraftShell — the sessionless surface", () => {
 		// No CTA by default: a configured surface stays quiet.
 		assert.ok(!html.includes('data-testid="setup-cta"'));
 		// The same empty state a fresh chat shows.
-		assert.ok(html.includes("The teacher will open by probing what you already know."));
+		assert.ok(html.includes("Læreren starter med å kartlegge hva du kan fra før."));
 		// The pointer-events pattern (953b22b): the wrapper stays inert…
 		assert.ok(html.includes("pointer-events-none"));
 		// …and the blob re-enables it.
@@ -173,9 +173,9 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 				mode="practice"
 			/>,
 		);
-		assert.match(html, /New practice session/);
-		assert.ok(html.includes("Pick nodes from your knowledge graph, describe what you want to practice, or bring your own problem."));
-		assert.match(html, /What do you want to practice\?/);
+		assert.match(html, /Ny øvingsøkt/);
+		assert.ok(html.includes("Velg noder fra kunnskapskartet, beskriv hva du vil øve på, eller ta med din egen oppgave."));
+		assert.match(html, /Hva vil du øve på\?/);
 	});
 
 	it("THE PICK BAR (owner round 10): the practice draft carries the same pill above its composer", () => {
@@ -188,7 +188,7 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 				mode="practice"
 			/>,
 		);
-		assert.match(html, />Pick nodes<\/button>/);
+		assert.match(html, />Velg noder<\/button>/);
 		// picked: count + Clear, the home register verbatim
 		const picked = renderToStaticMarkup(
 			<DraftShell
@@ -200,8 +200,8 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 				picks={[{ id: "n_1", name: "Parity", statement: "Odd + odd = even." }]}
 			/>,
 		);
-		assert.match(picked, /1 node selected/);
-		assert.match(picked, /Clear/);
+		assert.match(picked, /1 node valgt/);
+		assert.match(picked, /Fjern valg/);
 		// teach mode with nothing picked renders nothing (home's law)
 		const teach = renderToStaticMarkup(
 			<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} mode="teach" />,
@@ -242,6 +242,31 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 		const target = await startDraftSession("the parity chain", f, "practice");
 		assert.equal(target, "/chat/c9");
 		assert.deepEqual(body, { title: "the parity chain", kind: "practice" });
+	});
+
+	it("?fag=KODE: the fag link rides the create, in either mode", async () => {
+		const bodies: Record<string, unknown>[] = [];
+		const f = (async (_url: string, init?: RequestInit) => {
+			bodies.push(JSON.parse(String(init?.body)));
+			return new Response(JSON.stringify({ id: "c12" }), { status: 201 });
+		}) as unknown as typeof fetch;
+		await startDraftSession("hva er en transferfunksjon?", f, undefined, undefined, undefined, undefined, { code: "TTK4100" });
+		await startDraftSession("drill meg", f, "practice", [], undefined, undefined, { code: "TTK4100", topicId: "laplace", mode: "practice" });
+		assert.deepEqual(bodies, [
+			{ title: "hva er en transferfunksjon?", course: { code: "TTK4100" } },
+			{ title: "drill meg", kind: "practice", course: { code: "TTK4100", topicId: "laplace", mode: "practice" } },
+		]);
+	});
+
+	it("a fag-linked draft names the fag and links back to its page; a free draft shows no chip", () => {
+		const linked = renderToStaticMarkup(
+			<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} course={{ code: "TTK4100" }} />,
+		);
+		assert.match(linked, /data-testid="course-link-chip"/);
+		assert.match(linked, /href="\/fag\/TTK4100"/);
+		assert.ok(linked.includes("Økta kobles til TTK4100."));
+		const free = renderToStaticMarkup(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} />);
+		assert.ok(!free.includes('data-testid="course-link-chip"'));
 	});
 
 	it("the teaching default is unchanged — no kind key on the wire", async () => {

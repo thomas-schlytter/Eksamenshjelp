@@ -34,10 +34,10 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 			void (async () => {
 				try {
 					const [r] = await send(file);
-					if (!r) throw new Error("Invalid import response. Check the graph before retrying.");
+					if (!r) throw new Error("Ugyldig svar fra importen. Sjekk kunnskapskartet før du prøver igjen.");
 					if (!r.ok) {
 						const details = [r.provider, r.missing?.join(", "), r.slots?.join(", ")].filter(Boolean);
-						failures.set(index, `${r.filePath}: ${r.error}${r.code ? `\n${[r.code, ...details].join(" — ")}` : ""}`);
+						failures.set(index, `${r.filePath}: ${r.error}${r.code ? `\n${[r.code, ...details].join(" · ")}` : ""}`);
 					} else if (r.notice) notices.set(index, `${r.filePath}: ${r.notice}`);
 				} catch (error) {
 					// Never retry an ambiguous response: the merge may have committed.
@@ -60,8 +60,8 @@ export function createNotesImportQueue(post: (files: readonly File[]) => Promise
 				const index = sequence++;
 				const path = notesPath(file);
 				if (file.webkitRelativePath && file.name === ".DS_Store") continue;
-				if (!IMPORT_EXTENSIONS.test(path) || !validNotesPath(path, file.name)) failures.set(index, `${path}: Unsupported format or unsafe relative path.`);
-				else if (file.size > MAX_IMPORT_BYTES) failures.set(index, `${path}: Too big. Max 25 MB.`);
+				if (!IMPORT_EXTENSIONS.test(path) || !validNotesPath(path, file.name)) failures.set(index, `${path}: Formatet støttes ikke, eller stien er ugyldig.`);
+				else if (file.size > MAX_IMPORT_BYTES) failures.set(index, `${path}: For stor. Maks 25 MB.`);
 				else pending.push({ file, index });
 			}
 			const hadWork = active > 0 || pending.length > 0;

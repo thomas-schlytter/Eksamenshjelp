@@ -8,7 +8,7 @@
 	},
 	"homepage": "https://github.com/amosblomqvist/learnharness",
 	"desktopName": "learnharness.desktop",
-	"description": "An agent harness for learning: adaptive teaching, practice, and a persistent knowledge graph.",
+	"description": "Eksamensrettet AI-hjelp for NTNU-studenter: adaptiv læring, øving og et varig kunnskapskart.",
 	"type": "module",
 	"private": true,
 	"main": "electron/main.cjs",

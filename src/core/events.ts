@@ -52,6 +52,10 @@ export interface ServerEvents {
 	 *  the chat; the client mirrors it by disabling the composer/dock
 	 *  submit. */
 	"compaction-changed": { chatId: string; running: boolean };
+	/** A course ("fag") was created, changed or deleted, including a topic
+	 *  status set by the agent's topic_status tool. `code` names the course;
+	 *  `chatId` is present when a session's agent made the change. */
+	"courses-changed": { code?: string; chatId?: string };
 }
 
 export type ServerEventType = keyof ServerEvents;
@@ -69,6 +73,7 @@ export const SERVER_EVENT_TYPES = [
 	"subscriptions-changed",
 	"record-changed",
 	"compaction-changed",
+	"courses-changed",
 ] as const satisfies readonly ServerEventType[];
 
 /** One notification: the type discriminates the payload. */

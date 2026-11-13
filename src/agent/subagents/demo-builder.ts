@@ -234,7 +234,7 @@ export async function runDemoBuilder(input: DemoBuilderInput, opts: DemoBuilderO
 	// The verify gate: the delivered html must have a clean headless run —
 	// even when the model claims success or forgets the final run_demo.
 	if (state.testedHtml !== state.html || !state.lastResult?.ok) {
-		opts.onActivity?.("final verification");
+		opts.onActivity?.("siste kontroll");
 		let verify: DemoRunResult;
 		try {
 			verify = await headless.runDemo(state.html);

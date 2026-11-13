@@ -11,7 +11,7 @@ let dispose: (() => Promise<void>) | undefined;
 let restore: (() => void) | undefined;
 const byTest = (id: string) => document.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!;
 const trigger = () => byTest("dictation-language");
-const input = () => document.querySelector<HTMLInputElement>('input[aria-label="Search dictation languages"]')!;
+const input = () => document.querySelector<HTMLInputElement>('input[aria-label="Søk i dikteringsspråk"]')!;
 const menu = () => document.querySelector('[data-testid="dictation-language-menu"]');
 const click = async (element: HTMLElement) => { assert(element); await act(async () => { element.click(); }); };
 async function key(element: HTMLElement, value: string) {
@@ -97,36 +97,51 @@ afterEach(async () => { await dispose?.(); restore?.(); dispose = undefined; res
 test("an initial load failure is visible and opening the menu again can retry", async () => {
 	const f = await fixture(true);
 	await click(trigger());
-	assert.match(menu()!.querySelector('[role="alert"]')!.textContent!, /Could not load/);
+	assert.match(menu()!.querySelector('[role="alert"]')!.textContent!, /Kunne ikke laste/);
 	f.state.failRead = false;
 	await click(trigger());
 	await click(trigger());
 	assert.equal(menu()!.querySelector('[role="alert"]'), null);
-	await search("Polish");
+	await search("Polsk");
 	await key(input(), "Enter");
-	assert.match(trigger().textContent!, /Polish/);
+	assert.match(trigger().textContent!, /Polsk/);
 });
 
 test("the real picker searches by language, chooses with Arrow/Enter, and restores focus", async () => {
 	const f = await fixture();
-	assert.match(trigger().textContent!, /English/);
+	assert.match(trigger().textContent!, /Engelsk/);
 	for (const token of ["h-7", "rounded-sm", "border-border", "bg-background", "font-ui", "text-xs"]) {
 		assert.ok(trigger().className.split(" ").includes(token), `shared settings trigger: ${token}`);
 	}
 	await click(trigger());
 	assert.match(input().className, /lh-input/);
 	assert.equal(document.activeElement, input());
-	assert.equal(document.querySelector('[data-testid="dictation-language-list"] button')!.textContent, "Multilingual");
-	await search("Polish");
+	assert.equal(document.querySelector('[data-testid="dictation-language-list"] button')!.textContent, "Flerspråklig");
+	await search("Polsk");
 	assert.equal(document.querySelectorAll('[data-testid="dictation-language-list"] button').length, 1);
 	await key(input(), "ArrowDown");
 	await key(input(), "Enter");
 	assert.deepEqual(f.state.writes, ["pl"]);
-	assert.match(trigger().textContent!, /Polish/);
+	assert.match(trigger().textContent!, /Polsk/);
 	assert.equal(menu(), null);
 	assert.equal(document.activeElement, trigger());
 	await f.remount();
-	assert.match(trigger().textContent!, /Polish/);
+	assert.match(trigger().textContent!, /Polsk/);
+});
+
+test("English language names still find their rows, and the row shows the Norwegian name", async () => {
+	const f = await fixture();
+	await click(trigger());
+	const options = () => Array.from(document.querySelectorAll('[data-testid="dictation-language-list"] button')).map((b) => b.textContent);
+	await search("Polish");
+	assert.deepEqual(options(), ["Polsk"]);
+	await search("German");
+	assert.deepEqual(options().slice(0, 2).sort(), ["Tysk", "Tysk (Sveits)"]);
+	await search("Polish");
+	await key(input(), "ArrowDown");
+	await key(input(), "Enter");
+	assert.deepEqual(f.state.writes, ["pl"]);
+	assert.match(trigger().textContent!, /Polsk/);
 });
 
 test("Enter on a focused option preserves native button activation", async () => {
@@ -147,14 +162,14 @@ test("Enter on a focused option preserves native button activation", async () =>
 	assert.equal(prevented, false, "focused option Enter must retain its native click");
 	assert.deepEqual(f.state.writes, ["multi"]);
 	assert.equal(menu(), null);
-	assert.match(trigger().textContent!, /Multilingual/);
+	assert.match(trigger().textContent!, /Flerspråklig/);
 });
 
 test("empty results cannot save; Escape and outside click close the menu without closing settings", async () => {
 	const f = await fixture();
 	await click(trigger());
 	await search("zzzz-no-language");
-	assert.match(menu()!.textContent!, /No languages match/);
+	assert.match(menu()!.textContent!, /Ingen språk passer/);
 	await key(input(), "Enter");
 	assert.deepEqual(f.state.writes, []);
 	await key(input(), "Escape");
@@ -173,14 +188,14 @@ test("failed saves retain the confirmed choice and the same menu can retry", asy
 	const f = await fixture();
 	f.state.failWrite = true;
 	await click(trigger());
-	await search("Polish");
+	await search("Polsk");
 	await key(input(), "Enter");
-	assert.match(trigger().textContent!, /English/);
-	assert.match(menu()!.querySelector('[role="alert"]')!.textContent!, /Could not save/);
+	assert.match(trigger().textContent!, /Engelsk/);
+	assert.match(menu()!.querySelector('[role="alert"]')!.textContent!, /Kunne ikke lagre/);
 	f.state.failWrite = false;
 	await click(byTest("dictation-language-pl"));
 	assert.equal(menu(), null);
-	assert.match(trigger().textContent!, /Polish/);
+	assert.match(trigger().textContent!, /Polsk/);
 	assert.deepEqual(f.state.writes, ["pl", "pl"]);
 });
 
@@ -198,7 +213,7 @@ test("a remounted picker stays disabled throughout an outstanding save", async (
 	f.state.record.dictation = { language: "multi" };
 	await act(async () => { complete(Response.json({ settings: f.state.record })); });
 	assert.equal(trigger().disabled, false);
-	assert.match(trigger().textContent!, /Multilingual/);
+	assert.match(trigger().textContent!, /Flerspråklig/);
 	assert.deepEqual(f.state.writes, ["multi"]);
 });
 
@@ -229,10 +244,10 @@ for (const source of ["none", "file", "env"] as const) test(`Language is below t
 	assert.equal(rows[0]!.getAttribute("data-testid"), "key-deepgram_api_key");
 	assert.equal(rows[1]!.getAttribute("data-testid"), "row-dictation-language");
 	assert.equal(rows[2]!.getAttribute("data-testid"), "dictation-setup-hint");
-	assert.equal(byTest("dictation-setup-hint").textContent, "Create a Deepgram API key with the Member role or higher, then add it above.");
+	assert.equal(byTest("dictation-setup-hint").textContent, "Lag en API-nøkkel hos Deepgram med rollen Member eller høyere, og legg den inn over.");
 	assert.match(byTest("dictation-setup-hint").className, /text-muted-foreground/);
 	assert.equal(byTest("dictation-setup-hint").querySelector("a")!.href, "https://console.deepgram.com/");
-	assert.equal(byTest("dictation-setup-hint").querySelector("a")!.textContent, "Deepgram API key");
+	assert.equal(byTest("dictation-setup-hint").querySelector("a")!.textContent, "API-nøkkel hos Deepgram");
 	assert.equal(byTest("dictation-setup-hint").querySelectorAll("a").length, 1);
 	assert.match(rows[1]!.querySelector(".font-prose")!.className, /text-\(length:--lh-prose-size\)/);
 	assert.equal(trigger().disabled, false, "language is independent of key ownership");
@@ -283,7 +298,7 @@ test("the shared model menu preserves ranking, provider identity, keyboard clamp
 	await search("no-model-matches", modelInput);
 	await key(modelInput, "Enter");
 	assert.equal(picked.length, 4);
-	assert.match(document.body.textContent!, /No models match/);
+	assert.match(document.body.textContent!, /Ingen modeller passer/);
 });
 
 test("clearing each search restores the complete catalog order with Multilingual first", async () => {
@@ -292,7 +307,7 @@ test("clearing each search restores the complete catalog order with Multilingual
 	const order = () => [...document.querySelectorAll('[data-testid="dictation-language-list"] button')].map((item) => item.getAttribute("data-testid")!.replace("dictation-language-", ""));
 	const expected = DICTATION_LANGUAGES.map((item) => item.code);
 	assert.deepEqual(order(), expected);
-	for (const query of ["en", "multi", "Polish", "zzzzz"]) {
+	for (const query of ["en", "multi", "Polsk", "zzzzz"]) {
 		await search(query);
 		await search("");
 		assert.deepEqual(order(), expected, `catalog order after clearing ${query}`);

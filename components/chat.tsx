@@ -60,6 +60,7 @@ import { SessionMessageNavigation } from "@/components/session-navigation";
 import { PracticeDock } from "@/components/practice-dock";
 import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-cards";
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
+import { CourseContextCard } from "@/components/course-context-card";
 import { TopBar } from "@/components/top-bar";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
@@ -396,6 +397,32 @@ export function Chat({
 		window.addEventListener("lh:kbd-abort-turn", onAbort);
 		return () => window.removeEventListener("lh:kbd-abort-turn", onAbort);
 	}, []);
+	/* THE SILENT DISMISSAL of the pending question, shared by its two
+	 * callers: the Esc confirm (a plain dismissal) and the dock's "Spør
+	 * agenten" (`onHold`, 2026-11). Same route, same laws either way: the
+	 * non-answer lands via the SILENT route (no turn, no wake; the next
+	 * plain send carries it to the agent), the reading-thinking draft rides
+	 * along, and MID-TURN the discard also kills the running turn (the
+	 * route parks the dismissal and the settle applies it). */
+	const silentlyDismissPending = useCallback(
+		(reason?: "onHold") => {
+			const p = pendingRef.current;
+			if (!p) return;
+			const question = (p.input as { question?: string } | null)?.question ?? "";
+			const reading = readingThinkingRef.current.trim() || undefined;
+			clearReadingThinking();
+			const answer = dismissedAnswer(toolQuestionKind(p.tool), question, reason ? { reason, tool: p.tool } : undefined);
+			void dismissQuestion(
+				p.toolCallId,
+				reading ? { ...answer, readingThinking: reading } : answer,
+				p.key,
+			);
+			if (busyRef.current) abortInFlightTurn();
+		},
+		// clearReadingThinking is declared below and is stable (useCallback
+		// with no deps); this callback only ever runs from an event.
+		[abortInFlightTurn, dismissQuestion],
+	);
 	const confirmAbort = useCallback(
 		(mode: AbortMode) => {
 			setAbortAsk(null);
@@ -409,18 +436,8 @@ export function Chat({
 			// 2026-10-04 — the GLM loop): the question can only dangle because a
 			// turn is STILL RUNNING, so the discard ALSO kills that turn; the
 			// route parks the dismissal (202) and the settle applies it.
-			const p = pendingRef.current;
-			if (p) {
-				const question = (p.input as { question?: string } | null)?.question ?? "";
-				const reading = readingThinkingRef.current.trim() || undefined;
-				clearReadingThinking();
-				const answer = dismissedAnswer(toolQuestionKind(p.tool), question);
-				void dismissQuestion(
-					p.toolCallId,
-					reading ? { ...answer, readingThinking: reading } : answer,
-					p.key,
-				);
-				if (busyRef.current) abortInFlightTurn();
+			if (pendingRef.current) {
+				silentlyDismissPending();
 				return;
 			}
 			// The practice discard (owner, 2026-10-04): ask-style — the
@@ -433,7 +450,7 @@ export function Chat({
 				if (busyRef.current) abortInFlightTurn();
 			}
 		},
-		[abortInFlightTurn, dismissQuestion, dismissProblem],
+		[abortInFlightTurn, silentlyDismissPending, dismissProblem],
 	);
 	// Mount continuation: if the stored transcript ends with a fulfilled tool
 	// (a job result landed while no client was open), resume the lesson — the
@@ -726,6 +743,17 @@ export function Chat({
 			composerInputRef.current?.focus();
 		}
 	}, [dictation.active]);
+	/* "Spør agenten" hands the composer back FOCUSED (2026-11): the learner
+	 * pressed it in order to type. The flag is consumed on the very next
+	 * dock-subject change, whatever it is: the composer returning takes
+	 * focus; a sibling question taking the dock instead does not (and must
+	 * not leave a stale flag to steal focus after some later answer). */
+	const focusComposerOwedRef = useRef(false);
+	useEffect(() => {
+		if (!focusComposerOwedRef.current) return;
+		focusComposerOwedRef.current = false;
+		if (pendingQuestionId === null) composerInputRef.current?.focus();
+	}, [pendingQuestionId]);
 
 	// Jobs never gate the composer (contracts.ts "THE ASYNC PROTOCOL" §4): job
 	// tools resolve with an ack mid-turn, so the learner can interject while
@@ -753,6 +781,15 @@ export function Chat({
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
 	const sendAllowed = !pending && !activeProblem && !compacting;
+	/* A question sits ON HOLD (2026-11): derived from the record's tail (the
+	 * onHold result is the last thing in it until the learner's message
+	 * lands), so it survives a reload and needs no latch. Drives only the
+	 * composer's placeholder: the promise that the question comes back. */
+	const lastNative = nativeMessages.at(-1) as { role?: string; details?: unknown } | undefined;
+	const questionOnHold =
+		!pending &&
+		lastNative?.role === "toolResult" &&
+		(lastNative.details as { onHold?: unknown } | null | undefined)?.onHold === true;
 
 	/* THE PRACTICE PAUSE (owner round 16): between problems — practice
 	 * kind, nothing active, nothing in flight, and at least one problem
@@ -1199,6 +1236,54 @@ export function Chat({
 		void syncFromServer();
 	});
 
+	/* THE ANSWER SEAM (fork 1, owner 2026-09-26): the answer IS the question
+	 * call's tool result — one input event, one turn. The hook appends the
+	 * optimistic result (the AnsweredCard shows at once) and the server's
+	 * write-ahead persists it before the turn; the teacher's reaction
+	 * streams below it. The reading-thinking draft rides along (owner
+	 * 2026-10-03) — the check answer is its only carrier. Shared by the
+	 * dock's submit and its "Hopp over" (a skipped answer is still an
+	 * answer event: it starts the agent's turn). */
+	const submitPendingAnswer = (output: QuestionAnswerData) => {
+		if (!pending) return;
+		saveQuestionDraft(pending.key, { readingThinking: readingThinkingRef.current });
+		const reading = readingThinkingRef.current.trim() || undefined;
+		// The pending-id effect clears this only when the question
+		// actually leaves. An offline preflight keeps the draft visible.
+		submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output, pending.key);
+	};
+
+	/* "HOPP OVER" (2026-11, owner: "man skal kunne velge å ikke svare"):
+	 * one click, no confirm. Not "Vet ikke" (an honest gap, graded wrong)
+	 * and not the Esc dismissal (silent, the agent waits): the skip is sent
+	 * like any answer, so the agent simply moves on, and it counts as no
+	 * evidence at all ({kind, dismissed, skipped} is all the model sees). */
+	const skipQuestion = () => {
+		// localStream: the posing turn has not settled, the answer POST would
+		// be refused (the dock disables the button and says "Et øyeblikk…").
+		if (!pending || compacting || localStream) return;
+		const question = (pending.input as { question?: string } | null)?.question ?? "";
+		submitPendingAnswer(dismissedAnswer(toolQuestionKind(pending.tool), question, { reason: "skipped", tool: pending.tool }));
+	};
+
+	/* "SPØR AGENTEN" (2026-11, owner: "sette det på vent for å snakke med
+	 * agenten"): the question is parked through the SILENT dismissal route
+	 * (flagged onHold) and the composer comes straight back, focused. The
+	 * agent sees the hold with the learner's next message, answers it
+	 * without giving the held answer away, and re-poses the question.
+	 * Whatever the learner had typed in the dock becomes the composer
+	 * draft: it is most likely the start of what they wanted to ask, and
+	 * it must never be lost. An existing composer draft is kept in front. */
+	const holdQuestion = (draft: string) => {
+		if (!pendingRef.current) return;
+		if (draft) {
+			const existing = textRef.current.trimEnd();
+			applyText(existing ? `${existing}\n${draft}` : draft);
+		}
+		focusComposerOwedRef.current = true;
+		silentlyDismissPending("onHold");
+	};
+
 	const onSend = () => {
 		if (pending || compacting) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
@@ -1320,8 +1405,8 @@ export function Chat({
 								}}
 								onBlur={() => void commitRename(titleDraft)}
 								spellCheck={false}
-								aria-label="Session title"
-								title="Rename this session"
+								aria-label="Navn på økta"
+								title="Gi økta nytt navn"
 								className="lh-no-drag min-w-[8ch] max-w-[70%] shrink-0 bg-transparent font-title text-3xl tracking-tight caret-current outline-none [field-sizing:content]"
 							/>
 							{/* flex-1 spacer during rename too, so the chips stay at
@@ -1333,7 +1418,7 @@ export function Chat({
 					<>
 						<Hint
 							// F2 renames (registry) — surfaced on the hover.
-							label="Rename session"
+							label="Gi økta nytt navn"
 							action="rename-session"
 							side="bottom"
 						>
@@ -1357,7 +1442,7 @@ export function Chat({
 					    structure beside the phase chip — access to the full-DAG popup
 					    at every width; the marginalia is the wide-screen glance view. */}
 					{planTree && (
-						<Hint label="Open the full plan" side="bottom">
+						<Hint label="Åpne hele planen" side="bottom">
 <button
 							type="button"
 							data-testid="plan-chip"
@@ -1390,7 +1475,7 @@ export function Chat({
 							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
 						>
 							<DumbbellIcon className="size-3" />
-							Practice
+							Øving
 						</span>
 					) : (
 						<PhaseChip phase={phases.at(-1) ?? "probe"} />
@@ -1405,8 +1490,12 @@ export function Chat({
 						<div data-session-find-root="" className={`${COLUMN} flex flex-1 flex-col gap-4 pt-4`}>
 							{messages.length === 0 && !busy && (
 								<ConversationEmptyState
-									title="New session"
-									description="The teacher will open by probing what you already know."
+									title="Ny økt"
+									description={
+										kind === "practice"
+											? "Skriv hva du vil øve på, så får du en oppgave."
+											: "Læreren starter med å kartlegge hva du kan fra før."
+									}
 								/>
 							)}
 
@@ -1441,6 +1530,11 @@ export function Chat({
 										switch (part.type) {
 											case "data-graph-context":
 												return <GraphContextCard key={pi} data={part.data as GraphContextData} />;
+											case "data-course-context":
+												// The course line (exam mode, 2026-11): which course, topic
+												// and material this session works from. The card guards the
+												// untyped payload itself and renders nothing it cannot read.
+												return <CourseContextCard key={pi} data={part.data} />;
 											case "data-compaction":
 												return <CompactionMomentDivider key={pi} data={part.data as CompactionDividerData} />;
 											case "data-compaction-cut":
@@ -1457,7 +1551,7 @@ export function Chat({
 														className="my-4 flex items-center justify-center gap-1.5 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground"
 													>
 														<ArrowRightIcon className="size-3" />
-														Next problem
+														Neste oppgave
 													</div>
 												);
 											default:
@@ -1516,7 +1610,7 @@ export function Chat({
 												{/* The rail GROUPS (owner round 4, 2026-10-05): the YOU heading
 												    sits INSIDE the rail, same mono-xs register and same 1ch
 												    rail as the thinking rows — one quote geometry. */}
-												<div className="font-medium uppercase tracking-wide text-muted-foreground">You</div>
+												<div className="font-medium uppercase tracking-wide text-muted-foreground">Du</div>
 												<div className="lh-prose whitespace-pre-wrap text-foreground">
 													<PathText text={m.parts.filter((p) => p.type === "text").map((p) => p.text).join("\n")} />
 												</div>
@@ -1549,7 +1643,7 @@ export function Chat({
 												) {
 													return (
 														<SystemLine key={`retry-${pi}`} testId="tool-retry">
-															Retrying…
+															Prøver på nytt…
 														</SystemLine>
 													);
 												}
@@ -1591,7 +1685,7 @@ export function Chat({
 													case "tool-recall": {
 														const malformed = !busy && malformedQuestions.find(call => call.messageId === part.sourceMessageId && call.contentIndex === part.sourceContentIndex && call.toolCallId === part.toolCallId);
 														if (malformed) return <MalformedQuestion key={pi} disabled={!!pending || compacting}
-															reason={pending ? "Answer or discard the remaining question first." : undefined}
+															reason={pending ? "Svar på eller lukk det gjenstående spørsmålet først." : undefined}
 															onRetry={() => {
 																draftRef.current = null;
 																void send({ type: "retry-question", messageId: malformed.messageId, contentIndex: malformed.contentIndex, toolCallId: malformed.toolCallId });
@@ -1653,25 +1747,25 @@ export function Chat({
 						    BEFORE beginTurn; the settle kick runs after endTurn). */}
 							{compacting && (
 								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
-									<BrailleSpinner label="Compacting context" />
-									<Shimmer duration={1}>COMPACTING CONTEXT…</Shimmer>
+									<BrailleSpinner label="Komprimerer konteksten" />
+									<Shimmer duration={1}>KOMPRIMERER KONTEKSTEN…</Shimmer>
 								</span>
 							)}
 							{(status === "submitted" || turnInFlight) && (
 								<span className="flex items-center gap-2 font-ui text-xs font-medium uppercase tracking-wide text-muted-foreground">
-									<BrailleSpinner label="Thinking" />
+									<BrailleSpinner label="Tenker" />
 									<Shimmer duration={1}>
-										THINKING…
+										TENKER…
 									</Shimmer>
 								</span>
 							)}
 							{openingError && <p role="alert" className="text-sm text-destructive">{OPENING_PROMPT_FAILURE}</p>}
 							{error && (
 								<div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-2 text-sm">
-									<span>Something went wrong: {error.message}</span>
+									<span>Noe gikk galt: {error.message}</span>
 									{retryable && (
 										<Button variant="outline" size="xs" data-testid="retry-failed-turn" onClick={retryFailedTurn}>
-											Retry
+											Prøv igjen
 										</Button>
 									)}
 								</div>
@@ -1697,6 +1791,7 @@ export function Chat({
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.key, { form }); }}
 					practice={activeProblem}
 					compactionRunning={compacting}
+					turnSettling={localStream}
 					onSubmitThinking={submitThinking}
 					chatId={chatId}
 					onModelChange={setSelectedModel}
@@ -1727,7 +1822,7 @@ export function Chat({
 										onClick={() => setSetupOpen(true)}
 										className="rounded-sm border border-border bg-card px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 hover:bg-accent cursor-pointer"
 									>
-										Set up your models
+										Sett opp modellene dine
 									</button>
 								</div>
 							)
@@ -1754,25 +1849,18 @@ export function Chat({
 							// applies.
 							nextProblem={nextReady}
 							onNext={sendNext}
-							placeholder={nextReady ? "Ask anything, or press Enter for the next one." : undefined}
+							placeholder={
+								nextReady
+									? "Spør om hva som helst, eller trykk Enter for neste oppgave."
+									: questionOnHold
+										? "Spør om det du lurer på. Spørsmålet kommer tilbake etterpå."
+										: undefined
+							}
 						/>
 					}
-					onSubmitAnswer={(output) => {
-						if (!pending) return;
-						// THE ANSWER IS THE QUESTION CALL'S TOOL RESULT (fork 1, owner
-						// 2026-09-26): one input event, one turn — the hook appends
-						// the optimistic graded result (the AnsweredCard shows at
-						// once) and the server's write-ahead persists it before the
-						// turn; the teacher's reaction streams below it. Dismissals
-						// ride the same callback (QuestionAnswerData.dismissed). The
-						// reading-thinking draft rides along (owner 2026-10-03) — the
-						// check answer is its only carrier.
-						saveQuestionDraft(pending.key, { readingThinking: readingThinkingRef.current });
-						const reading = readingThinkingRef.current.trim() || undefined;
-						// The pending-id effect clears this only when the question
-						// actually leaves. An offline preflight keeps the draft visible.
-						submitAnswer(pending.tool, pending.toolCallId, reading ? { ...output, readingThinking: reading } : output, pending.key);
-					}}
+					onSubmitAnswer={submitPendingAnswer}
+					onSkipQuestion={skipQuestion}
+					onHoldQuestion={holdQuestion}
 				/>
 				</Conversation>
 
@@ -1931,6 +2019,7 @@ function DockOverlay({
 	onSaveQuestionDraft,
 	practice,
 	compactionRunning,
+	turnSettling,
 	onSubmitThinking,
 	requiresReveal,
 	readingThinking,
@@ -1943,6 +2032,8 @@ function DockOverlay({
 	pricing,
 	composer,
 	onSubmitAnswer,
+	onSkipQuestion,
+	onHoldQuestion,
 	chatId,
 	onModelChange,
 	onReserve,
@@ -1959,6 +2050,9 @@ function DockOverlay({
 	/** Compaction running for this chat (round 14) — the docks' submit
 	 *  affordance gate (the server's registry is the real one). */
 	compactionRunning: boolean;
+	/** Our own stream for the turn that posed the pending question is still
+	 *  open: answers and skips wait ("Et øyeblikk…"), a hold is queued. */
+	turnSettling: boolean;
 	/** The ACTIVE practice problem (practice sessions, 2026-10-04):
 	 *  {toolCallId, input} — dock ownership exactly like a pending
 	 *  question (the composer is replaced); null in teaching sessions. */
@@ -1981,6 +2075,11 @@ function DockOverlay({
 	pricing?: SessionPricing;
 	composer: React.ReactNode;
 	onSubmitAnswer: (output: QuestionAnswerData) => void;
+	/** The dock's two non-answers (2026-11): "Hopp over" (sent as an answer,
+	 *  the agent moves on) and "Spør agenten" (on hold, the composer returns
+	 *  carrying the learner's dock draft). Owned by ChatView like the submit. */
+	onSkipQuestion: () => void;
+	onHoldQuestion: (draft: string) => void;
 	/** The model control's pass-through (the stats bar hosts it). */
 	chatId: string;
 	onModelChange: (model: string | undefined) => void;
@@ -2402,11 +2501,14 @@ function DockOverlay({
 									phase={phase}
 									onExpand={expandAndReveal}
 									onSubmit={onSubmitAnswer}
+									onSkip={onSkipQuestion}
+									onHold={onHoldQuestion}
 									initialDraft={initialQuestionDraft}
 									onSaveDraft={onSaveQuestionDraft}
 									onEscape={dictationCancel}
 									dictationClaim={!revealPending}
 									compactionRunning={compactionRunning}
+									turnSettling={turnSettling}
 								/>
 							) : practice ? (
 								<PracticeDock
@@ -2464,7 +2566,7 @@ function DockOverlay({
 				    mid-question unmount), and widening past the floor fades it
 				    back in. */}
 				{pending && plan && (
-					<Hint label="Open the full plan" side="bottom">
+					<Hint label="Åpne hele planen" side="bottom">
 <button
 						type="button"
 						data-testid="plan-marginalia"
