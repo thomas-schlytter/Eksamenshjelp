@@ -27,7 +27,7 @@ import type {
 	RoleModelOverride,
 } from "../core/settings.ts";
 import { BACKGROUND_MODEL_ROLES, CACHE_RETENTIONS, COMPACTION_THRESHOLD_FLOOR, CUSTOM_MODEL_PIN_FLOOR, EXTRACTION_CHUNK_TOKENS_FLOOR, MODEL_SLOTS } from "../core/settings.ts";
-import { WRITABLE_TOOL_KEYS } from "../core/pending.ts";
+import { RETIRED_TOOL_KEYS, TOGGLEABLE_TOOLS } from "../core/pending.ts";
 import { isDictationLanguage } from "../core/dictation.ts";
 
 /** Parsed-or-rejected — `ok: false` carries the 400's error message. */
@@ -172,11 +172,15 @@ export function parseAgentSettingsBody(body: unknown): SettingsBodyResult<AgentS
 		// Unknown tool keys are rejected at WRITE time (user decision
 		// 2026-09-19): the delta is inert while unread, but once the bridge
 		// honors it a persisted bogus key would drift. The writable set is
-		// the job tools + the quizzing-mechanics switch (explain, owner
-		// 2026-09-27). The read-side sanitizer stays lenient for
-		// forward-compat.
-		const supported = WRITABLE_TOOL_KEYS as readonly string[];
+		// the job tools. A retired key (the old question-form switch) is
+		// accepted and dropped: the settings UI echoes the stored map back,
+		// so rejecting it would fail every save on an old settings file.
+		const supported = TOGGLEABLE_TOOLS as readonly string[];
 		for (const key of Object.keys(tools.map)) {
+			if ((RETIRED_TOOL_KEYS as readonly string[]).includes(key)) {
+				delete tools.map[key];
+				continue;
+			}
 			if (!supported.includes(key)) {
 				return { ok: false, error: `unknown tool "${key}" (supported: ${supported.join(", ")})` };
 			}

@@ -204,6 +204,18 @@ describe("sanitizeUserSettings", () => {
 		assert.deepEqual(out.agent?.tools, { quiz: false, demo: true });
 	});
 
+	it("the retired question-form key (agent.tools.explain) is dropped on read, whatever it held", () => {
+		// An old settings.json from before 2026-11-14 must load without error
+		// and without the key reaching a registry or the settings UI.
+		const kept = sanitizeUserSettings({ version: 1, agent: { tools: { explain: true, research: false } } });
+		assert.deepEqual(kept?.agent?.tools, { research: false });
+		for (const value of [true, false]) {
+			const alone = sanitizeUserSettings({ version: 1, agent: { tools: { explain: value } } });
+			assert.ok(alone);
+			assert.equal(alone.agent?.tools, undefined);
+		}
+	});
+
 	it("BACKGROUND_MODEL_ROLES matches the five background roles (practice trio deleted 2026-10-04)", () => {
 		assert.deepEqual([...BACKGROUND_MODEL_ROLES], [
 			"researcher",

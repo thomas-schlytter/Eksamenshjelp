@@ -276,6 +276,24 @@ describe("exam prompt overlay", () => {
 		assert.equal(composeInstructions("practice", {}, { exam: true }), composeInstructions("practice"));
 	});
 
+	it("the question model is fixed in every prompt: quiz along the way, explain approves, no setting to switch on", () => {
+		const teach = composeInstructions("teacher");
+		const examTeacher = composeInstructions("teacher", {}, { exam: true });
+		const prober = composeInstructions("prober");
+		for (const text of [teach, examTeacher]) {
+			assert.match(text, /## Approving a node — `explain`/);
+			assert.match(text, /never spend `explain` on a routine check/);
+			assert.match(text, /Every `quiz` and `explain` call carries `nodeId` AND `type`/);
+		}
+		assert.match(examTeacher, /approve it the exam way/);
+		assert.match(prober, /`probe`, always multiple choice/);
+		for (const text of [teach, examTeacher, prober, composeInstructions("prober", {}, { exam: true })]) {
+			for (const stale of [/switched on in settings/, /mechanic the learner chose/, /whichever the learner/, /free-recall tool if you have one/, /`recall`/]) {
+				assert.doesNotMatch(text, stale);
+			}
+		}
+	});
+
 	it("exam overlay segments are valid, overridable segment paths", () => {
 		assert.ok(isValidSegmentPath("exam-teacher/10-exam.md"));
 		assert.ok(isValidSegmentPath("exam-prober/10-exam-probe.md"));

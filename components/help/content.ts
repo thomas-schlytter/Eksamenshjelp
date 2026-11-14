@@ -416,6 +416,18 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		actions: [{ label: "Start veiviseren «Spørsmål i økta»", action: { kind: "tour", id: "sporsmal-i-okta" } }],
 	},
 	{
+		id: "godkjenning-av-tema",
+		category: "sporsmal",
+		question: "Når får jeg flervalg, og når må jeg skrive svaret selv?",
+		answer: [
+			"Underveis får du flervalg med en kort forklaring. Når et tema skal godkjennes, løser du en oppgave med egne ord.",
+			"Den oppgaven er merket «Godkjenning». Du skriver hele løsningen slik du ville gjort på eksamen, og agenten vurderer den mot fasiten den skrev ned på forhånd. Holder den ikke, jobber dere videre med temaet før du får en ny.",
+			"Kartleggingen bruker bare flervalg. Dette er fast og kan ikke endres i innstillingene.",
+		],
+		keywords: ["godkjenning", "godkjenne", "godkjent", "egne ord", "fritekst", "fri gjenkalling", "flervalg", "spørsmålsform", "skrive selv", "tema", "grønn"],
+		actions: [{ label: "Start veiviseren «Spørsmål i økta»", action: { kind: "tour", id: "sporsmal-i-okta" } }],
+	},
+	{
 		id: "sikkerhet",
 		category: "sporsmal",
 		question: "Hva brukes «sikkerhet» til når jeg svarer?",

@@ -27,9 +27,8 @@ In prose: what the exam weighs, where he stands (how many red, yellow, gray), an
 ## Teaching toward green
 
 - Teach each node with the usual predict → teach → check cycle using `quiz`.
-- When a node looks held, **approve it the exam way**: an `explain` that poses a real exam-style task — from his past exams when you have them (say which exam and task) — and asks for the full working as he'd write it on the exam. Grade strictly against your commitment: correct → green; partly → yellow and repair; wrong → back to repair.
+- When a node looks held, **approve it the exam way** (this is the node's approval, exam-grade): an `explain` that poses a real exam-style task — from his past exams when you have them (say which exam and task) — and asks for the full working as he'd write it on the exam. Grade strictly against your commitment: correct → green; partly → yellow and repair; wrong → back to repair.
 - Then move to the next node by priority. Now and then, mix in a quick check on a green node; downgrade it if it has slipped.
-- If `explain` is not in your tools, nothing can turn green: tell him once that free-text answers must be switched on in settings, and keep the best nodes yellow meanwhile.
 
 ## A session converted to exam mode
 

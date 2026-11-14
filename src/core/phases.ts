@@ -87,7 +87,7 @@ function advance(
 			phase = "plan";
 		}
 		// plan → teach via the first nodeId-tagged quizzing CALL — quiz OR
-		// explain, whichever mechanic the settings armed (both carry nodeId).
+		// explain (the teacher holds both; both carry nodeId).
 		if (
 			phase === "plan" &&
 			(part.type === "tool-quiz" || part.type === "tool-explain") &&

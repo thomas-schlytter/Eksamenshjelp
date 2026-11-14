@@ -35,6 +35,7 @@ import type { ModelRole } from "../../config.ts";
 import type { ChatSettings } from "./contracts/chat.ts";
 import type { SearchEngineId } from "./search.ts";
 import { isDictationLanguage, type DictationLanguage } from "./dictation.ts";
+import { RETIRED_TOOL_KEYS } from "./pending.ts";
 
 /** The schema version this code understands. Bump ONLY for breaking shape
  *  changes (a field renamed/meaning changed); pure additions never bump. */
@@ -712,7 +713,13 @@ function sanitizeAgent(raw: Record<string, unknown>): AgentSettings {
 		if (Object.keys(models).length) out.models = models;
 	}
 	const tools = sanitizeBooleanMap(raw.tools);
-	if (tools) out.tools = tools;
+	if (tools) {
+		// Retired keys (the old question-form switch) are dropped on read:
+		// an old settings.json loads cleanly and the key never reaches a tool
+		// registry or the settings UI.
+		for (const key of RETIRED_TOOL_KEYS) delete tools[key];
+		if (Object.keys(tools).length) out.tools = tools;
+	}
 	const prompts = sanitizeBooleanMap(raw.prompts);
 	if (prompts) out.prompts = prompts;
 	// Search preference: lenient read side (an unknown engine id drops;

@@ -8,7 +8,7 @@ import { PathText } from "@/components/file-path-chip";
 import { cn } from "@/lib/utils";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import type { QuestionAnswerData } from "@/src/core";
-import { answerForPresentation, parseAskInput, parseQuizInput } from "@/src/core";
+import { answerForPresentation, explainLabel, parseAskInput, parseQuizInput } from "@/src/core";
 
 /**
  * Static rendering of an answered question (tool part in `output-available`).
@@ -86,15 +86,15 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 			    transcript. No `tool` on old records: kind labels as before. */}
 				{answer.tool === "probe"
 					? "Kartlegging"
-					: answer.tool === "recall"
-						? "Gjenkalling"
-						: isQuiz
-							? answer.questionType === "predict"
-								? "Forutsi"
-								: "Sjekk"
-							: isExplain
-								? "Forklar"
-								: "Spørsmål"}
+					: isQuiz
+						? answer.questionType === "predict"
+							? "Forutsi"
+							: "Sjekk"
+						: isExplain
+							? // A teach explain is the node's approval; the role rides the
+								// original call, like the details line below.
+								explainLabel(answer.tool, (input as { type?: unknown } | null | undefined)?.type)
+							: "Spørsmål"}
 				{isQuiz &&
 					(answer.dontKnow ? (
 						<span className="rounded bg-muted px-1.5 py-0.5">visste ikke</span>

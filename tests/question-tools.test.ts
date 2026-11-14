@@ -273,16 +273,16 @@ describe("tool toggles (core/pending.ts + factories)", () => {
 		const noAsk = createProberTools(ctx, { ask_user_question: false });
 		assert.deepEqual(Object.keys(noAsk).sort(), ["find", "grep", "ls", "pdf", "probe", "probe_done", "read", "research"]);
 
-		// Quizzing is mechanics-managed now (owner 2026-09-27): quiz/explain
-		// NEVER pass through the generic filter — hand-written quiz:false is a
-		// no-op (the wedge danger stands: a quiz-less prober collapses its
-		// assessment flow). probe_done is never droppable — it ends the phase.
-		const noQuiz = createProberTools(ctx, { quiz: false });
-		assert.deepEqual(Object.keys(noQuiz).sort(), ["ask_user_question", "find", "grep", "ls", "pdf", "probe", "probe_done", "read", "research"]);
-		// The mechanic switch (owner 2026-09-27): tools.explain === true arms
-		// free-recall — explain in, quiz out, exactly one quizzing tool.
-		const free = createProberTools(ctx, { explain: true });
-		assert.deepEqual(Object.keys(free).sort(), ["ask_user_question", "find", "grep", "ls", "pdf", "probe_done", "read", "recall", "research"]);
+		// The graded tool is FIXED (owner 2026-11-14): probing is always
+		// multiple choice. No key reaches `probe` through the generic filter
+		// (the wedge danger stands: a quiz-less prober collapses its
+		// assessment flow), and `recall` is never armed — not by the retired
+		// question-form key (explain: true), not by anything else.
+		const fullProber = ["ask_user_question", "find", "grep", "ls", "pdf", "probe", "probe_done", "read", "research"];
+		for (const stored of [{ quiz: false }, { probe: false }, { explain: true }, { explain: false }, { recall: true }]) {
+			assert.deepEqual(Object.keys(createProberTools(ctx, stored)).sort(), fullProber, JSON.stringify(stored));
+		}
+		// probe_done is never droppable — it ends the phase.
 		assert.ok(createProberTools(ctx, { probe_done: false }).probe_done, "probe_done always-on");
 	});
 
@@ -295,10 +295,12 @@ describe("tool toggles (core/pending.ts + factories)", () => {
 			spawn: () => {},
 		};
 		const full = Object.keys(createTeacherTools(ctx)).sort();
-		assert.deepEqual(full, ["ask_user_question", "demo", "find", "grep", "ls", "pdf", "plan_init", "quiz", "read", "research", "visual"]);
+		// BOTH graded tools, always (owner 2026-11-14): quiz for the lesson,
+		// explain for approving a node.
+		assert.deepEqual(full, ["ask_user_question", "demo", "explain", "find", "grep", "ls", "pdf", "plan_init", "quiz", "read", "research", "visual"]);
 
 		const noResearch = Object.keys(createTeacherTools(ctx, { research: false })).sort();
-		assert.deepEqual(noResearch, ["ask_user_question", "demo", "find", "grep", "ls", "pdf", "plan_init", "quiz", "read", "visual"]);
+		assert.deepEqual(noResearch, full.filter((t) => t !== "research"));
 
 		// absent = enabled: an empty record and undefined behave identically
 		assert.deepEqual(
@@ -307,14 +309,15 @@ describe("tool toggles (core/pending.ts + factories)", () => {
 			"absent keys mean enabled — old records behave exactly as today",
 		);
 
-		// The mechanic switch (owner 2026-09-27): free-recall swaps the teach
-		// quiz for the teach explain — one quizzing tool, whichever is armed.
-		const freeFull = ["ask_user_question", "demo", "explain", "find", "grep", "ls", "pdf", "plan_init", "read", "research", "visual"];
-		assert.deepEqual(Object.keys(createTeacherTools(ctx, { explain: true })).sort(), freeFull);
+		// The retired question-form key is ignored whatever it holds, and no
+		// stored key can remove a graded tool: quiz AND explain survive.
+		for (const stored of [{ explain: true }, { explain: false }, { quiz: false }, { quiz: false, explain: false }]) {
+			assert.deepEqual(Object.keys(createTeacherTools(ctx, stored)).sort(), full, JSON.stringify(stored));
+		}
 		assert.deepEqual(
 			Object.keys(createTeacherTools(ctx, { explain: true, research: false })).sort(),
-			freeFull.filter((t) => t !== "research"),
-			"mechanics and plain toggles compose",
+			full.filter((t) => t !== "research"),
+			"a stale key beside a real toggle: only the toggle acts",
 		);
 	});
 });

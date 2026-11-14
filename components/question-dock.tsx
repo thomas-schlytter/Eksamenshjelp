@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import {
 	buildAnswer,
 	repairMathForDisplay,
+	explainLabel,
 	normalizeQuizType,
 	CONFIDENCE_STOPS,
 	DEFAULT_CONFIDENCE_INDEX,
@@ -139,10 +140,6 @@ export function QuestionDock({
 	// ("recall") is explain-shaped. Old records keep the teach names.
 	const canonical =
 		toolName === "probe" ? "quiz" : toolName === "recall" ? "explain" : toolName;
-	// The chip's display name carries the tool's OWN name (owner
-	// 2026-10-09): probe-phase questions label Probe/Recall in the
-	// composer; teach tools keep the standing labels.
-	const toolLabel = toolName === "probe" ? "Kartlegging" : toolName === "recall" ? "Gjenkalling" : undefined;
 	// Parse, don't cast (src/core/tool-parts.ts): the model authored this
 	// input, and only the schema the tool declared vouches for its shape.
 	// The dock mounts on input-available parts (already validated at the
@@ -154,6 +151,16 @@ export function QuestionDock({
 	if (!parsed) {
 		return <MalformedQuestion />;
 	}
+	// The chip's display name carries the tool's OWN name (owner
+	// 2026-10-09): probe-phase questions label Kartlegging in the composer.
+	// A teach explain is the node's approval (owner 2026-11-14) and says so;
+	// old recall/explain calls keep their labels (explainLabel).
+	const toolLabel =
+		toolName === "probe"
+			? "Kartlegging"
+			: canonical === "explain"
+				? explainLabel(toolName, (parsed as { type?: unknown }).type)
+				: undefined;
 	return (
 		<>
 			{!expanded && (
@@ -291,7 +298,7 @@ export function QuestionDockBar({
 					<PlayIcon className="size-3.5" />
 				</span>
 				<span className="min-w-0 flex-1">
-					<span className="block text-sm font-medium">Sjekk forståelsen</span>
+					<span className="block text-sm font-medium">{toolLabel === "Godkjenning" ? "Godkjenning" : "Sjekk forståelsen"}</span>
 					<span className="block truncate text-xs text-muted-foreground">{teaserText(question)}</span>
 				</span>
 				<span className="flex shrink-0 items-center gap-1 text-xs font-medium text-primary">
@@ -310,7 +317,7 @@ export function QuestionDockBar({
 			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				{label ??
 							toolLabel ??
-							(toolName === "quiz" ? "Sjekk" : toolName === "explain" ? "Forklar" : "Spørsmål")}
+							(toolName === "quiz" ? "Sjekk" : "Spørsmål")}
 			</span>
 			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
 			<span className="flex shrink-0 items-center gap-1 text-xs font-medium">
@@ -691,15 +698,13 @@ function QuestionDockForm({
 				<div className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					{toolName === "probe"
 						? "Kartlegging"
-						: toolName === "recall"
-							? "Gjenkalling"
-							: kind === "quiz"
-								? qd.questionType === "predict"
-									? "Forutsi"
-									: "Sjekk"
-								: kind === "explain"
-									? "Forklar"
-									: "Spørsmål"}
+						: kind === "quiz"
+							? qd.questionType === "predict"
+								? "Forutsi"
+								: "Sjekk"
+							: kind === "explain"
+								? explainLabel(toolName, (input as { type?: unknown }).type)
+								: "Spørsmål"}
 					{qd.mode === "multi-select" && " · velg alle som passer"}
 				</div>
 				<div className="mb-3 font-medium">

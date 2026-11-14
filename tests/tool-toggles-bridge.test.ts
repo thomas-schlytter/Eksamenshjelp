@@ -42,6 +42,17 @@ describe("AgentBuildOptions.toolToggles (the P2 bridge)", () => {
 		assert.deepEqual(toolNames(bare), ["ask_user_question", "quiz"]);
 	});
 
+	it("a stored explain:true from the retired setting changes nothing: teacher keeps quiz AND explain, prober keeps probe", () => {
+		const chatId = chatStore.createChat("Retired setting bridge test").id;
+		const ctx: ProberToolContext = { chatId, chatStore, deliver: () => {}, jobStore, spawn: () => {} };
+		for (const toolToggles of [undefined, { explain: true }, { explain: false }]) {
+			const teacher = toolNames(createTeacherAgent(ctx, { engine: fauxEngine(), toolToggles }));
+			assert.ok(teacher.includes("quiz") && teacher.includes("explain"), `teacher: ${JSON.stringify(toolToggles)}`);
+			const prober = toolNames(createProberAgent(ctx, { engine: fauxEngine(), toolToggles }));
+			assert.ok(prober.includes("probe") && !prober.includes("recall") && !prober.includes("explain"), `prober: ${JSON.stringify(toolToggles)}`);
+		}
+	});
+
 	it("flows into the prober's registry; probe_done survives everything", () => {
 		const chatId = chatStore.createChat("Toggle bridge test").id;
 		const ctx: ProberToolContext = { chatId, chatStore, deliver: () => {}, jobStore, spawn: () => {} };
@@ -81,16 +92,23 @@ describe("parseAgentSettingsBody: tool keys validate at write time", () => {
 		assert.deepEqual(r.ok && r.settings.tools, { research: false, pdf: false });
 	});
 
-	it("the quizzing-mechanics key (explain) is writable (owner 2026-09-27)", () => {
-		const r = parse({ explain: true });
-		assert.equal(r.ok, true);
-		assert.deepEqual(r.ok && r.settings.tools, { explain: true });
+	it("the retired question-form key (explain) is accepted and dropped, never a 400 (owner 2026-11-14)", () => {
+		// The settings UI echoes the stored tools map back on every save: an
+		// old settings file must keep saving, and the key must not persist.
+		for (const value of [true, false]) {
+			const r = parse({ explain: value, research: false });
+			assert.equal(r.ok, true);
+			assert.deepEqual(r.ok && r.settings.tools, { research: false });
+		}
+		const alone = parse({ explain: true });
+		assert.equal(alone.ok, true);
+		assert.deepEqual(alone.ok && alone.settings.tools, {});
 	});
 
 	it("unknown keys are rejected with the supported list (the quiz wedge never persists)", () => {
 		const r = parse({ quiz: false });
 		assert.equal(r.ok, false);
-		assert.match(!r.ok && r.error, /unknown tool "quiz" \(supported: research, demo, visual, pdf, explain\)/);
+		assert.match(!r.ok && r.error, /unknown tool "quiz" \(supported: research, demo, visual, pdf\)/);
 		const typo = parse({ reasearch: false });
 		assert.equal(typo.ok, false);
 		assert.match(!typo.ok && typo.error, /unknown tool "reasearch"/);

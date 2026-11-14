@@ -55,7 +55,16 @@ function resolveTopicId(raw: string, topics: ReadonlyArray<{ id: string; title: 
 	return topics.find((t) => t.title.trim().toLowerCase() === lower)?.id ?? null;
 }
 
-export function courseTools(ctx: CourseToolContext): Record<string, AgentTool<any>> {
+/** Registry-specific rules. `greenRequiresExplain` (teacher registry
+ *  only): returns whether the session holds an answered explain; green is
+ *  refused while it returns false. Absent = no gate (the prober's mapping
+ *  has only multiple choice; practice has its own problem tool). */
+export interface CourseToolOptions {
+	greenRequiresExplain?: () => boolean;
+}
+
+export function courseTools(ctx: CourseToolContext, options: CourseToolOptions = {}): Record<string, AgentTool<any>> {
+	const gated = options.greenRequiresExplain !== undefined;
 	// A typed const (not an inline literal) keeps execute's precise input;
 	// the heterogeneous record below takes AgentTool<any>.
 	const topicStatus: AgentTool<typeof topicStatusInputSchema> = {
@@ -65,7 +74,12 @@ export function courseTools(ctx: CourseToolContext): Record<string, AgentTool<an
 			"Record how well the learner masters ONE topic of this session's course. Updates the topic's color in the " +
 			"learner's exam plan immediately. Call it when you have real evidence (several answers or worked steps on the " +
 			"topic, never a single answer), once per topic whose picture changed; calling it again later overwrites the " +
-			"earlier status. The turn continues after the result.",
+			"earlier status. " +
+			(gated
+				? "green = approved: ONLY after he has answered an explain on that topic (a task solved in his own words, full " +
+					"working) and you judged it correct — green before any answered explain in this session is refused. "
+				: "") +
+			"The turn continues after the result.",
 		parameters: topicStatusInputSchema,
 		executionMode: "sequential",
 		// Synchronous and instant: no abort guard needed. Refusals are isError
@@ -86,6 +100,12 @@ export function courseTools(ctx: CourseToolContext): Record<string, AgentTool<an
 			if (!topicId) {
 				return invalidInputResult("topic_status", [
 					`topicId ${JSON.stringify(input.topicId)} is not a topic of ${ctx.code} — copy one of these ids exactly: ${topics.map((t) => t.id).join(", ")}`,
+				]);
+			}
+			if (input.status === "green" && options.greenRequiresExplain && !options.greenRequiresExplain()) {
+				return invalidInputResult("topic_status", [
+					`${topicId} can't be green yet: no answered explain in this session. Approve the topic with one explain ` +
+						"(a task he solves in his own words, full working) first; until then use yellow",
 				]);
 			}
 			const note = input.note.replace(/\s+/g, " ").trim().slice(0, MAX_NOTE_CHARS);

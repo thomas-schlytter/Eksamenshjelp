@@ -118,15 +118,6 @@ export function composeTool(agent: AgentSettings | undefined, id: string, on: bo
 	return { ...agent, tools: { ...agent?.tools, [id]: on } };
 }
 
-/** The quizzing mechanics (owner 2026-09-27): a segmented control, not a
- *  toggle — exactly one mechanic is ever active. `explain: true` arms
- *  free-recall (explain in, quiz out); anything else is multiple choice.
- *  `quiz` itself is never written (mechanics-managed — see quizMechanics
- *  in agent/tools.ts). Pure — exported for tests. */
-export function composeQuizMechanics(agent: AgentSettings | undefined, mechanics: "choice" | "free"): AgentSettings {
-	return { ...agent, tools: { ...agent?.tools, explain: mechanics === "free" } };
-}
-
 /** Compose the prober graph-tools toggle (wave 7): its own key in the
  *  agent section — never in the tool-toggles map (owner ruling). Absent =
  *  ON (the toggle discipline); the write is explicit either way, so an
@@ -768,46 +759,6 @@ export function AgentSection({
 								testid="toggle-graph-tools"
 								onChange={(on) => onSectionChange(composeGraphTools(agent, on))}
 							/>
-						</SettingsRow>
-					);
-				})()}
-				{/* The quizzing mechanic (owner 2026-09-27): segmented — exactly one
-				    of Multiple choice / Free recall is active; the choice swaps which
-				    quizzing tool BOTH agents carry (prober checks + teach checks).
-				    Persisted as agent.tools.explain; absent = Multiple choice. */}
-				{(() => {
-					const free = agent?.tools?.explain === true;
-					return (
-						<SettingsRow
-							label="Spørsmålsform"
-							hint="Hvordan agentene sjekker forståelsen din"
-							testid="quiz-mechanics-row"
-						>
-							<div
-								role="radiogroup"
-								aria-label="Spørsmålsform"
-								className="flex rounded-lg border border-border/60 bg-muted/30 p-0.5"
-								>
-								{(["choice", "free"] as const).map((m) => {
-									const active = m === "free" ? free : !free;
-									return (
-										<button
-											key={m}
-											type="button"
-											role="radio"
-											aria-checked={active}
-											data-testid={`quiz-mechanics-${m}`}
-											onClick={() => onSectionChange(composeQuizMechanics(agent, m))}
-											className={cn(
-												"h-8 rounded-md px-3 text-sm font-medium transition-colors",
-												active ? "bg-background text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-											)}
-										>
-											{m === "choice" ? "Flervalg" : "Fri gjenkalling"}
-										</button>
-									);
-								})}
-							</div>
 						</SettingsRow>
 					);
 				})()}

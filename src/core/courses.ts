@@ -730,7 +730,13 @@ export function courseContextText(course: Course, link: ChatCourseLink, todayIso
 		"Topic status: when you have real evidence of how well the learner masters a topic (several answers or worked steps, " +
 			"never one single answer), record it with the `topic_status` tool using the topic id from the list above: red = cannot " +
 			"do this yet, yellow = unsure or partly there, green = can do it at exam level. Add a one-sentence note in Norwegian " +
-			"with the reason. The learner sees these colors in their exam plan.",
+			"with the reason. The learner sees these colors in their exam plan." +
+			// Practice sessions grade through `problem`, not explain: no approval rule there.
+			(link.mode === "practice"
+				? ""
+				: " Green is an approval: while teaching, set it only after he has solved a task on that topic correctly in " +
+					"his own words with `explain`. While probing you have only multiple choice, so green is allowed there " +
+					"when both his picks and his written explanations carry it."),
 	);
 	return lines.join("\n");
 }

@@ -37,7 +37,7 @@ Appen er gratis og har åpen kildekode. Alt i appen er på norsk bokmål.
 
 **Tenk høyt.** I tankefeltene kan du forklare hvordan du resonnerer, og hva du er usikker på. Da får agenten et bedre bilde enn bare riktig eller galt svar. Du kan skrive eller bruke diktering.
 
-Står du fast på et spørsmål, kan du hoppe over det eller spørre agenten før du svarer.
+Står du fast på et spørsmål, kan du hoppe over det eller spørre agenten før du svarer. Underveis får du flervalg med en kort forklaring. Når et tema skal godkjennes, løser du en oppgave med egne ord.
 
 Agenten kan også gjøre research i bakgrunnen, lage visualiseringer og bygge interaktive demoer.
 

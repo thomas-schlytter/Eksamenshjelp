@@ -220,6 +220,16 @@ export function normalizeQuizType(raw: unknown): QuizQuestionType | undefined {
 	return v === "predict" ? "predict" : v === "check" ? "check" : undefined;
 }
 
+/** The learner-facing label of an explain-shaped question (dock chip and
+ *  answered card agree by sharing this). A teach `explain` declared as a
+ *  check is the node's APPROVAL (owner 2026-11-14): «Godkjenning». The
+ *  retired probe `recall` keeps «Gjenkalling»; everything older (no type,
+ *  or a prediction from the retired free-recall setting) keeps «Forklar». */
+export function explainLabel(tool: string | undefined, type: unknown): "Godkjenning" | "Gjenkalling" | "Forklar" {
+	if (tool === "recall") return "Gjenkalling";
+	return normalizeQuizType(type) === "check" ? "Godkjenning" : "Forklar";
+}
+
 /** The reveal law as a pure predicate (owner 2026-10-03; explain joined
  *  2026-10-09): a teach-phase CHECK collapses behind the "Check your
  *  understanding" reveal — a prediction NEVER does (it precedes the
@@ -356,9 +366,10 @@ export function explainInputProblems(input: { correctAnswer: string }): string[]
 	return [];
 }
 
-/** The tool names that carry the quizzing mechanic — the teach seam
- *  (phases), the plan-position fold, and the pending gate all recognize
- *  whichever is armed. */
+/** The teacher's two graded tools, always both registered (quiz for the
+ *  lesson's predictions and checks, explain for approving a node) — the
+ *  teach seam (phases), the plan-position fold, and the pending gate
+ *  recognize either. */
 export const QUIZ_TOOL_NAMES = ["quiz", "explain"] as const;
 
 /** The TEACHER's quiz declaration (base + the position field). */

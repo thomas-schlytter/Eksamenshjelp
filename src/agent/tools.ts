@@ -13,7 +13,7 @@ import {
 	quizInputProblems,
 } from "../core/question-core.ts";
 import { filterEnabledTools, type EnabledTools } from "../core/pending.ts";
-import type { JobRecord } from "../core/contracts.ts";
+import { explainAnsweredNodesLh, type JobRecord } from "../core/contracts.ts";
 import type { JobStore } from "../core/ports.ts";
 import { jobTools, type DemoInput, type PdfInput, type ResearchInput, type VisualInput } from "./tools/jobs.ts";
 import { planTools, type PlanToolContext } from "./tools/plan.ts";
@@ -175,11 +175,11 @@ function quizDescription(delta: { name: "quiz" | "probe"; nodeId: boolean; types
 	);
 }
 
-/** The explain mechanics (free-recall quizzing): the commitment rule is
+/** The explain mechanics (free-text, graded): the commitment rule is
  *  the GRADING CONTRACT — mechanics, not doctrine. The softer doctrine
- *  (near-miss reading, genuine gaps) lives in the shared prompt chunk.
- *  `name`: the teach tool self-references as explain, the probe variant
- *  as recall (owner 2026-10-09). */
+ *  (near-miss reading, genuine gaps, WHEN to use it: approval only) lives
+ *  in the prompt chunks. `name`: the teach tool self-references as
+ *  explain, the retired probe variant as recall (owner 2026-10-09). */
 function explainDescription(name: "explain" | "recall", nodeId: boolean): string {
 	return (
 		"Ask the learner to EXPLAIN something in his own words — a graded check with NO options: he types a free-text " +
@@ -190,7 +190,8 @@ function explainDescription(name: "explain" | "recall", nodeId: boolean): string
 		"sees the question. When his answer returns, grade it strictly against the commitment — never revise it " +
 		"after seeing his words. He sees the committed answer on submit. " +
 		(nodeId
-			? "Set `nodeId` (required) to the plan node this question is about — validated at call time against the session's plan map. "
+			? "Set `nodeId` (required) to the plan node this question is about — validated at call time against the session's plan map. " +
+				"Declare `type` as check. "
 			: "") +
 		"ONE question per turn: call a single " + name + ", then end your turn — his answer determines the next."
 	);
@@ -218,8 +219,10 @@ export const probeQuizTool: AgentTool<typeof probeQuizInputSchema> = {
 	},
 };
 
-/** The teacher's free-recall variant (nodeId-validated, same seam as the
- *  teach quiz — phases/plan recognize BOTH tool names). */
+/** The teacher's free-text tool (nodeId-validated, same seam as the
+ *  teach quiz — phases/plan recognize BOTH tool names). Always registered
+ *  beside `quiz` (owner 2026-11-14): quiz runs the lesson, explain
+ *  approves a node. */
 export function teachExplainToolFor(
 	ctx: Pick<PlanToolContext, "chatId" | "chatStore">,
 ): AgentTool<typeof explainInputObject> {
@@ -240,14 +243,11 @@ export function teachExplainToolFor(
 	};
 }
 
-/** The prober's free-recall variant (no nodeId — same pattern as the
- *  probe quiz). */
-/** The prober's free-recall variant — named `recall`, not `explain`
- *  (owner, 2026-10-09), for the same phase-boundary reason as `probe`:
- *  the teach explain adds `type` and `nodeId`; a shared name carried the
- *  probe call shape into teaching. Old probe-phase records keep the
- *  `explain` name and parse identically (the display seam accepts
- *  both). */
+/** The prober's free-recall variant, named `recall`. RETIRED from every
+ *  registry (owner 2026-11-14: probing is always multiple choice) — kept
+ *  only as the declaration old sessions' `recall` calls were made
+ *  against. Old probe-phase records carry `recall` or the older `explain`
+ *  name; the display seam reads both. */
 export const probeExplainTool: AgentTool<typeof explainInputBase> = {
 	name: "recall",
 	label: "recall",
@@ -304,25 +304,17 @@ export function createProberTools(
 		spawn: ctx.spawn,
 		searchAvailable: ctx.searchAvailable,
 	});
-	// Quizzing mechanics (owner 2026-09-27): free-recall swaps the probe
-	// quiz for the probe explain — one quizzing tool at a time, whichever
-	// the settings arm. ask stays always-on. The registry keys are the
-	// PHASE names (probe/recall, owner 2026-10-09) — distinct from the
-	// teach tools so the schema boundary is visible to the model.
-	const mechanics = quizMechanics(enabled);
-	// The armed quizzing tool, widened to the registry's heterogeneous
-	// AgentTool record BEFORE the filter (a conditional spread of two
-	// differently-typed literals makes the whole object's type a union —
-	// unusable as Record<string, AgentTool<any>> downstream).
-	const quizzing: Record<string, AgentTool<any>> =
-		mechanics === "free" ? { recall: probeExplainTool } : { probe: probeQuizTool };
+	// Probing is ALWAYS multiple choice (owner 2026-11-14): `probe` is the
+	// one graded tool here, `recall` is never armed, and no setting changes
+	// that. The registry key is the PHASE name (owner 2026-10-09) — distinct
+	// from the teach tools so the schema boundary is visible to the model.
 	// healToolRecord (owner, 2026-10-09 — the whitehead generalization):
 	// the standard argument heal over the WHOLE registry — every tool,
 	// not just the one the latest wobble incident landed on.
 	return healToolRecord({
 		...filterEnabledTools(
 			{
-				...quizzing,
+				probe: probeQuizTool,
 				ask_user_question: askUserQuestionTool,
 				// The learner-filesystem set is always-on (user-decided 2026-09,
 				// sources v1): the prober inspects and LOCATES learner-referenced
@@ -348,7 +340,7 @@ export function createProberTools(
 				...(ctx.course ? courseTools(ctx.course) : {}),
 				...done,
 			},
-				withoutMechanics(enabled),
+				withoutGradedTools(enabled),
 			),
 			...done,
 		});
@@ -423,41 +415,42 @@ export interface TeacherToolContext extends PlanToolContext {
  * future toggleables (question-tool variants, …) need no change here.
  * Absent/undefined = enabled — tests and old records see today's set.
  */
-/** The quizzing mechanics (owner 2026-09-27): `tools.explain === true` in
- *  the resolved settings ⇒ free-recall checks (explain armed, quiz dropped)
- *  — anything else ⇒ multiple choice, exactly today's set. Mechanics-
- *  managed, NOT individually toggleable: quiz/explain never pass through
- *  filterEnabledTools (the 2026-09-19 wedge ruling stands — a quiz-less
- *  prober collapses its assessment flow). */
-export function quizMechanics(enabled?: EnabledTools): "choice" | "free" {
-	return enabled?.explain === true ? "free" : "choice";
+/** The graded question tools are FIXED (owner 2026-11-14): the prober
+ *  always has `probe`, the teacher always has `quiz` AND `explain`. No
+ *  setting selects or removes them: their keys are stripped before
+ *  filterEnabledTools, so neither a tool toggle nor a stored
+ *  `agent.tools.explain` from the retired question-form setting moves the
+ *  registry (the 2026-09-19 wedge ruling stands — a quiz-less agent
+ *  collapses its flow). */
+function withoutGradedTools(enabled?: EnabledTools): EnabledTools | undefined {
+	if (!enabled) return undefined;
+	const { explain: _e, quiz: _q, probe: _p, recall: _r, ...rest } = enabled;
+	return rest;
 }
 
-/** Strip the mechanics keys so filterEnabledTools can never drop the
- *  quizzing tools (the derivation above is their only switch). */
-function withoutMechanics(enabled?: EnabledTools): EnabledTools | undefined {
-	if (!enabled) return undefined;
-	const { explain: _e, quiz: _q, ...rest } = enabled;
-	return rest;
+/** The topic_status green gate for the teacher registry (teach and exam
+ *  sessions): the session must hold at least one ANSWERED explain. Topic
+ *  ids are not plan-node ids, so the gate is per session, not per topic;
+ *  whether that answer was correct, and about this topic, stays doctrine. */
+function answeredExplainInSession(ctx: Pick<PlanToolContext, "chatId" | "chatStore">): boolean {
+	const record = ctx.chatStore.getChat(ctx.chatId);
+	return record ? explainAnsweredNodesLh(record.messages).size > 0 : false;
 }
 
 export function createTeacherTools(
 	ctx: TeacherToolContext,
 	enabled?: EnabledTools,
 ): Record<string, AgentTool<any>> {
-	// Quizzing mechanics (owner 2026-09-27): free-recall swaps the teach
-	// quiz for the teach explain — one quizzing tool at a time, whichever
-	// the settings arm. ask stays always-on.
-	const mechanics = quizMechanics(enabled);
-	// Same widening as the prober's (see above) — the conditional spread of
-	// two differently-typed literals collapses into an unusable union type.
-	const quizzing: Record<string, AgentTool<any>> =
-		mechanics === "free" ? { explain: teachExplainToolFor(ctx) } : { quiz: teachQuizToolFor(ctx) };
+	// BOTH graded tools, always (owner 2026-11-14): `quiz` (multiple
+	// choice) carries the lesson's predictions and checks, `explain` (free
+	// text) approves a node. The split is doctrine (the teacher prompts);
+	// the registry only guarantees both are there. ask stays always-on.
 	// healToolRecord — same standard as the prober's registry (above).
 	return healToolRecord(
 		filterEnabledTools(
 			{
-			...quizzing,
+			quiz: teachQuizToolFor(ctx),
+			explain: teachExplainToolFor(ctx),
 			ask_user_question: askUserQuestionTool,
 			// The learner-filesystem set is always-on (user-decided 2026-09,
 			// sources v1): the teacher locates and reads learner-referenced
@@ -470,9 +463,11 @@ export function createTeacherTools(
 			...planTools(ctx),
 			...jobTools({ chatId: ctx.chatId, jobStore: ctx.jobStore, spawn: ctx.spawn, searchAvailable: ctx.searchAvailable }),
 			// Exam mode: the course's topic status, only in course sessions.
-			...(ctx.course ? courseTools(ctx.course) : {}),
+			// Green needs an answered explain here (the prober's mapping has no
+			// explain, so its registry carries no gate).
+			...(ctx.course ? courseTools(ctx.course, { greenRequiresExplain: () => answeredExplainInSession(ctx) }) : {}),
 		},
-		withoutMechanics(enabled),
+		withoutGradedTools(enabled),
 		),
 	);
 }

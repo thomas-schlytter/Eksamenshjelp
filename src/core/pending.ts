@@ -86,12 +86,13 @@ export const JOB_TOOLS = ["research", "demo", "visual"] as const;
  *  2026-09). */
 export const TOGGLEABLE_TOOLS = ["research", "demo", "visual", "pdf"] as const;
 
-/** The keys the settings WRITE side accepts in agent.tools: the plain
- *  toggleables PLUS the quizzing-mechanics switch (`explain: true` arms
- *  free-recall quizzing and drops the MC quiz — see quizMechanics in
- *  agent/tools.ts; owner 2026-09-27). `quiz` itself stays unwritable:
- *  mechanics-managed, never individually toggleable. */
-export const WRITABLE_TOOL_KEYS = [...TOGGLEABLE_TOOLS, "explain"] as const;
+/** agent.tools keys that once meant something and no longer do. `explain`
+ *  was the question-form switch (free recall instead of multiple choice,
+ *  2026-09-27), retired 2026-11-14: the graded tools are fixed per phase
+ *  (agent/tools.ts). Old settings files and stale clients still carry the
+ *  key, so the read side drops it and the write side accepts and drops it
+ *  instead of answering 400. */
+export const RETIRED_TOOL_KEYS = ["explain"] as const;
 
 /** The resolved settings → factory seam shape (Platform wires chat-handler
  *  to pass this through from the settings record; storage and defaults are

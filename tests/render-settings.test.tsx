@@ -149,6 +149,14 @@ describe("AgentSection (thin SSR)", () => {
 		assert.ok(html2.includes("Tavily"), "pinned engine visible in the trigger");
 	});
 
+	it("no question-form row: the question form is fixed, even with the old key stored (owner 2026-11-14)", () => {
+		for (const agent of [undefined, { tools: { explain: true } }]) {
+			const html = renderToStaticMarkup(<AgentSection agent={agent} models={undefined} graph={undefined} onSectionChange={() => {}} onModelsChange={() => {}} />);
+			assert.ok(html.includes('data-testid="group-tools"'), "the Tools group still renders");
+			for (const gone of ["quiz-mechanics", "Spørsmålsform", "Fri gjenkalling", "Flervalg"]) assert.ok(!html.includes(gone), gone);
+		}
+	});
+
 	it("the prober graph-tools row: FIRST in the Tools group, default ON, its own key (wave 7)", () => {
 		// Default state: graph on, graphTools absent → ON, the describing
 		// hint rides (the search-row hint discipline).

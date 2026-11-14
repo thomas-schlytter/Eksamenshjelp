@@ -169,3 +169,77 @@ describe("topic_status — execution against the course store", () => {
 		assert.equal(courseToolContextFor({ code: "../x" }, "chat_1"), undefined);
 	});
 });
+
+// ─── the approval gate (owner 2026-11-14): in the teacher registry green
+//     needs an answered explain in the session; the prober has no gate ────
+
+/** A native explain call + (optionally) its answered result. */
+function explainExchange(answered: boolean, dismissed = false): unknown[] {
+	const call = {
+		role: "assistant",
+		content: [{ type: "toolCall", id: "e1", name: "explain", arguments: { nodeId: "pid", type: "check", question: "Løs", correctAnswer: "x" } }],
+	};
+	if (!answered) return [call];
+	return [call, {
+		role: "toolResult",
+		toolCallId: "e1",
+		toolName: "explain",
+		isError: false,
+		content: [{ type: "text", text: "{}" }],
+		details: { kind: "explain", questionText: "Løs", dontKnow: false, answers: [], text: "mitt svar", ...(dismissed ? { dismissed: true } : {}) },
+	}];
+}
+
+describe("topic_status — green is an approval", () => {
+	const registry = (messages: unknown[]) => ({
+		chatId: "c1",
+		chatStore: { getChat: () => ({ messages }) } as never,
+		deliver: () => undefined,
+		...jobWiring,
+		course: courseToolContextFor({ code: "TTK4100" }, "c1")!,
+	});
+
+	it("teacher: green is refused until the session holds an ANSWERED explain; red and yellow never need one", async () => {
+		seed();
+		for (const messages of [[], explainExchange(false), explainExchange(true, true)]) {
+			const tool = createTeacherTools(registry(messages)).topic_status!;
+			const refused = await call(tool, { topicId: "pid-regulator", status: "green", note: "kan dette" });
+			assert.equal(refused.isError, true);
+			assert.match(textOf(refused), /pid-regulator can't be green yet: no answered explain in this session/);
+			assert.match(textOf(refused), /use yellow/);
+			assert.equal(courseStore.getCourse("TTK4100")!.topics[0]!.status, "unknown", "nothing written");
+		}
+		const open = createTeacherTools(registry([])).topic_status!;
+		assert.equal((await call(open, { topicId: "pid-regulator", status: "yellow", note: "halvveis" })).isError, undefined);
+		assert.equal((await call(open, { topicId: "pid-regulator", status: "red", note: "nei" })).isError, undefined);
+
+		const approved = createTeacherTools(registry(explainExchange(true))).topic_status!;
+		const ok = await call(approved, { topicId: "pid-regulator", status: "green", note: "løste oppgaven med full utregning" });
+		assert.equal(ok.isError, undefined);
+		assert.equal(courseStore.getCourse("TTK4100")!.topics[0]!.status, "green");
+	});
+
+	it("teacher: an unknown topic id is reported before the gate", async () => {
+		seed();
+		const tool = createTeacherTools(registry([])).topic_status!;
+		const result = await call(tool, { topicId: "stabilitet", status: "green", note: "x" });
+		assert.match(textOf(result), /is not a topic of TTK4100/);
+	});
+
+	it("prober (mapping has only multiple choice) and practice: no gate", async () => {
+		seed();
+		const prober = createProberTools(registry([])).topic_status!;
+		assert.equal((await call(prober, { topicId: "pid-regulator", status: "green", note: "riktig valg og forklaring" })).isError, undefined);
+		assert.equal(courseStore.getCourse("TTK4100")!.topics[0]!.status, "green");
+		const practice = practiceTools({ chatId: "c1", chatStore: { getChat: () => ({ messages: [] }) }, course: courseToolContextFor({ code: "TTK4100" }, "c1")! }).topic_status!;
+		assert.equal((await call(practice, { topicId: "blokkdiagram", status: "green", note: "ok" })).isError, undefined);
+	});
+
+	it("only the teacher's description states the rule", () => {
+		const ctx = { code: "TTK4100", topics: () => [], setStatus: () => true };
+		const base = { chatId: "c1", chatStore: chatStoreStub, deliver: () => undefined, ...jobWiring, course: ctx };
+		assert.match(createTeacherTools(base).topic_status!.description, /green before any answered explain in this session is refused/);
+		assert.doesNotMatch(createProberTools(base).topic_status!.description, /explain/);
+		assert.doesNotMatch(courseTools(ctx).topic_status!.description, /explain/);
+	});
+});

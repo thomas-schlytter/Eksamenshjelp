@@ -602,6 +602,45 @@ describe("AnsweredCard: the explain variant", () => {
 		assert.match(html, /Something about relativity\?/);
 	});
 
+	// The approval label (owner 2026-11-14): a teach explain declared as a
+	// check approves the node and says so in the transcript and the dock.
+	const approvalInput = { type: "check", nodeId: "aether", question: "Explain why the null result matters.", correctAnswer: "It ruled out the aether." };
+
+	it("an answered teach explain is labeled Godkjenning (the role rides the original call)", () => {
+		const html = renderToStaticMarkup(<AnsweredCard answer={buildAnswer(explainQD(), { text: "No aether." }, "explain")} input={approvalInput} />);
+		assert.match(html, />Godkjenning</);
+		assert.ok(!html.includes(">Forklar<"));
+		assert.match(html, /Svaret:/, "the reveal is unchanged");
+	});
+
+	it("old explain records keep Forklar: a prediction from the retired free-recall setting, and a call with no type", () => {
+		const predict = renderToStaticMarkup(<AnsweredCard answer={buildAnswer(explainQD(), { text: "x" }, "explain")} input={{ ...approvalInput, type: "predict" }} />);
+		const untyped = renderToStaticMarkup(<AnsweredCard answer={buildAnswer(explainQD(), { text: "x" }, "explain")} input={{ question: "Q", correctAnswer: "A" }} />);
+		for (const html of [predict, untyped]) {
+			assert.match(html, /Forklar/);
+			assert.ok(!html.includes("Godkjenning"));
+		}
+	});
+
+	it("the dock labels a pending teach explain Godkjenning, open and behind the reveal", () => {
+		const open = renderDock({ toolName: "explain", toolCallId: "a1", input: approvalInput as never });
+		assert.match(open, /Godkjenning/);
+		assert.ok(!open.includes(">Forklar<"));
+		const reveal = renderToStaticMarkup(
+			<QuestionDock toolName="explain" toolCallId="a2" input={approvalInput as never} expanded={false} reveal onExpand={() => {}} onSubmit={() => {}} />,
+		);
+		const bar = reveal.split('data-testid="teach-check-reveal"')[1] ?? "";
+		assert.match(bar, /Godkjenning/);
+		assert.ok(!bar.split("</button>")[0]!.includes("Sjekk forståelsen"), "the invitation names the approval");
+	});
+
+	it("an old pending explain with no type still renders, labeled Forklar", () => {
+		const html = renderDock({ toolName: "explain", toolCallId: "a3", input: { question: "Explain the chain rule.", correctAnswer: "Outer times inner." } as never });
+		assert.match(html, /Forklar/);
+		assert.match(html, /Explain the chain rule\./);
+		assert.ok(!html.includes("Godkjenning"));
+	});
+
 });
 
 // ─── probe-phase naming (owner, 2026-10-09): the probe/recall rename —

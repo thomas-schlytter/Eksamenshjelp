@@ -1294,7 +1294,7 @@ describe("background-turn runner (owner ruling 2026-09-25: every turn is a serve
 	});
 });
 
-// ─── the explain mechanic end-to-end (free-recall, owner 2026-09-27) ───────
+// ─── the explain tool end-to-end (the node approval; free text) ────────────
 
 it("explain tool call persists as a pending part; the free-text answer reveals the commitment and reaches the model", async () => {
 	const EXPLAIN_INPUT = {
@@ -1319,12 +1319,10 @@ it("explain tool call persists as a pending part; the free-text answer reveals t
 	const chat = createConfiguredChat("Test: explain mechanic");
 	createdChats.push(chat.id);
 
-	// Free-recall armed: the mechanic swap is the ONLY change to the registry.
-	const tools = createTeacherTools(
-		{ chatId: chat.id, chatStore, jobStore, spawn: () => {} },
-		{ explain: true },
-	);
-	assert.ok(tools.explain && !tools.quiz, "explain armed, quiz dropped — one quizzing tool");
+	// The teacher's standing registry (owner 2026-11-14): explain sits
+	// beside quiz with no setting involved.
+	const tools = createTeacherTools({ chatId: chat.id, chatStore, jobStore, spawn: () => {} });
+	assert.ok(tools.explain && tools.quiz, "both graded tools, always");
 
 	const factory: Parameters<typeof handleChatRequest>[1] = (opts) =>
 		createTeacherAgent(undefined, { engine, messages: opts.messages, tools });
