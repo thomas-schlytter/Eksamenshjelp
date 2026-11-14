@@ -1,4 +1,4 @@
-import type { PlanEdge, PlanNode, PlanTree } from "./contracts.ts";
+import type { PlanEdge, PlanGroup, PlanNode, PlanTree } from "./contracts.ts";
 
 /**
  * Pure, validated plan-tree operations (vision §2 "the formal plan tree").
@@ -109,7 +109,7 @@ function assertValidEdge(from: string, to: string, nodes: PlanNode[], existingEd
 // ─── ops ─────────────────────────────────────────────────────────────────────
 
 /** Build a fresh tree (version 1) from node and edge lists, validating all invariants. */
-export function createTree(nodes: PlanNode[], edges: PlanEdge[]): PlanTree {
+export function createTree(nodes: PlanNode[], edges: PlanEdge[], groups?: PlanGroup[]): PlanTree {
 	const map = nodeMap(nodes);
 	for (const e of edges) {
 		requireNode(map, e.from, "Edge `from`");
@@ -122,7 +122,17 @@ export function createTree(nodes: PlanNode[], edges: PlanEdge[]): PlanTree {
 		assertValidEdge(e.from, e.to, nodes, accepted);
 		accepted.push({ from: e.from, to: e.to });
 	}
-	return { nodes: nodes.map((n) => ({ ...n })), edges: accepted, version: 1 };
+	// Emner (exam sessions): kept only when at least one node uses one;
+	// a node pointing at an undeclared group falls back to ungrouped.
+	const declared = new Set((groups ?? []).map((g) => g.id));
+	const outNodes: PlanNode[] = nodes.map((n) => {
+		const copy: PlanNode = { ...n };
+		if (copy.group !== undefined && !declared.has(copy.group)) delete copy.group;
+		return copy;
+	});
+	const used = new Set(outNodes.map((n) => n.group).filter(Boolean));
+	const outGroups = (groups ?? []).filter((g) => used.has(g.id)).map((g) => ({ ...g }));
+	return { nodes: outNodes, edges: accepted, ...(outGroups.length > 0 ? { groups: outGroups } : {}), version: 1 };
 }
 
 // The per-node mutation ops (addNode/updateNode/removeNode/addEdge/removeEdge/

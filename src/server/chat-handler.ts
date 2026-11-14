@@ -455,6 +455,8 @@ export async function handleChatInput(
 		// point as the tool delta — the agent layer composes the system
 		// prompt fresh per turn, swapping in any enabled override segments.
 		promptSwitches: effective.agent.prompts,
+		// Exam sessions (2026-11-12): the exam prompt overlay.
+		...(record.kind === "exam" ? { exam: true } : {}),
 	};
 	// EXAM MODE: a session started from a course ("fag") gets topic_status
 	// in whichever registry this turn builds; the port keeps the agent layer

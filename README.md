@@ -33,6 +33,8 @@ Appen er gratis og har åpen kildekode. Alt i appen er på norsk bokmål.
 4. **Følg planen.** Du får en plan dag for dag fram mot eksamensdatoen. Hvert tema har en farge og en tekst: grå «Ikke kartlagt», rød «Kan ikke ennå», gul «Usikker» og grønn «Kan dette».
 5. **Lær og øv.** Hvert tema har to handlinger. **Lær** bygger forståelsen steg for steg, med utgangspunkt i det du allerede kan. **Øv** gir deg oppgaver å løse, gjerne i eksamensform.
 
+**Eksamensøkt.** Vil du heller ta hele faget i ett løp, starter du en eksamensøkt fra fagsiden. Agenten kartlegger pensum fra tidligere eksamener, og du følger framgangen i et eksamenskart med én kolonne per emne og de samme fargene som på fagsiden.
+
 **Tenk høyt.** I tankefeltene kan du forklare hvordan du resonnerer, og hva du er usikker på. Da får agenten et bedre bilde enn bare riktig eller galt svar. Du kan skrive eller bruke diktering.
 
 Står du fast på et spørsmål, kan du hoppe over det eller spørre agenten før du svarer.

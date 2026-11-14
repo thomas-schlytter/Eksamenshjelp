@@ -51,6 +51,13 @@ export const FEATURES: readonly FeatureEntry[] = [
 		suggested: true,
 	},
 	{
+		id: "start-eksamensokt",
+		title: "Start eksamensøkt",
+		description: "Én økt som kartlegger hele pensum og følger deg tema for tema med et fargekart.",
+		keywords: ["eksamensøkt", "eksamen", "eksamenskart", "fargekart", "pensum", "tidligere eksamener", "emner", "rød gul grønn", "exam session", "eksamensmodus"],
+		action: { kind: "route", href: "/chat/new?mode=exam" },
+	},
+	{
 		id: "kunnskapskart",
 		title: "Kunnskapskart",
 		description: "Se det du har lært som et kart av påstander og sammenhenger.",

@@ -30,7 +30,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { PATHS, PROMPTS_OVERRIDE_DIR } from "../../config.ts";
-import { FRAGMENT_RE, isValidSegmentPath, type PromptAgent, type PromptSegmentInfo } from "../core/prompt-segments.ts";
+import { FRAGMENT_RE, isValidSegmentPath, type PromptAgent, type PromptComposeOptions, type PromptSegmentInfo } from "../core/prompt-segments.ts";
 
 const PROMPTS_DIR = path.join(PATHS.root, "src", "agent", "prompts");
 
@@ -66,7 +66,10 @@ export function readPromptOverride(segmentPath: string): string | null {
  *  the shared/ fragments (the 2026-09-27 reorder: the agent's job and
  *  method lead; the shared tool/file/format mechanics are an appendix).
  *  The exact order composeInstructions composes them in. */
-export function listSourceSegments(agent: PromptAgent): Array<{ path: string; shared: boolean; file: string }> {
+export function listSourceSegments(
+	agent: PromptAgent,
+	opts: PromptComposeOptions = {},
+): Array<{ path: string; shared: boolean; file: string }> {
 	// PRACTICE (owner, 2026-10-04): its own directory plus a CURATED
 	// shared appendix — the teaching base and the question/confidence/
 	// file mechanics stay out (the doctrine contradicts them; 00-base.md
@@ -81,6 +84,16 @@ export function listSourceSegments(agent: PromptAgent): Array<{ path: string; sh
 		const fragments = fs.readdirSync(dir).filter((f) => FRAGMENT_RE.test(f)).sort();
 		for (const f of fragments) {
 			segments.push({ path: `${agent}/${f}`, shared: false, file: path.join(dir, f) });
+		}
+	}
+	// The exam overlay (2026-11-12): exam sessions add exam-<agent>/ after
+	// the agent's own doctrine — the teach prompts stay untouched.
+	if (opts.exam && agent !== "practice") {
+		const examDir = path.join(PROMPTS_DIR, `exam-${agent}`);
+		if (fs.existsSync(examDir)) {
+			for (const f of fs.readdirSync(examDir).filter((f) => FRAGMENT_RE.test(f)).sort()) {
+				segments.push({ path: `exam-${agent}/${f}`, shared: false, file: path.join(examDir, f) });
+			}
 		}
 	}
 	const sharedDir = path.join(PROMPTS_DIR, "shared");
@@ -107,8 +120,9 @@ export function listSourceSegments(agent: PromptAgent): Array<{ path: string; sh
 export function effectivePromptSegments(
 	agent: PromptAgent,
 	switches: Record<string, boolean>,
+	opts: PromptComposeOptions = {},
 ): PromptSegmentInfo[] {
-	return listSourceSegments(agent).map((segment) => {
+	return listSourceSegments(agent, opts).map((segment) => {
 		let sourceText: string;
 		try {
 			sourceText = fs.readFileSync(segment.file, "utf-8");
@@ -130,7 +144,7 @@ export function effectivePromptSegments(
 export function allSegmentPaths(): string[] {
 	const paths = new Set<string>();
 	for (const agent of ["prober", "teacher", "practice"] as const) {
-		for (const segment of listSourceSegments(agent)) paths.add(segment.path);
+		for (const segment of listSourceSegments(agent, { exam: true })) paths.add(segment.path);
 	}
 	return [...paths].sort();
 }

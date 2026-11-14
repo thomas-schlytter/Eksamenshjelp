@@ -169,6 +169,7 @@ const ACTIVITY_LABELS: Record<string, string> = {
 	visual: "Lager en visualisering…",
 	pdf: "Leser en PDF…",
 	plan_init: "Setter opp planen…",
+	plan_status: "Fargelegger planen…",
 	probe_done: "Avslutter kartleggingen…",
 	topic_status: "Oppdaterer temastatus…",
 };

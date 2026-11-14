@@ -26,7 +26,10 @@ import type { ChatCourseLink } from "../courses.ts";
  *  the default and ABSENT on pre-practice records (no migration — absence
  *  reads as teach); "practice" marks an adaptive-practice session — the
  *  practice agent, its two tools, no extraction, no graph writes. */
-export type ChatKind = "teach" | "practice";
+export type ChatKind = "teach" | "practice" | "exam";
+/** "exam" (2026-11-12): an exam-practice session — the teach flow (prober
+ *  → teacher, same tools) with the exam prompt overlay (exam-prober/,
+ *  exam-teacher/) and the plan_status tool: emner + red/yellow/green. */
 
 export interface ChatRecord {
 	id: string;
@@ -249,8 +252,10 @@ export interface PlanBlockData {
 	current: string | null;
 	/** All nodes of the authored tree. Statuses are the snapshot's,
 	 * derived at emission time — the block never re-derives at render. */
-	nodes: Array<{ id: string; title: string; status: PlanNodeStatus }>;
+	nodes: Array<{ id: string; title: string; status: PlanNodeStatus; group?: string }>;
 	edges: Array<{ from: string; to: string }>;
+	/** Exam sessions: the emner (column layout). Absent on teach plans. */
+	groups?: Array<{ id: string; title: string }>;
 }
 
 /** The list view's shape (messageCount instead of full messages) + the

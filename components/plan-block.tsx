@@ -13,8 +13,9 @@ import { layout as dagreLayout } from "dagre-d3-es/src/dagre/index.js";
 // d3's curveBasis (the exact recipe dagre-d3's own renderer uses).
 import { curveBasis, line } from "d3-shape";
 import { fitGraphView, fitZoomFor, zoomedGraphView, type Viewport } from "@/components/pan-zoom";
-import type { PlanBlockData, PlanNodeStatus, PlanTree } from "@/src/core";
-import { derivedNodeStatus, derivePlanStatuses } from "@/src/core";
+import type { MasteryEntry, NodeMastery, PlanBlockData, PlanGroup, PlanNodeStatus, PlanTree, TopicStatus } from "@/src/core";
+import { derivedNodeStatus, derivePlanMastery, derivePlanStatuses, TOPIC_STATUS_LABEL } from "@/src/core";
+import { STATUS_STYLE } from "@/components/courses/course-format";
 import { Hint } from "@/components/ui/hint";
 
 /**
@@ -93,6 +94,8 @@ export const GAP_Y = 48;
 export interface LayoutNode {
 	id: string;
 	title: string;
+	/** Exam sessions: the emne (column) this node sits in. */
+	group?: string;
 }
 
 /** Topological order + longest-path depth (Kahn, authoring tie-break) —
@@ -146,7 +149,11 @@ export function topoFor(nodes: readonly LayoutNode[], edges: ReadonlyArray<{ fro
  *  Deterministic + synchronous + DOM-free: SSR and render tests stay
  *  exact. Dangling edges are ignored defensively — a ghost endpoint
  *  would spawn an unmeasured node and break the measurer. */
-export function blockLayout(nodes: readonly LayoutNode[], edges: ReadonlyArray<{ from: string; to: string }>) {
+export function blockLayout(
+	nodes: readonly LayoutNode[],
+	edges: ReadonlyArray<{ from: string; to: string }>,
+	opts: { chain?: boolean } = {},
+) {
 	const x = new Map<string, number>();
 	const y = new Map<string, number>();
 	const nodeH = new Map<string, number>();
@@ -166,12 +173,30 @@ export function blockLayout(nodes: readonly LayoutNode[], edges: ReadonlyArray<{
 		const h = NODE_H + Math.max(0, lines.length - 2) * LINE_H;
 		nodeH.set(n.id, h);
 		nodeW.set(n.id, nodeWidth(lines));
-		g.setNode(n.id, { width: nodeW.get(n.id)!, height: h });
 	}
+	// CHAIN MODE (exam columns, 2026-11-12): one emne is one vertical
+	// column — every node gets the column's width, and invisible "ghost"
+	// edges chain the nodes in topological order so dagre stacks them
+	// instead of laying independent skills side by side. Ghost edges are
+	// consistent with the topo order (never a cycle) and never drawn.
+	if (opts.chain) {
+		const widest = Math.max(NODE_W_MIN, ...nodes.map((n) => nodeW.get(n.id) ?? NODE_W_MIN));
+		for (const n of nodes) nodeW.set(n.id, widest);
+	}
+	for (const n of nodes) g.setNode(n.id, { width: nodeW.get(n.id)!, height: nodeH.get(n.id)! });
 	for (const e of edges) {
 		if (ids.has(e.from) && ids.has(e.to)) {
 			g.setEdge(e.from, e.to, { label: "", width: 0, height: 0 });
 			routed.push(e);
+		}
+	}
+	if (opts.chain) {
+		const real = new Set(routed.map((e) => `${e.from}->${e.to}`));
+		const { order } = topoFor(nodes, routed);
+		for (let i = 0; i + 1 < order.length; i++) {
+			const a = order[i]!.id;
+			const b = order[i + 1]!.id;
+			if (!real.has(`${a}->${b}`)) g.setEdge(a, b, { label: "", width: 0, height: 0, minlen: 1 }, "ghost");
 		}
 	}
 	// (the d.ts marks opts required; the runtime ignores it)
@@ -277,6 +302,99 @@ export function wrapTitle(title: string, maxChars = 28): string[] {
 		}
 	}
 	return lines;
+}
+
+// ─── Exam columns (2026-11-12): one column per emne ──────────────────────────
+
+/** Header band above each column (emne title + mastery count). */
+export const HEADER_H = 30;
+/** Horizontal gap between columns, vertical gap between column rows. */
+export const COL_GAP = 40;
+export const ROW_GAP = 36;
+/** Columns wrap into a new row past this width (svg units) so a big
+ *  pensum reads as a grid, not one endless strip. */
+export const MAX_ROW_W = 1500;
+/** The column for nodes no emne claims. */
+export const OTHER_GROUP: PlanGroup = { id: "__other", title: "Annet" };
+
+export interface ColumnBox {
+	id: string;
+	title: string;
+	x: number;
+	y: number;
+	width: number;
+	nodeIds: string[];
+}
+
+export type PlanLayout = ReturnType<typeof blockLayout> & { columns?: ColumnBox[] };
+
+/** Column layout: each emne laid out on its own (chain mode — a vertical
+ *  stack honoring its internal prerequisites), columns placed left to
+ *  right and wrapped into rows at MAX_ROW_W. Edges BETWEEN emner are not
+ *  routed (owner, exam plan 2026-11-12) — the map stays readable. Same
+ *  return shape as blockLayout plus the column boxes. Pure. */
+export function groupedLayout(
+	nodes: readonly LayoutNode[],
+	edges: ReadonlyArray<{ from: string; to: string }>,
+	groups: readonly PlanGroup[],
+): PlanLayout {
+	const x = new Map<string, number>();
+	const y = new Map<string, number>();
+	const nodeH = new Map<string, number>();
+	const nodeW = new Map<string, number>();
+	const edgePts = new Map<string, Array<{ x: number; y: number }>>();
+	const known = new Set(groups.map((g) => g.id));
+	const cols: Array<{ group: PlanGroup; nodes: LayoutNode[] }> = groups.map((g) => ({ group: g, nodes: [] }));
+	const other: LayoutNode[] = [];
+	for (const n of nodes) {
+		if (n.group && known.has(n.group)) cols.find((c) => c.group.id === n.group)!.nodes.push(n);
+		else other.push(n);
+	}
+	if (other.length > 0) cols.push({ group: OTHER_GROUP, nodes: other });
+	const columns: ColumnBox[] = [];
+	let cursorX = 0;
+	let cursorY = 0;
+	let rowH = 0;
+	let maxW = 0;
+	for (const col of cols) {
+		if (col.nodes.length === 0) continue;
+		const ids = new Set(col.nodes.map((n) => n.id));
+		const inner = edges.filter((e) => ids.has(e.from) && ids.has(e.to));
+		const sub = blockLayout(col.nodes, inner, { chain: true });
+		const headerW = estimateLineWidth(col.group.title.toLocaleUpperCase("nb")) * 1.15 + 40;
+		const colW = Math.max(sub.width, headerW);
+		const colH = HEADER_H + sub.height;
+		if (cursorX > 0 && cursorX + colW > MAX_ROW_W) {
+			cursorX = 0;
+			cursorY += rowH + ROW_GAP;
+			rowH = 0;
+		}
+		const ox = cursorX + (colW - sub.width) / 2 - (sub.originX ?? 0);
+		const oy = cursorY + HEADER_H - (sub.originY ?? 0);
+		for (const n of col.nodes) {
+			x.set(n.id, (sub.x.get(n.id) ?? 0) + ox);
+			y.set(n.id, (sub.y.get(n.id) ?? 0) + oy);
+			nodeH.set(n.id, sub.nodeH.get(n.id) ?? NODE_H);
+			nodeW.set(n.id, sub.nodeW.get(n.id) ?? NODE_W_MIN);
+		}
+		for (const [key, pts] of sub.edgePts) edgePts.set(key, pts.map((p) => ({ x: p.x + ox, y: p.y + oy })));
+		columns.push({ id: col.group.id, title: col.group.title, x: cursorX, y: cursorY, width: colW, nodeIds: col.nodes.map((n) => n.id) });
+		cursorX += colW + COL_GAP;
+		maxW = Math.max(maxW, cursorX - COL_GAP);
+		rowH = Math.max(rowH, colH);
+	}
+	return { x, y, nodeH, nodeW, edgePts, originX: 0, originY: 0, width: Math.max(maxW, 1), height: Math.max(cursorY + rowH, 1), columns };
+}
+
+/** The layout a plan renders with: columns when it has emner, the
+ *  dagre DAG otherwise. Every surface (block, popup, marginalia) calls
+ *  this so their fit math agrees with what PlanDiagram draws. */
+export function planLayout(
+	nodes: readonly LayoutNode[],
+	edges: ReadonlyArray<{ from: string; to: string }>,
+	groups?: readonly PlanGroup[] | null,
+): PlanLayout {
+	return groups && groups.length > 0 ? groupedLayout(nodes, edges, groups) : blockLayout(nodes, edges);
 }
 
 // ─── Geometry caps (owner, plan-graph refinement round 1) ─────────────────────
@@ -464,6 +582,64 @@ const TEXT: Record<PlanNodeStatus, string> = {
 const MONO_BOX = "fill-card stroke-foreground";
 const MONO_TEXT = "fill-foreground text-xs";
 
+// Exam mastery colors (2026-11-12): red = can't, yellow = unsure, green =
+// can do it, gray = not mapped. Tinted fills keep the title readable; the
+// stroke carries the hue. Same hues as the course page's topic colors
+// (courses/course-format.ts STATUS_STYLE): the 600 step on light, the 400
+// step on dark, so a red node and a red topic read as the same red.
+export const MASTERY_BOX: Record<NodeMastery, string> = {
+	red: "fill-red-600/15 stroke-red-600 dark:fill-red-400/25 dark:stroke-red-400",
+	yellow: "fill-amber-500/20 stroke-amber-500 dark:fill-amber-400/25 dark:stroke-amber-400",
+	green: "fill-emerald-600/15 stroke-emerald-600 dark:fill-emerald-400/25 dark:stroke-emerald-400",
+	unassessed: "fill-card stroke-border",
+};
+const MASTERY_TEXT: Record<NodeMastery, string> = {
+	red: "fill-foreground text-xs",
+	yellow: "fill-foreground text-xs",
+	green: "fill-foreground text-xs",
+	unassessed: "fill-muted-foreground text-xs",
+};
+/** A node color as the course page's topic status (gray = «unknown»):
+ *  the two maps share one vocabulary and one palette. */
+export const MASTERY_TOPIC_STATUS: Record<NodeMastery, TopicStatus> = {
+	red: "red",
+	yellow: "yellow",
+	green: "green",
+	unassessed: "unknown",
+};
+/** The learner-facing names: the SAME words the course page uses for its
+ *  topic colors (core/courses.ts TOPIC_STATUS_LABEL). */
+export const MASTERY_LABEL: Record<NodeMastery, string> = {
+	red: TOPIC_STATUS_LABEL.red,
+	yellow: TOPIC_STATUS_LABEL.yellow,
+	green: TOPIC_STATUS_LABEL.green,
+	unassessed: TOPIC_STATUS_LABEL.unknown,
+};
+/** Legend/progress swatches (HTML side): the course page's dots. */
+export const MASTERY_SWATCH: Record<NodeMastery, string> = {
+	red: STATUS_STYLE.red.dot,
+	yellow: STATUS_STYLE.yellow.dot,
+	green: STATUS_STYLE.green.dot,
+	unassessed: STATUS_STYLE.unknown.dot,
+};
+/** The current node's outline in exam view — thick white, no yellow glow
+ *  (a yellow halo would read as the yellow status). */
+const CURRENT_STROKE_W = 2.5;
+
+export function masteryOf(mastery: ReadonlyMap<string, MasteryEntry>, id: string): NodeMastery {
+	return mastery.get(id)?.status ?? "unassessed";
+}
+
+/** Counts per mastery bucket over the plan's nodes. Pure. */
+export function masteryCounts(
+	nodeIds: readonly string[],
+	mastery: ReadonlyMap<string, MasteryEntry>,
+): Record<NodeMastery, number> {
+	const out: Record<NodeMastery, number> = { red: 0, yellow: 0, green: 0, unassessed: 0 };
+	for (const id of nodeIds) out[masteryOf(mastery, id)]++;
+	return out;
+}
+
 /** The diagram itself: positioned nodes + bezier edges. Pure-ish render —
  *  every input is data, so SSR render tests pin the whole thing. The root
  *  sets font-family var(--font-prose): node titles render in the READING
@@ -482,6 +658,9 @@ export function PlanDiagram({
 	naturalSize,
 	monochrome,
 	fill,
+	groups,
+	mastery,
+	currentId,
 }: {
 	nodes: readonly LayoutNode[];
 	edges: ReadonlyArray<{ from: string; to: string }>;
@@ -508,8 +687,22 @@ export function PlanDiagram({
 	 *  dock band's marginalia mode, where the diagram must fit BOTH the
 	 *  flank's width and the band's height rather than run width-first. */
 	fill?: boolean;
+	/** Exam sessions: the emner — renders one column per emne. */
+	groups?: readonly PlanGroup[] | null;
+	/** Exam sessions: node colors (red/yellow/green; absent = gray). When
+	 *  set, the position statuses stop styling the boxes and the current
+	 *  node gets a thick outline instead of the yellow glow. */
+	mastery?: ReadonlyMap<string, MasteryEntry> | null;
+	/** Exam view: the node the lesson is on (thick outline). */
+	currentId?: string | null;
 }) {
-	const layout = useMemo(() => blockLayout(nodes, edges), [nodes, edges]);
+	const layout = useMemo(() => planLayout(nodes, edges, groups), [nodes, edges, groups]);
+	const exam = !!mastery && !monochrome;
+	// Exam view: a node with no color yet that he HAS worked on keeps the
+	// position look (white outline) instead of turning gray — a converted
+	// session must not look like its progress vanished before the teacher
+	// colors the map (owner, 2026-11-12). Only untouched + unassessed is gray.
+	const unworked = (id: string) => masteryOf(mastery!, id) === "unassessed" && statusOf(id) === "upcoming";
 	// Pad only the full-extent render — the plan window's override viewBox is
 	// a deliberate viewport crop, and the popup keeps its own fit margins.
 	const pad = viewBoxOverride ? 0 : (padUnits ?? 0);
@@ -577,8 +770,33 @@ export function PlanDiagram({
 				<filter id={`${markerId}-glow`} x="-60%" y="-60%" width="220%" height="220%">
 					<feGaussianBlur stdDeviation={GLOW_BLUR} />
 				</filter>
-			</defs>
-			{edges.map((e) => {
+				</defs>
+				{layout.columns?.map((col) => {
+					const counts = exam ? masteryCounts(col.nodeIds, mastery!) : null;
+					return (
+						<g key={`col-${col.id}`} data-testid={`plan-column-${col.id}`}>
+							<text
+								x={col.x + col.width / 2}
+								y={col.y + 13}
+								textAnchor="middle"
+								className="fill-muted-foreground text-[11px] font-medium"
+								style={{ letterSpacing: "0.08em" }}
+							>
+								{col.title.toLocaleUpperCase("nb")}
+								{counts ? ` · ${counts.green}/${col.nodeIds.length}` : ""}
+							</text>
+							<line
+								x1={col.x}
+								x2={col.x + col.width}
+								y1={col.y + 21}
+								y2={col.y + 21}
+								className="stroke-border"
+								strokeWidth={STROKE_W}
+							/>
+						</g>
+					);
+				})}
+				{edges.map((e) => {
 				// Dagre's route for this edge: border-intersected waypoints —
 				// the line leaves/enters nodes on whatever side dagre chose
 				// (mermaid's drawing, owner round 11). Unroutable edges
@@ -597,9 +815,9 @@ export function PlanDiagram({
 				// arrows stay gray even when they point into covered territory
 				// (supersedes round 6's target-only rule); the in-chat block
 				// stays all-white.
-				const dim =
-					!monochrome &&
-					(statusOf(e.from) === "upcoming" || statusOf(e.to) === "upcoming");
+				const dim = exam
+					? unworked(e.from) || unworked(e.to)
+					: !monochrome && (statusOf(e.from) === "upcoming" || statusOf(e.to) === "upcoming");
 				return (
 					<path
 						key={`${e.from}->${e.to}`}
@@ -612,7 +830,11 @@ export function PlanDiagram({
 			})}
 			{nodes.map((n) => {
 				const status = statusOf(n.id);
-				const glow = n.id === glowId && !monochrome;
+				const glow = n.id === glowId && !monochrome && !exam;
+				const m = exam ? masteryOf(mastery!, n.id) : null;
+				const positionLook = m === "unassessed" && status !== "upcoming";
+				const isCurrent = exam && n.id === currentId;
+				const reason = exam ? mastery!.get(n.id)?.reason : undefined;
 				const lines = wrapTitle(n.title);
 				// The box hugs its wrapped content; text centers in it —
 				// horizontally too now (text-first sizing round, 2026-10-07).
@@ -625,14 +847,30 @@ export function PlanDiagram({
 						transform={`translate(${layout.x.get(n.id) ?? 0}, ${layout.y.get(n.id) ?? 0})`}
 						data-testid={`plan-node-${n.id}`}
 						data-status={status}
-					>
+						{...(m ? { "data-mastery": m } : {})}
+						>
+						{m && (
+							// Native hover tooltip: the color's name + the teacher's evidence.
+							<title>{`${MASTERY_LABEL[m]}${reason ? `: ${reason}` : ""}`}</title>
+						)}
 						{/* Rectangular — no corner rounding (owner). */}
 						<rect
 							width={w}
 							height={h}
-							className={monochrome ? MONO_BOX : BOX[status]}
+							className={monochrome ? MONO_BOX : m && !positionLook ? MASTERY_BOX[m] : BOX[status]}
 							strokeWidth={STROKE_W}
 						/>
+						{isCurrent && (
+							<rect
+								x={-3}
+								y={-3}
+								width={w + 6}
+								height={h + 6}
+								className="fill-none stroke-foreground"
+								strokeWidth={CURRENT_STROKE_W}
+								data-testid="plan-current-outline"
+							/>
+						)}
 						{glow && (
 							// The current node's highlight: faint yellow, blurred so it
 							// bleeds over the edges — static, no pulse (owner, round 6).
@@ -654,7 +892,7 @@ export function PlanDiagram({
 								x={w / 2}
 								y={y0 + i * LINE_H}
 								textAnchor="middle"
-								className={monochrome ? MONO_TEXT : TEXT[status]}
+								className={monochrome ? MONO_TEXT : m && !positionLook ? MASTERY_TEXT[m] : TEXT[status]}
 							>
 								{line}
 							</text>
@@ -699,9 +937,46 @@ export function PlanBlock({ data, onOpen }: { data: PlanBlockData; onOpen: () =>
 			pad={GRAPH_PAD}
 			textCapScale={TEXT_CAP_SCALE}
 			monochrome
-		/>
+			groups={data.groups}
+			/>
 		</button>
 </Hint>
+	);
+}
+
+// ─── The exam summary (2026-11-12) ───────────────────────────────────────────
+
+/** «5 av 15 kan du», a stacked progress bar and the per-color counts —
+ *  the exam plan's at-a-glance header. */
+export function MasterySummary({
+	nodeIds,
+	mastery,
+}: {
+	nodeIds: readonly string[];
+	mastery: ReadonlyMap<string, MasteryEntry>;
+}) {
+	const counts = masteryCounts(nodeIds, mastery);
+	const total = Math.max(nodeIds.length, 1);
+	const order: NodeMastery[] = ["green", "yellow", "red", "unassessed"];
+	return (
+		<div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground" data-testid="plan-mastery-summary">
+			<span className="text-foreground">
+				{counts.green} av {nodeIds.length} kan du
+			</span>
+			<span className="flex h-1.5 w-32 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+				{order.map((k) =>
+					counts[k] > 0 ? (
+						<span key={k} className={MASTERY_SWATCH[k]} style={{ width: `${(counts[k] / total) * 100}%` }} />
+					) : null,
+				)}
+			</span>
+			{(["red", "yellow", "green", "unassessed"] as const).map((k) => (
+				<span key={k} className="flex items-center gap-1.5" data-testid={`plan-mastery-count-${k}`}>
+					<span className={cn("size-2 rounded-full", MASTERY_SWATCH[k])} aria-hidden="true" />
+					{counts[k]} {MASTERY_LABEL[k].toLowerCase()}
+				</span>
+			))}
+		</div>
 	);
 }
 
@@ -748,11 +1023,24 @@ const POPUP_PAD = GLOW_REACH;
  * territory. Surface 80% + blur (owner decision): the transcript ghosts
  * through while the focus owns the session area.
  */
-export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessage[]; onClose: () => void }) {
+export function PlanPopup({
+	messages,
+	onClose,
+	exam = false,
+}: {
+	messages: readonly PopupMessage[];
+	onClose: () => void;
+	/** Exam session (2026-11-12): colored nodes + the mastery summary. */
+	exam?: boolean;
+}) {
 	const tree = useMemo(() => latestTree(messages), [messages]);
 	const statuses = useMemo(
 		() => (tree ? derivePlanStatuses(tree, messages as Parameters<typeof derivePlanStatuses>[1]) : null),
 		[tree, messages],
+	);
+	const mastery = useMemo(
+		() => (exam && tree ? derivePlanMastery(tree, messages as Parameters<typeof derivePlanMastery>[1]) : null),
+		[exam, tree, messages],
 	);
 	const statusOf = (id: string): PlanNodeStatus => (statuses ? derivedNodeStatus(statuses, id) : "upcoming");
 
@@ -786,7 +1074,7 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 		return () => ro.disconnect();
 	}, []);
 
-	const layout = useMemo(() => (tree ? blockLayout(tree.nodes, tree.edges) : null), [tree]);
+	const layout = useMemo(() => (tree ? planLayout(tree.nodes, tree.edges, tree.groups) : null), [tree]);
 	// The fit box is the PADDED ink box — the diagram renders with POPUP_PAD
 	// (= the glow's reach) so the blurred glow never clips at the frame, and
 	// the fit must account for that padding.
@@ -893,8 +1181,12 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 			}}
 		>
 			<div className="mb-2 flex items-center gap-2">
-				<span className="text-sm font-medium">Planen</span>
-				<span className="text-xs text-muted-foreground">oppdateres fortløpende, statusene følger resultatene dine</span>
+				<span className="text-sm font-medium">{exam ? "Eksamenskart" : "Planen"}</span>
+				{exam && tree && mastery ? (
+					<MasterySummary nodeIds={tree.nodes.map((n) => n.id)} mastery={mastery} />
+				) : (
+					<span className="text-xs text-muted-foreground">oppdateres fortløpende, statusene følger resultatene dine</span>
+				)}
 				<Hint label="Lukk" binding="escape" side="left">
 <button
 					type="button"
@@ -944,7 +1236,10 @@ export function PlanPopup({ messages, onClose }: { messages: readonly PopupMessa
 								markerId={markerId}
 								pad={POPUP_PAD}
 								naturalSize
-							/>
+								groups={tree.groups}
+								mastery={mastery}
+								currentId={statuses?.current ?? null}
+								/>
 						</div>
 						<div className="pointer-events-none absolute inset-x-0 bottom-0 flex items-end justify-between p-2">
 							<span className="text-xs text-muted-foreground/60">Dra for å flytte · rull for å zoome</span>

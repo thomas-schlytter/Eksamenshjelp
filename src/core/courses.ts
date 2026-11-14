@@ -127,7 +127,9 @@ export interface CourseSearchHit {
 export interface ChatCourseLink {
 	code: string;
 	topicId?: string;
-	mode?: "learn" | "practice" | "mapping";
+	/** "exam" = the link of an eksamensøkt (ChatRecord.kind "exam"): the
+	 *  whole fag, with its sources as the pensum basis. */
+	mode?: "learn" | "practice" | "mapping" | "exam";
 }
 
 // ─── Small shared rules ──────────────────────────────────────────────────────
@@ -605,6 +607,16 @@ const MODE_INSTRUCTION: Record<NonNullable<ChatCourseLink["mode"]>, string> = {
 		"which topics you marked and why, tell the learner the exam plan for the course is now updated and that they can go " +
 		"back to it and start from today's item, and end your turn. Only if the learner then explicitly asks to keep going " +
 		"and be taught here do you conclude the assessment the normal way.",
+	exam:
+		"Mode: EXAM SESSION. This is one continuous exam session for the whole course, with no single focus topic. The sources " +
+		"listed below are the pensum basis: the earlier exam papers, solutions and notes among them are where the emner and the " +
+		"recurring task types come from. Read them yourself (`ls`/`find` the folders, the `pdf` tool for PDF files) before you " +
+		"probe, instead of asking the learner where the material is; ask only when the list holds no exam papers. The exam facts " +
+		"above (date, form, permitted aids) are already known, so do not ask for them again. The course topics listed above are " +
+		"a starting point for the emner of the plan map, but the past exams decide. Two status tools do two different things: " +
+		"`plan_status` colors the nodes of THIS session's plan map (your own plan_init slugs), `topic_status` colors the " +
+		"course's topics on the course page (the topic ids above). When the evidence that colors a plan node also settles a " +
+		"course topic, update both.",
 };
 
 const NOTE_INLINE_CHARS = 4_000;

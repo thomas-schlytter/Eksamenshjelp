@@ -242,6 +242,23 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		keywords: ["plan", "eksamensplan", "hvordan lages", "regnes ut", "prioritering", "dag for dag", "tidsplan"],
 	},
 	{
+		id: "eksamensplan-eller-eksamensokt",
+		category: "eksamensmodus",
+		question: "Hva er forskjellen på eksamensplanen og en eksamensøkt?",
+		answer: [
+			"Eksamensplanen står på fagsiden. Den er en plan dag for dag, regnet ut fra fargene på temaene, eksamensdatoen og tiden du har per dag. Hvert punkt i planen starter en egen, kort økt.",
+			"En eksamensøkt er ett sammenhengende løp i én økt. Agenten kartlegger hele pensum fra tidligere eksamener, finner ut hva du kan, og lager et eksamenskart med én kolonne per emne. Hver boks i kartet får farge etter hvert: grå «Ikke kartlagt», rød «Kan ikke ennå», gul «Usikker» og grønn «Kan dette». En boks blir først grønn når du har løst en eksamensoppgave om den med full utregning.",
+			"Du kan bruke begge. Planen passer når du vil ha noe konkret å gjøre hver dag. Eksamensøkta passer når du vil jobbe deg gjennom hele pensum sammen med agenten og se framgangen i ett kart.",
+		],
+		steps: [
+			"Åpne faget og gå til fanen «Eksamensplan».",
+			"Velg «Start eksamensøkt» under statuslinjen. Har faget en eksamensøkt fra før, står det «Fortsett eksamensøkta».",
+			"Legg gjerne tidligere eksamener inn under «Kontekst» først. Da bruker agenten dem som grunnlag for pensum.",
+		],
+		keywords: ["eksamensøkt", "eksamenskart", "fargekart", "forskjell", "eksamensplan", "emner", "kolonner", "pensum", "tidligere eksamener", "grønn", "plan_status"],
+		actions: [{ label: "Start en eksamensøkt uten fag", action: { kind: "route", href: "/chat/new?mode=exam" } }],
+	},
+	{
 		id: "endre-eksamensdato",
 		category: "eksamensmodus",
 		question: "Eksamensdatoen er feil eller mangler. Hvordan retter jeg den?",

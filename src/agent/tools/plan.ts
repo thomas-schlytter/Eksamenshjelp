@@ -2,6 +2,7 @@ import { Type } from "typebox";
 import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { serverExecute } from "../tool-execute.ts";
 import type { PlanToolResult, PlanTree } from "../../core/contracts.ts";
+import { explainAnsweredNodesLh } from "../../core/contracts.ts";
 import type { ChatStore } from "../../core/ports.ts";
 import { createTree, PlanTreeError } from "../../core/plan-tree.ts";
 import { parseMermaidPlan } from "./mermaid-plan.ts";
@@ -59,8 +60,78 @@ const planInitInput = Type.Object({
 	}),
 });
 
-export function planTools(ctx: PlanToolContext): Record<string, AgentTool<any>> {
+/** plan_status input (exam sessions, 2026-11-12): a batch of node colors. */
+const planStatusInput = Type.Object({
+	updates: Type.Array(
+		Type.Object({
+			nodeId: Type.String({ minLength: 1, description: "A plan_init node slug, exactly." }),
+			status: Type.Union(
+				[Type.Literal("red"), Type.Literal("yellow"), Type.Literal("green")],
+				{
+					description:
+						"red = he can't do it yet; yellow = he has seen some of it / gets parts right / shaky; " +
+						"green = mastered — only allowed once he has answered an explain on this node and solved it fully.",
+				},
+			),
+			reason: Type.String({
+				minLength: 1,
+				description: "One short line of evidence, in the learner's language (shown when he hovers the node).",
+			}),
+		}),
+		{ minItems: 1 },
+	),
+});
+
+/** The exam-session status tool: the teacher colors plan nodes red /
+ *  yellow / green. Colors DERIVE from the transcript (contracts/plan.ts
+ *  derivePlanMastery) — this call only validates and acknowledges. Green
+ *  is gated structurally: the node must carry an answered explain. */
+function planStatusTool(ctx: PlanToolContext): AgentTool<any> {
 	return {
+		name: "plan_status",
+		label: "plan_status",
+		description:
+			"Color plan-map nodes by how well the learner masters them — the exam plan's red / yellow / green. " +
+			"Batch: set every node you have evidence for in ONE call (e.g. right after plan_init, from the probe). " +
+			"red = can't do it; yellow = has seen some / shaky; green = mastered, ONLY after he has answered an explain on that node " +
+			"(an exam-style task with full working) and you judged it correct — green without an answered explain is refused. " +
+			"Re-call whenever the evidence changes (downgrades too). The latest color per node wins; untouched nodes show gray (unassessed).",
+		parameters: planStatusInput,
+		execute: serverExecute("plan_status", planStatusInput, async ({ updates }) => {
+			const record = ctx.chatStore.getChat(ctx.chatId);
+			if (!record) return { ok: false, error: `Chat not found: ${ctx.chatId}` };
+			const known = new Set(record.tree?.nodes.map((n) => n.id) ?? []);
+			if (known.size === 0) return { ok: false, error: "No plan map exists yet — call plan_init first." };
+			const explained = explainAnsweredNodesLh(record.messages);
+			const problems: string[] = [];
+			for (const u of updates) {
+				if (!known.has(u.nodeId)) {
+					problems.push(`nodeId "${u.nodeId}" matches no node in the plan map — copy a plan_init slug exactly.`);
+				} else if (u.status === "green" && !explained.has(u.nodeId)) {
+					problems.push(
+						`"${u.nodeId}" can't be green yet: no answered explain on it. Pose an exam-style explain (full working) on this node first; until then use yellow.`,
+					);
+				}
+			}
+			// All-or-nothing: a partly-applied batch would leave the map in a
+			// state the teacher never wrote. Fix and resend the whole batch.
+			if (problems.length > 0) return { ok: false, error: `Nothing was applied. ${problems.join(" ")}` };
+			return { ok: true, updated: updates.length };
+		}),
+	};
+}
+
+/** Exam sessions: plan_init also takes emner (mermaid subgraphs). */
+const EXAM_PLAN_INIT_NOTE =
+	" EXAM SESSION: group the nodes into emner (exam topics) with subgraph blocks — " +
+	"`subgraph komplekse-tall[Komplekse tall]` … node lines … `end` — one block per emne, each node declared inside its emne; " +
+	"put any cross-emne edges after the last `end`. The learner sees one column per emne. No sink node for the whole exam.";
+
+export function planTools(ctx: PlanToolContext): Record<string, AgentTool<any>> {
+	// Exam sessions get the status tool; teach sessions are unchanged.
+	const exam = ctx.chatStore.getChat(ctx.chatId)?.kind === "exam";
+	return {
+		...(exam ? { plan_status: planStatusTool(ctx) } : {}),
 		plan_init: {
 			name: "plan_init",
 			label: "plan_init",
@@ -69,7 +140,8 @@ export function planTools(ctx: PlanToolContext): Record<string, AgentTool<any>> 
 				"Call once right after the probe concludes, to present the map; re-call whenever the map is wrong (the new block replaces the old tree). " +
 				"A mermaid graph block (any direction): one node per line (`slug[Short Title]` — slugs are permanent lowercase ids: a-z, 0-9, hyphens/underscores), " +
 				"`-->` edges meaning 'from must be understood before to' (chains fine). 5–15 nodes: a map, not a syllabus — one reasoning step per node, compress. " +
-				"Every check you fire names the node it assesses via `nodeId`; where the lesson stands derives from those tags.",
+				"Every check you fire names the node it assesses via `nodeId`; where the lesson stands derives from those tags." +
+				(exam ? EXAM_PLAN_INIT_NOTE : ""),
 			parameters: planInitInput,
 			execute: serverExecute("plan_init", planInitInput, async ({ mermaid }) => {
 				const { chatId, chatStore } = ctx;
@@ -86,7 +158,7 @@ export function planTools(ctx: PlanToolContext): Record<string, AgentTool<any>> 
 				try {
 					// createTree validates the structure (duplicate ids, missing
 					// edge endpoints, self-loops, cycles → PlanTreeError).
-					const next = createTree(parsed.plan.nodes, parsed.plan.edges);
+					const next = createTree(parsed.plan.nodes, parsed.plan.edges, parsed.plan.groups);
 					chatStore.saveTree(chatId, next);
 					// Context diet: content = the validated nodeIds + the reminder (the
 				// ids just became binding for every quiz/explain call); details =

@@ -7,7 +7,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
 import type { ChatDeleteMode } from "@/src/core";
 import {
-	CircleHelpIcon, DumbbellIcon, HomeIcon, NetworkIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon,
+	CircleHelpIcon, DumbbellIcon, GraduationCapIcon, HomeIcon, NetworkIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon,
 } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
@@ -346,6 +346,9 @@ export function SessionRow({
 			{(chat.kind ?? "teach") === "practice" && (
 				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Øvingsøkt" />
 			)}
+			{chat.kind === "exam" && (
+				<GraduationCapIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Eksamensøkt" />
+			)}
 		</button>
 	);
 }
@@ -406,6 +409,13 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 export type SessionKindFilter = "teach" | "all" | "practice";
 const KIND_FILTER_KEY = "lh:session-kind-filter";
 const KIND_FILTER_LABEL: Record<SessionKindFilter, string> = { all: "Alle", teach: "Læring", practice: "Øving" };
+
+/** Does a session belong under a filter choice? Eksamensøkter sort under
+ *  «Læring»: they run the teach flow (prober, then teacher) with the exam
+ *  overlay, so a third choice would only split one kind of work in two. */
+export function matchesKindFilter(kind: ChatListItem["kind"] | undefined, filter: SessionKindFilter): boolean {
+	return filter === "all" || (kind === "practice" ? "practice" : "teach") === filter;
+}
 
 /** The window event that opens «Legg til fag» on the home screen. */
 export const ADD_COURSE_EVENT = "lh:add-course";
@@ -493,7 +503,7 @@ function SessionsSidebar() {
 		const q = query.trim();
 		let list = chats;
 		if (list && kindFilter !== "all") {
-			list = list.filter((c) => (c.kind ?? "teach") === kindFilter);
+			list = list.filter((c) => matchesKindFilter(c.kind, kindFilter));
 		}
 		if (!list) return list;
 		if (!q) return list;

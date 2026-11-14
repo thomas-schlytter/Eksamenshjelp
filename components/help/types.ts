@@ -127,6 +127,7 @@ export const TOUR_ANCHORS = [
 	"sidebar-settings",
 	"course-tabs",
 	"exam-plan",
+	"exam-session",
 	"topic-board",
 	"course-sources",
 	"exam-date",

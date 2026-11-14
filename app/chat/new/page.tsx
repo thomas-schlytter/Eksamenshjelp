@@ -13,6 +13,8 @@ export const dynamic = "force-dynamic";
  *
  * One mode outwardly. Two optional doors in the URL:
  *  - `?mode=practice` (the knowledge map, the fag page) makes it an øvingsøkt;
+ *  - `?mode=exam` (the fag page, the help center) makes it an eksamensøkt:
+ *    one session that maps the whole pensum and follows it on a colored map;
  *  - `?fag=<KODE>` (+ `&tema=<id>`) links the draft to a fag, so the server
  *    writes the fag's context as the session's first message.
  *
@@ -27,16 +29,21 @@ export default async function NewSessionPage({
 }) {
 	const { mode, fag, tema } = await searchParams;
 	const practice = mode === "practice";
+	const exam = mode === "exam";
 	const code = normalizeCourseCode(fag);
 	// A topic id is a slug; anything else is dropped rather than trusted.
 	const topicId = typeof tema === "string" && /^[a-z0-9-]{1,64}$/.test(tema) ? tema : undefined;
+	// An eksamensøkt spans the whole fag: no single tema, and the link's
+	// mode tells the server to present the fag's sources as the pensum.
 	const course: ChatCourseLink | undefined = code
-		? { code, ...(topicId ? { topicId, mode: practice ? "practice" : "learn" } : {}) }
+		? exam
+			? { code, mode: "exam" }
+			: { code, ...(topicId ? { topicId, mode: practice ? "practice" : "learn" } : {}) }
 		: undefined;
 	return (
 		<NewSession
 			initialConfigured={slotsConfigured(readSettingsRecord()?.models)}
-			mode={practice ? "practice" : "teach"}
+			mode={practice ? "practice" : exam ? "exam" : "teach"}
 			course={course}
 		/>
 	);

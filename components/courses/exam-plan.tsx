@@ -13,6 +13,7 @@ import {
 import {
 	topicCounts, type Course, type ExamPlan, type ExamPlanDay, type ExamPlanItem, type PlanActivity,
 } from "./course-types";
+import { ExamSessionCard, type ExamSessionState } from "./exam-session";
 import { StatusDot, TopicStatusBar } from "./status-ui";
 
 const ACTIVITY_ICON: Record<PlanActivity, typeof BookOpenIcon> = {
@@ -148,12 +149,15 @@ function PlanMessage({ title, children, action }: { title: string; children: Rea
  * the plan itself always comes from the server (`plan`), so ticking an item
  * or changing a status re-plans there.
  */
-export function ExamPlanView({ course, plan, today, actions }: {
+export function ExamPlanView({ course, plan, today, actions, examSession = null }: {
 	course: Course;
 	plan: ExamPlan;
 	/** The student's local date, YYYY-MM-DD. */
 	today: string;
 	actions: ExamPlanActions;
+	/** The fag's eksamensøkt, if it has one (the card under the status
+	 *  line continues it instead of starting another). */
+	examSession?: ExamSessionState;
 }) {
 	const [showAll, setShowAll] = useState(false);
 	const counts = topicCounts(course.topics);
@@ -222,6 +226,10 @@ export function ExamPlanView({ course, plan, today, actions }: {
 					</select>
 				</label>
 			</div>
+
+			{/* The other way through the fag: one continuous eksamensøkt. Always
+			    here, in the same place, whatever state the plan below is in. */}
+			<ExamSessionCard course={course} session={examSession} onStart={actions.onStart} starting={actions.starting} />
 
 			{noTopics ? (
 				<PlanMessage

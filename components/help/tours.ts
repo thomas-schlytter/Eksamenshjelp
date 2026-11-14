@@ -143,6 +143,15 @@ export const TOURS: readonly Tour[] = [
 				text: "Start dagens punkter rett fra planen. «Lær» går gjennom temaet steg for steg, «Øv» gir deg oppgaver. Huk av når du er ferdig, så ser du hvor langt du har kommet.",
 				fallback: "Du starter økter rett fra planen. «Lær» går gjennom temaet steg for steg, «Øv» gir deg oppgaver. Huk av punktene etter hvert som du blir ferdig.",
 			},
+			{
+				id: "eksamensokt",
+				route: COURSE_ROUTE,
+				anchor: "exam-session",
+				openTab: "Eksamensplan",
+				title: "Eller ta alt i én eksamensøkt",
+				text: "En eksamensøkt er ett sammenhengende løp: agenten kartlegger hele pensum fra tidligere eksamener og følger deg tema for tema med et fargekart.",
+				fallback: "Under «Eksamensplan» kan du også starte en eksamensøkt: ett sammenhengende løp der agenten kartlegger hele pensum fra tidligere eksamener og følger deg tema for tema med et fargekart.",
+			},
 		],
 	},
 	{

@@ -747,7 +747,7 @@ export function parseChatCourseLink(raw: unknown): ChatCourseLink | null {
 	if (!code) return null;
 	const course = courseStore.getCourse(code);
 	if (!course) return null;
-	const mode = input.mode === "learn" || input.mode === "practice" || input.mode === "mapping" ? input.mode : undefined;
+	const mode = input.mode === "learn" || input.mode === "practice" || input.mode === "mapping" || input.mode === "exam" ? input.mode : undefined;
 	const topicId = typeof input.topicId === "string" && course.topics.some((t) => t.id === input.topicId) ? input.topicId : undefined;
 	return { code, ...(topicId ? { topicId } : {}), ...(mode ? { mode } : {}) };
 }

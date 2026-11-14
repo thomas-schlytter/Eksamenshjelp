@@ -24,14 +24,21 @@
  *   a --> b         — requires edge (from = prerequisite); ==>, -.-> are
  *                     synonyms; chains a --> b --> c expand to pairs
  *   a[title] --> b[title] — inline labels anywhere an endpoint appears
+ *   subgraph id[Title] … end
+ *                   — an EMNE (exam sessions, 2026-11-12): every node that
+ *                     FIRST appears inside the block belongs to that group.
+ *                     `subgraph id["Title"]`, `subgraph id [Title]` and a
+ *                     bare `subgraph id` (title = id) all work; no nesting.
  * Bare endpoints register as nodes; forward references are fine; duplicate
  * edges dedupe; the first label a node gets wins.
  */
-import type { PlanEdge, PlanNode } from "@/src/core";
+import type { PlanEdge, PlanGroup, PlanNode } from "@/src/core";
 
 export interface ParsedPlan {
 	nodes: PlanNode[];
 	edges: PlanEdge[];
+	/** The emner in authoring order — absent when the block has none. */
+	groups?: PlanGroup[];
 }
 
 export interface PlanParseResult {
@@ -52,6 +59,8 @@ const ARROW_RE = /-->|==>|-\.->/;
 // with a generic parse error. The muscle-protein post-mortem: underscores
 // failed HERE, the actionable message never fired, and the teacher spent
 // four attempts hunting punctuation the parser didn't care about.
+/** `subgraph id[Title]`, `subgraph id ["Title"]`, `subgraph id`. */
+const SUBGRAPH_RE = /^subgraph\s+([^\s\[\]()]+)\s*(?:\[([^\[\]]*)\])?\s*$/i;
 const ENDPOINT_RE = /^([^\s()\[\]]+)\s*(?:\[([^\[\]]*)\]|\(\s*"([^"]*)"\s*\)|\(([^()]*)\))?$/;
 
 interface Endpoint {
@@ -89,6 +98,9 @@ export function parseMermaidPlan(mermaid: string): PlanParseResult {
 	}
 
 	const nodes = new Map<string, string>(); // id → title (first label wins)
+	const nodeGroup = new Map<string, string>(); // id → group id (first appearance wins)
+	const groups: PlanGroup[] = [];
+	let openGroup: { id: string; line: number } | null = null;
 	const edges: PlanEdge[] = [];
 	const seenEdges = new Set<string>();
 
@@ -99,14 +111,50 @@ export function parseMermaidPlan(mermaid: string): PlanParseResult {
 			);
 			return;
 		}
-		if (!nodes.has(id)) nodes.set(id, label && label.length > 0 ? label : id);
-		else if (label && label.length > 0 && nodes.get(id) === id) nodes.set(id, label);
+		if (!nodes.has(id)) {
+			nodes.set(id, label && label.length > 0 ? label : id);
+			if (openGroup) nodeGroup.set(id, openGroup.id);
+		} else if (label && label.length > 0 && nodes.get(id) === id) nodes.set(id, label);
 	};
 
 	for (let i = first + 1; i < lines.length; i++) {
 		const line = lines[i]?.trim() ?? "";
 		const no = i + 1;
 		if (line.length === 0 || line.startsWith("%%")) continue;
+
+		// Emner: `subgraph id[Title]` … `end`.
+		if (/^subgraph\b/i.test(line)) {
+			const m = line.match(SUBGRAPH_RE);
+			if (openGroup) {
+				problems.push(`line ${no}: subgraphs can't nest — close \`${openGroup.id}\` (opened on line ${openGroup.line}) with \`end\` first.`);
+				continue;
+			}
+			if (!m || !m[1]) {
+				problems.push(`line ${no}: can't read the subgraph \`${line}\` — expected \`subgraph emne-slug[Emne title]\`.`);
+				continue;
+			}
+			const gid = m[1];
+			if (!SLUG_RE.test(gid)) {
+				problems.push(`line ${no}: subgraph id \`${gid}\` must be a lowercase slug (a-z, 0-9, hyphens/underscores) — put the display name in brackets: \`subgraph ${gid.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "emne"}[${gid}]\`.`);
+				continue;
+			}
+			if (groups.some((g) => g.id === gid)) {
+				problems.push(`line ${no}: subgraph \`${gid}\` is declared twice — put all of its nodes in one block.`);
+				continue;
+			}
+			let title = (m[2] ?? "").trim();
+			if (title.length >= 2 && ((title.startsWith('"') && title.endsWith('"')) || (title.startsWith("'") && title.endsWith("'")))) {
+				title = title.slice(1, -1).trim();
+			}
+			groups.push({ id: gid, title: title || gid });
+			openGroup = { id: gid, line: no };
+			continue;
+		}
+		if (/^end$/i.test(line)) {
+			if (!openGroup) problems.push(`line ${no}: \`end\` without an open subgraph.`);
+			openGroup = null;
+			continue;
+		}
 
 		// Edges (incl. chains): split on any arrow spelling; every segment is
 		// an endpoint, consecutive pairs become requires-edges.
@@ -145,7 +193,7 @@ export function parseMermaidPlan(mermaid: string): PlanParseResult {
 			const node = parseEndpoint(line);
 			if (!node) {
 				problems.push(
-					`line ${no}: can't parse \`${line}\` — ids are the strict part (lowercase slugs: a-z, 0-9, hyphens, underscores); node lines (\`slug[title]\`) and requires-edges (\`a --> b\`) are the accepted forms; subgraphs, styles, and classes are not part of the subset.`,
+					`line ${no}: can't parse \`${line}\` — ids are the strict part (lowercase slugs: a-z, 0-9, hyphens, underscores); node lines (\`slug[title]\`) and requires-edges (\`a --> b\`) are the accepted forms (plus \`subgraph emne[Title]\` … \`end\` blocks for emner); styles and classes are not part of the subset.`,
 				);
 				continue;
 			}
@@ -153,9 +201,18 @@ export function parseMermaidPlan(mermaid: string): PlanParseResult {
 		}
 	}
 
+	if (openGroup) problems.push(`line ${openGroup.line}: subgraph \`${openGroup.id}\` is never closed — add \`end\` after its nodes.`);
+	for (const g of groups) {
+		if (nodes.has(g.id)) problems.push(`subgraph id \`${g.id}\` is also a node id — give the emne its own slug.`);
+	}
+
 	const plan: ParsedPlan = {
-		nodes: [...nodes.entries()].map(([id, title]) => ({ id, title })),
+		nodes: [...nodes.entries()].map(([id, title]) => {
+			const group = nodeGroup.get(id);
+			return group ? { id, title, group } : { id, title };
+		}),
 		edges,
+		...(groups.length > 0 ? { groups } : {}),
 	};
 	if (problems.length > 0) return { ok: false, problems };
 	if (plan.nodes.length === 0) return { ok: false, problems: ["No nodes found — the plan needs at least one."] };

@@ -3,7 +3,7 @@ import { clearOpeningPrompt, OPENING_PROMPT_FAILURE, stashOpeningPrompt } from "
 
 export interface SessionCreation {
 	title: string;
-	kind?: "practice";
+	kind?: "practice" | "exam";
 	graphContext?: { propositions: readonly { id: string; name: string; statement: string }[] };
 	/** The fag link (exam mode): the server writes a course-context marker
 	 *  as the first message. Omitted entirely for a free session. */

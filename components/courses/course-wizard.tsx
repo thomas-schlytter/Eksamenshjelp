@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { formatExamDate, mappingSession, type CourseSessionStart, type SelfStatus } from "./course-format";
 import { SourceAdder, SourceList, type AddSource } from "./course-sources";
+import { ExamSessionCard, type ExamSessionState } from "./exam-session";
 import { topicCounts, type Course } from "./course-types";
 import { StatusButtons, StatusDot } from "./status-ui";
 
@@ -47,10 +48,13 @@ function StepIndicator({ step }: { step: number }) {
  * material, (3) make the topic list and say how well you know each topic.
  * Every answer is saved as it is given, so leaving halfway loses nothing.
  */
-export function CourseWizard({ course, actions, initialStep = 0 }: {
+export function CourseWizard({ course, actions, initialStep = 0, examSession = null }: {
 	course: Course;
 	actions: WizardActions;
 	initialStep?: 0 | 1 | 2;
+	/** The fag's eksamensøkt, if it has one (the last step offers the
+	 *  eksamensøkt as an alternative to the topic list and the plan). */
+	examSession?: ExamSessionState;
 }) {
 	const [step, setStep] = useState<number>(initialStep);
 	const [date, setDate] = useState(course.exam.date ?? "");
@@ -227,6 +231,14 @@ export function CourseWizard({ course, actions, initialStep = 0 }: {
 							<ArrowRightIcon aria-hidden="true" />
 						</Button>
 					</div>
+				</div>
+			)}
+
+			{/* The alternative to the plan: one continuous eksamensøkt. */}
+			{step === 2 && !generating && (
+				<div className="mt-4 border-t border-border/60 pt-4">
+					<p className="mb-2 font-ui text-xs font-medium uppercase tracking-widest text-muted-foreground">Eller</p>
+					<ExamSessionCard course={course} session={examSession} onStart={actions.onStart} starting={actions.starting} compact />
 				</div>
 			)}
 		</section>

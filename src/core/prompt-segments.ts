@@ -22,6 +22,13 @@ export const FRAGMENT_RE = /^\d+-[\w.-]+\.md$/;
  *  teaching philosophy; its 00-base.md plays the base role). */
 export type PromptAgent = "prober" | "teacher" | "practice";
 
+/** Composition options. `exam` (2026-11-12): an exam session composes the
+ *  agent's exam overlay directory (exam-prober/ or exam-teacher/) right
+ *  after its own fragments, before the shared/ appendix. */
+export interface PromptComposeOptions {
+	exam?: boolean;
+}
+
 /** One segment of one agent's composed prompt. */
 export interface PromptSegmentInfo {
 	/** The override/store key — mirrors the source layout ("system-prompt.md",
@@ -44,7 +51,7 @@ export interface PromptSegmentInfo {
  *  CURRENT source segment list. */
 export function isValidSegmentPath(segmentPath: string): boolean {
 	if (segmentPath === "system-prompt.md") return true;
-	const m = /^(prober|teacher|practice|shared)\/([\w.-]+\.md)$/.exec(segmentPath);
+	const m = /^(prober|teacher|practice|shared|exam-prober|exam-teacher)\/([\w.-]+\.md)$/.exec(segmentPath);
 	if (!m || m[2] === undefined) return false;
 	return FRAGMENT_RE.test(m[2]);
 }

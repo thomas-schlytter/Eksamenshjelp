@@ -17,6 +17,18 @@ export interface PlanNode {
 	title: string;
 	/** 1-2 sentences: what this node covers. */
 	summary?: string;
+	/** Exam sessions (2026-11-12): the id of the emne (topic group) this
+	 *  node belongs to — a mermaid `subgraph` in the plan_init block.
+	 *  Absent = ungrouped (every teach-session plan). */
+	group?: string;
+}
+
+/** An emne: a named group of plan nodes (mermaid `subgraph`). */
+export interface PlanGroup {
+	/** Lowercase slug, same rule as node ids. */
+	id: string;
+	/** Display title ("Komplekse tall"). */
+	title: string;
 }
 
 export interface PlanEdge {
@@ -29,6 +41,8 @@ export interface PlanEdge {
 export interface PlanTree {
 	nodes: PlanNode[];
 	edges: PlanEdge[];
+	/** Exam sessions: the emner in authoring order. Absent = no groups. */
+	groups?: PlanGroup[];
 	/** Increments on every mutation — lets the UI animate/react to changes. */
 	version: number;
 }
@@ -146,4 +160,119 @@ export function derivePlanStatusesLh(tree: PlanTree, messages: readonly LhMessag
 	const current = runs.at(-1) ?? null;
 	const visited = new Set(runs.slice(0, -1));
 	return { current, visited };
+}
+
+
+// ─── exam mastery (2026-11-12): red / yellow / green per node ───────────────
+//
+// Exam sessions color every plan node by how well the learner masters it.
+// The TEACHER sets the color with plan_status (tools/plan.ts) — red = can't
+// do it, yellow = has seen some of it / shaky, green = mastered (only after
+// an answered explain on that node; the tool refuses green otherwise). A
+// node no plan_status call has touched is "unassessed" (gray). Like
+// position, mastery is DERIVED from the transcript — the latest successful
+// plan_status entry per node wins; nothing is stored on the tree, so a
+// plan_init rewrite keeps every color whose slug survives.
+
+export type MasteryStatus = "red" | "yellow" | "green";
+export type NodeMastery = MasteryStatus | "unassessed";
+export const MASTERY_STATUSES: readonly MasteryStatus[] = ["red", "yellow", "green"];
+
+export interface MasteryEntry {
+	status: MasteryStatus;
+	/** The teacher's one-line reason, shown on hover. */
+	reason?: string;
+}
+
+/** One plan_status update as the tool takes it. */
+export interface PlanStatusUpdate {
+	nodeId: string;
+	status: MasteryStatus;
+	reason?: string;
+}
+
+function isMasteryStatus(v: unknown): v is MasteryStatus {
+	return v === "red" || v === "yellow" || v === "green";
+}
+
+/** Fold a sequence of plan_status inputs (in call order) into node → latest
+ *  entry. Unknown node ids (not in the current tree) are dropped. Pure. */
+export function foldMastery(tree: PlanTree, inputs: readonly unknown[]): Map<string, MasteryEntry> {
+	const ids = new Set(tree.nodes.map((n) => n.id));
+	const out = new Map<string, MasteryEntry>();
+	for (const input of inputs) {
+		const updates = (input as { updates?: unknown } | undefined)?.updates;
+		if (!Array.isArray(updates)) continue;
+		for (const u of updates as Array<Partial<PlanStatusUpdate>>) {
+			if (!u || typeof u.nodeId !== "string" || !ids.has(u.nodeId) || !isMasteryStatus(u.status)) continue;
+			out.set(u.nodeId, {
+				status: u.status,
+				...(typeof u.reason === "string" && u.reason.trim() ? { reason: u.reason.trim() } : {}),
+			});
+		}
+	}
+	return out;
+}
+
+/** Mastery over UI-shaped messages (the popup / marginalia): every
+ *  plan_status CALL whose result came back ok. A refused call (e.g. green
+ *  without an explain) colors nothing. */
+export function derivePlanMastery(tree: PlanTree, messages: readonly PartsCarrier[]): Map<string, MasteryEntry> {
+	const inputs: unknown[] = [];
+	for (const m of messages) {
+		for (const part of m.parts) {
+			if (part.type !== "tool-plan_status" || part.state !== "output-available") continue;
+			if ((part.output as { ok?: unknown } | undefined)?.ok !== true) continue;
+			inputs.push(part.input);
+		}
+	}
+	return foldMastery(tree, inputs);
+}
+
+/** The same fold over the NATIVE record: plan_status calls whose
+ *  toolResult is ok (details.ok === true). */
+export function derivePlanMasteryLh(tree: PlanTree, messages: readonly LhMessage[]): Map<string, MasteryEntry> {
+	const okCalls = new Set<string>();
+	for (const m of messages) {
+		const r = m as { role?: string; toolName?: string; toolCallId?: string; details?: { ok?: unknown } };
+		if (r.role === "toolResult" && r.toolName === "plan_status" && r.details?.ok === true && r.toolCallId) okCalls.add(r.toolCallId);
+	}
+	const inputs: unknown[] = [];
+	for (const m of messages) {
+		if ((m as { role?: string }).role !== "assistant") continue;
+		const content = (m as { content?: unknown }).content;
+		if (!Array.isArray(content)) continue;
+		for (const block of content as Array<{ type?: string; name?: string; id?: string; arguments?: unknown }>) {
+			if (block.type === "toolCall" && block.name === "plan_status" && block.id && okCalls.has(block.id)) inputs.push(block.arguments);
+		}
+	}
+	return foldMastery(tree, inputs);
+}
+
+/** Node ids that carry an ANSWERED (not dismissed) explain call — the
+ *  green gate. Native record. */
+export function explainAnsweredNodesLh(messages: readonly LhMessage[]): Set<string> {
+	const callNode = new Map<string, string>();
+	for (const m of messages) {
+		if ((m as { role?: string }).role !== "assistant") continue;
+		const content = (m as { content?: unknown }).content;
+		if (!Array.isArray(content)) continue;
+		for (const block of content as Array<{ type?: string; name?: string; id?: string; arguments?: unknown }>) {
+			if (block.type !== "toolCall" || block.name !== "explain" || !block.id) continue;
+			const nodeId = (block.arguments as { nodeId?: unknown } | undefined)?.nodeId;
+			if (typeof nodeId === "string") callNode.set(block.id, nodeId);
+		}
+	}
+	const out = new Set<string>();
+	for (const m of messages) {
+		const r = m as { role?: string; toolCallId?: string; isError?: boolean; details?: { dismissed?: unknown; kind?: unknown } };
+		if (r.role !== "toolResult" || !r.toolCallId || r.isError) continue;
+		const nodeId = callNode.get(r.toolCallId);
+		if (!nodeId) continue;
+		// Only a real answer counts: the placeholder "question posed" result
+		// carries no answer kind; a dismissal carries dismissed:true.
+		if (r.details?.kind !== "explain" || r.details?.dismissed === true) continue;
+		out.add(nodeId);
+	}
+	return out;
 }

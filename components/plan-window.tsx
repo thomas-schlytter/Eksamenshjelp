@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useMemo } from "react";
-import { derivedNodeStatus, derivePlanStatuses } from "@/src/core";
+import { derivedNodeStatus, derivePlanMastery, derivePlanStatuses } from "@/src/core";
 import {
 	PlanDiagram,
 	GRAPH_PAD,
@@ -41,12 +41,17 @@ export function planExists(messages: readonly PopupMessage[]): boolean {
 	return !!tree && tree.nodes.length > 0;
 }
 
-export function PlanMarginalia({ messages }: { messages: readonly PopupMessage[] }) {
+export function PlanMarginalia({ messages, exam = false }: { messages: readonly PopupMessage[]; exam?: boolean }) {
 	const markerId = useId().replace(/[^a-zA-Z0-9-]/g, "");
 	const tree = useMemo(() => latestTree(messages), [messages]);
 	const statuses = useMemo(
 		() => (tree ? derivePlanStatuses(tree, messages as Parameters<typeof derivePlanStatuses>[1]) : null),
 		[tree, messages],
+	);
+	// Exam sessions (2026-11-12): the margin shows the colors too.
+	const mastery = useMemo(
+		() => (exam && tree ? derivePlanMastery(tree, messages as Parameters<typeof derivePlanMastery>[1]) : null),
+		[exam, tree, messages],
 	);
 	if (!tree || tree.nodes.length === 0) return null; // no plan yet: nothing in the margin
 	const statusOf = (id: string) => (statuses ? derivedNodeStatus(statuses, id) : "upcoming");
@@ -60,6 +65,9 @@ export function PlanMarginalia({ messages }: { messages: readonly PopupMessage[]
 			pad={MARGIN_PAD}
 			textCapScale={TEXT_CAP_SCALE}
 			fill
-		/>
+			groups={tree.groups}
+			mastery={mastery}
+			currentId={statuses?.current ?? null}
+			/>
 	);
 }

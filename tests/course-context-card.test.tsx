@@ -37,7 +37,13 @@ describe("CourseContextCard", () => {
 			assert.equal(parseCourseContext(data), null);
 			assert.equal(renderToStaticMarkup(<CourseContextCard data={data} />), "");
 		}
-		assert.equal(parseCourseContext({ code: "TTK4100", mode: "exam", sourceCount: "many", topicTitle: 3 })?.mode, undefined, "unknown fields degrade, never throw");
+		assert.equal(parseCourseContext({ code: "TTK4100", mode: "cram", sourceCount: "many", topicTitle: 3 })?.mode, undefined, "unknown fields degrade, never throw");
+	});
+
+	it("an eksamensøkt's marker says so on the line", () => {
+		const data = parseCourseContext({ code: "TTK4100", name: "Kybernetikk, introduksjon", mode: "exam", sourceCount: 2 });
+		assert.equal(data?.mode, "exam");
+		assert.deepEqual(courseContextSegments(data!), ["Eksamensøkt", "2 kilder"]);
 	});
 
 	it("the marker projects into the data-course-context part this card consumes", () => {

@@ -18,6 +18,7 @@ import { SourcesPanel } from "./course-sources";
 import { localIsoDate, type Course } from "./course-types";
 import { CourseWizard } from "./course-wizard";
 import { ExamPlanView } from "./exam-plan";
+import { useExamSession } from "./exam-session";
 import { LauncherSetupDialog, usePageTabCycle, useSessionLauncher } from "./session-launcher";
 import { StartBox } from "./start-box";
 import { TopicBoard } from "./topic-board";
@@ -290,6 +291,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 	const root = useRef<HTMLDivElement>(null);
 	usePageTabCycle(root);
 	const launcher = useSessionLauncher(initialConfigured);
+	const examSession = useExamSession(code);
 	const [data, setData] = useState(initial);
 	const [gone, setGone] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
@@ -531,6 +533,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 							<div className="flex flex-col items-center gap-3">
 								<CourseWizard
 									course={course}
+									examSession={examSession}
 									actions={{
 										onExamDate: setExamDate,
 										onAddSource: (source) => mutate(null, () => courseApi.addSource(code, source)),
@@ -550,6 +553,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 								course={course}
 								plan={plan}
 								today={today}
+								examSession={examSession}
 								actions={{
 									onToggleDone: togglePlanItem,
 									onStart: start,

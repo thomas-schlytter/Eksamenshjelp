@@ -44,7 +44,7 @@ const DOCK = "mx-auto w-full max-w-[46rem] px-4";
 export async function startDraftSession(
 	text: string,
 	fetchLike: typeof fetch,
-	mode?: "practice",
+	mode?: "practice" | "exam",
 	picks?: readonly DraftPick[],
 	starter = new SessionStarter(),
 	settingsIdentity?: string,
@@ -61,7 +61,9 @@ export async function startDraftSession(
 		{
 			...(mode === "practice"
 				? { title: t, kind: "practice" as const, ...(picks && picks.length > 0 ? { graphContext: { propositions: picks } } : {}) }
-				: { title: t }),
+				: mode === "exam"
+					? { title: t, kind: "exam" as const }
+					: { title: t }),
 			...(course ? { course } : {}),
 		},
 		fetchLike,
@@ -96,7 +98,7 @@ export function DraftShell({
 	/** The practice draft (owner, 2026-10-04): ?mode=practice — the
 	 *  created session carries kind:"practice" and the copy changes
 	 *  (the practice agent opens; no probing). */
-	mode?: "teach" | "practice";
+	mode?: "teach" | "practice" | "exam";
 	/** The fag this draft is linked to: shown as a chip above the box (a
 	 *  link back to the fag page) and named in the empty state. */
 	course?: Pick<ChatCourseLink, "code">;
@@ -180,13 +182,17 @@ export function DraftShell({
 						<Conversation className="h-full min-w-0 flex-1" initial="instant">
 							<ConversationContent className="min-h-full gap-0 p-0">
 								<ConversationEmptyState
-									title={mode === "practice" ? "Ny øvingsøkt" : "Ny økt"}
+									title={mode === "practice" ? "Ny øvingsøkt" : mode === "exam" ? "Ny eksamensøkt" : "Ny økt"}
 									description={
 										mode === "practice"
 											? "Velg noder fra kunnskapskartet, beskriv hva du vil øve på, eller ta med din egen oppgave."
-											: course
-												? `Økta kobles til ${course.code}. Læreren starter med å kartlegge hva du kan fra før.`
-												: "Læreren starter med å kartlegge hva du kan fra før."
+											: mode === "exam"
+												? course
+													? `Økta kobles til ${course.code}. Læreren kartlegger pensum fra kildene i faget, finner ut hva du kan, og lager et eksamenskart med farger.`
+													: "Si hvilken eksamen det gjelder, og hvor du har tidligere eksamener og PDF-er. Læreren kartlegger pensum, finner ut hva du kan, og lager et eksamenskart med farger."
+												: course
+													? `Økta kobles til ${course.code}. Læreren starter med å kartlegge hva du kan fra før.`
+													: "Læreren starter med å kartlegge hva du kan fra før."
 									}
 								/>
 							</ConversationContent>
@@ -221,7 +227,7 @@ export function DraftShell({
 										// input (owner refinement round, 2026-09-24) — no lesson has
 										// started yet, so the composer must not read like one is in
 										// flight.
-										placeholder={mode === "practice" ? "Hva vil du øve på?" : "Hva vil du lære?"}
+										placeholder={mode === "practice" ? "Hva vil du øve på?" : mode === "exam" ? "Hvilken eksamen forbereder du deg til?" : "Hva vil du lære?"}
 									/>
 								</div>
 								<StatsBar
@@ -249,8 +255,9 @@ export function DraftShell({
 export function NewSession({ initialConfigured, mode = "teach", course }: {
 	initialConfigured: boolean;
 	/** One mode outwardly («Ny økt»); ?mode=practice is the knowledge
-	 *  map's and the fag page's door to an øvingsøkt. */
-	mode?: "teach" | "practice";
+	 *  map's and the fag page's door to an øvingsøkt, ?mode=exam the door
+	 *  to an eksamensøkt (the help center and the fag page link there). */
+	mode?: "teach" | "practice" | "exam";
 	course?: ChatCourseLink;
 }) {
 	const router = useRouter();
@@ -328,7 +335,7 @@ export function NewSession({ initialConfigured, mode = "teach", course }: {
 		startingRef.current = true;
 		setBusy(true);
 		setStartError(false);
-		void startDraftSession(draft, fetch, mode === "practice" ? "practice" : undefined, mode === "practice" ? picksRef.current : undefined,
+		void startDraftSession(draft, fetch, mode === "teach" ? undefined : mode, mode === "practice" ? picksRef.current : undefined,
 			starterRef.current, JSON.stringify(catalog?.slots.strong), course)
 			.then((target) => {
 				if (target) router.push(target);

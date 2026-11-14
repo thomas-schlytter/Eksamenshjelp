@@ -162,7 +162,7 @@ export function sortTopicsForBoard<T extends Pick<CourseTopic, "status" | "weigh
  *  learner's opening message (delivered as the session's first turn). */
 export interface CourseSessionStart {
 	title: string;
-	kind?: "practice";
+	kind?: "practice" | "exam";
 	course: ChatCourseLink;
 	openingText: string;
 }
@@ -200,6 +200,18 @@ export function mappingSession(course: CourseRef): CourseSessionStart {
 		title: `Kartlegging ${course.code}`,
 		course: { code: course.code, mode: "mapping" },
 		openingText: `Kartlegg hva jeg kan i ${course.code} ${course.name}.`,
+	};
+}
+
+/** Eksamensøkt: one continuous session for the whole fag (kind "exam").
+ *  The agent maps the pensum from the fag's sources and follows the
+ *  student on a colored map; no single tema. */
+export function examSession(course: CourseRef): CourseSessionStart {
+	return {
+		title: `Eksamensøkt ${course.code}`,
+		kind: "exam",
+		course: { code: course.code, mode: "exam" },
+		openingText: `Jeg skal ha eksamen i ${course.code} ${course.name}. Kartlegg pensum og lag et eksamenskart.`,
 	};
 }
 

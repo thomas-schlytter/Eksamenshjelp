@@ -33,7 +33,7 @@ function chatFile(id: string): string {
  *  phase, busy, pendingQuestion) is already announced by turn-started /
  *  turn-settled, which the sidebar refetches on. Silence here is law,
  *  not oversight. */
-function createChat(title: string, kind?: "practice", course?: ChatCourseLink): ChatRecord {
+function createChat(title: string, kind?: "practice" | "exam", course?: ChatCourseLink): ChatRecord {
 	const now = new Date().toISOString();
 	const record: ChatRecord = {
 		id: `chat_${Date.now().toString(36)}_${crypto.randomUUID().slice(0, 8)}`,
@@ -43,7 +43,7 @@ function createChat(title: string, kind?: "practice", course?: ChatCourseLink): 
 		messages: [],
 		// Practice sessions carry the marker; teach stays ABSENT (absence
 		// reads as teach — pre-practice records never migrate).
-		...(kind === "practice" ? { kind: "practice" as const } : {}),
+		...(kind === "practice" || kind === "exam" ? { kind } : {}),
 		// The course link (exam mode) is absent unless the session was
 		// started from a course; old records never carry it.
 		...(course ? { course } : {}),

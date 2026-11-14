@@ -139,7 +139,7 @@ describe("tours", () => {
 	it("the owner's tour outlines are covered", () => {
 		const anchors = (id: string) => findTour(id)!.steps.map((step) => step.anchor).filter(Boolean);
 		assert.deepEqual(anchors("kom-i-gang"), ["add-course", "course-card", "home-composer", "sidebar-courses", "sidebar-help", "sidebar-settings"]);
-		assert.deepEqual([...new Set(anchors("eksamensmodus"))], ["exam-date", "course-tabs", "topic-board", "exam-plan"]);
+		assert.deepEqual([...new Set(anchors("eksamensmodus"))], ["exam-date", "course-tabs", "topic-board", "exam-plan", "exam-session"]);
 		assert.ok(anchors("egen-kontekst").includes("course-sources"));
 		assert.deepEqual(anchors("sporsmal-i-okta"), ["question-skip", "question-hold", "question-explain"]);
 		const colours = findTour("eksamensmodus")!.steps.find((step) => step.anchor === "topic-board")!.text;

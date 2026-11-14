@@ -24,11 +24,15 @@ export async function POST(req: Request) {
 	const title = typeof body.title === "string" ? body.title : "";
 	// Practice sessions (owner, 2026-10-04): kind "practice" marks the
 	// record — the practice agent + its tools from turn 1, no extraction.
-	const kind = body.kind === "practice" ? ("practice" as const) : undefined;
+	const kind = body.kind === "practice" || body.kind === "exam" ? (body.kind as "practice" | "exam") : undefined;
 	// Exam mode: a session started from a course ("fag") carries the link
 	// from birth. A link to a course that does not exist is dropped, and
 	// the session is created as an ordinary one.
-	const course = parseChatCourseLink(body.course);
+	// An eksamensøkt spans the whole fag: the link carries mode "exam" (no
+	// single tema), whatever the client sent, so the context marker names
+	// the fag's sources as the pensum basis.
+	const parsedCourse = parseChatCourseLink(body.course);
+	const course = parsedCourse && kind === "exam" ? { code: parsedCourse.code, mode: "exam" as const } : parsedCourse;
 	const chat = createChat(titleFromPrompt(title || "Økt uten navn"), kind, course ?? undefined);
 	// PER-SESSION MODELS (owner, 2026-09-28): a session owns its model +
 	// thinking level from birth — stamped verbatim from the STRONG slot,
