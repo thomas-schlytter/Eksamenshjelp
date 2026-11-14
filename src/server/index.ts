@@ -57,3 +57,8 @@ export { customProviderGet, customProviderMutation } from "./custom-provider-htt
 // Courses ("fag", exam mode): the /api/courses service + the NTNU fetch.
 export * from "./courses.ts";
 export { NtnuUnreachableError, createNtnuClient, parseNtnuCoursePage } from "./ntnu.ts";
+// "Importer fra LearnHarness": additive import of another data folder.
+export {
+	DataImportError, importSeams, legacyDataCandidates, previewImport, runImport,
+	legacyImportCandidatesResponse, legacyImportPreviewResponse, legacyImportRunResponse,
+} from "./data-import.ts";

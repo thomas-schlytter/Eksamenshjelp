@@ -65,6 +65,13 @@ export const FEATURES: readonly FeatureEntry[] = [
 		action: { kind: "route", href: "/kart" },
 	},
 	{
+		id: "importer-fra-learnharness",
+		title: "Importer fra LearnHarness",
+		description: "Hent inn økter, kunnskapskart og innstillinger fra den vanlige LearnHarness-appen.",
+		keywords: ["importer", "overfør", "flytt", "gammel", "data", "økter", "noder", "kunnskapskart", "migrer", "hent inn", "tidligere", "import"],
+		action: { kind: "legacy-import" },
+	},
+	{
 		id: "hjelpesenter",
 		title: "Hjelpesenter",
 		description: "Spørsmål og svar, og veivisere som viser deg rundt.",

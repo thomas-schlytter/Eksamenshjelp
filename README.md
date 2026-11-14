@@ -65,6 +65,20 @@ Velg modeller første gang du åpner appen, og legg deretter til et fag.
 
 Den originale LearnHarness-appen (på engelsk, uten NTNU-funksjonene) kan lastes ned fra [learnharness.ai](https://learnharness.ai) eller [GitHub Releases](https://github.com/amosblomqvist/learnharness/releases).
 
+### Har du brukt LearnHarness før?
+
+Da kan du ta med deg øktene og kunnskapskartet. Når du kjører fra kildekoden, ligger dataene i repoets `data/`, ikke i mappen den vanlige LearnHarness-appen bruker. Åpne **Innstillinger → Generelt → Importer fra LearnHarness** (eller søk etter «importer» i søket). Appen finner selv mappen til skrivebordsappen hvis den ligger på maskinen:
+
+| System | Mappe |
+|---|---|
+| Mac | `~/Library/Application Support/LearnHarness` |
+| Windows | `%APPDATA%\LearnHarness` |
+| Linux | `~/.config/LearnHarness` |
+
+Ligger dataene på en annen maskin, kopierer du hele mappen over og limer inn stien til kopien. Du velger selv hva som blir med: økter, kunnskapskart, innstillinger, API-nøkler (av som standard) og egne systeminstrukser.
+
+Importen legger bare til. Ingenting hos deg slettes eller overskrives, dataene i den andre mappen endres ikke, og det tas en sikkerhetskopi av kunnskapskartet og innstillingene dine i `data/backups/` før noe skrives. Du kan trygt kjøre importen flere ganger; det som alt er hentet inn, hoppes over.
+
 ### Egne nøkler og modeller
 
 Appen har ingen egen konto og ingen innebygd AI-tjeneste. Du kobler til modeller selv, på én av disse måtene:

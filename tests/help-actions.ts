@@ -70,6 +70,14 @@ export function assertActionValid(action: HelpAction, where: string): void {
 		case "article":
 			assert.ok(findArticle(action.id), `${where}: article ${action.id} does not exist`);
 			break;
+		case "legacy-import": {
+			// The dialog opens through a window event; prove a listener is mounted.
+			const provider = readFileSync(join(ROOT, "components/help/help-provider.tsx"), "utf8");
+			const host = readFileSync(join(ROOT, "components/import/legacy-import-host.tsx"), "utf8");
+			assert.ok(provider.includes("<LegacyImportHost />"), `${where}: the import host is not mounted`);
+			assert.ok(host.includes("addEventListener(OPEN_LEGACY_IMPORT_EVENT"), `${where}: nothing listens for the import event`);
+			break;
+		}
 		case "point":
 			assert.ok(routeExists(action.route), `${where}: route ${action.route} has no page in app/`);
 			assert.ok((TOUR_ANCHORS as readonly string[]).includes(action.anchor), `${where}: anchor ${action.anchor} is not in the contract`);

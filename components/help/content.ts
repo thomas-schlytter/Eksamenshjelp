@@ -546,6 +546,24 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		keywords: ["lagres", "data", "lokalt", "maskinen", "sky", "server", "hvor ligger", "personvern", "gdpr"],
 	},
 	{
+		id: "importere-fra-learnharness",
+		category: "personvern",
+		question: "Kan jeg ta med øktene og kunnskapskartet fra den vanlige LearnHarness-appen?",
+		answer: [
+			"Ja. «Importer fra LearnHarness» henter inn øktene, kunnskapskartet og, hvis du vil, innstillingene, API-nøklene og dine egne systeminstrukser fra en annen LearnHarness-mappe.",
+			"Importen legger bare til. Økter og innstillinger du allerede har her, blir aldri overskrevet, og dataene i den andre mappen endres ikke. Før noe skrives, tas en sikkerhetskopi av kunnskapskartet og innstillingene dine.",
+			"Alt skjer mellom to mapper på din egen maskin. Ingenting sendes ut. Har du dataene på en annen maskin, kopierer du LearnHarness-mappen over først og velger kopien.",
+		],
+		steps: [
+			"Åpne «Importer fra LearnHarness».",
+			"Velg mappen appen fant, eller lim inn stien til en annen mappe.",
+			"Se over hva som blir med, og huk av det du vil ha.",
+			"Trykk «Importer».",
+		],
+		keywords: ["importer", "overfør", "flytt", "gammel", "tidligere", "data", "økter", "noder", "kunnskapskart", "migrer", "ta med", "annen maskin", "sikkerhetskopi"],
+		actions: [{ label: "Importer fra LearnHarness", action: { kind: "legacy-import" } }],
+	},
+	{
 		id: "hva-sendes-ut",
 		category: "personvern",
 		question: "Hva sendes ut av maskinen min?",

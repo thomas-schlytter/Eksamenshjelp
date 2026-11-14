@@ -89,3 +89,5 @@ export * from "./coverage.ts";
 export * from "./session-markdown.ts";
 // courses.ts (exam mode): the course/topic/exam-plan contract + pure logic.
 export * from "./courses.ts";
+// data-import.ts: the "Importer fra LearnHarness" contract (types + defaults).
+export * from "./data-import.ts";

@@ -29,6 +29,8 @@ export type HelpAction =
 	| { kind: "tour"; id: string }
 	/** Open one answer in the help centre. */
 	| { kind: "article"; id: string }
+	/** Open the «Importer fra LearnHarness» dialog (components/import/). */
+	| { kind: "legacy-import" }
 	/** Go to a route and point at one control; the control stays clickable. */
 	| { kind: "point"; route: string; anchor: string; title: string; text: string };
 

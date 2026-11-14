@@ -8,6 +8,7 @@ import { ADD_COURSE_EVENT } from "@/components/sidebar";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { LegacyImportHint } from "@/components/import/legacy-import-hint";
 import { AddCourse } from "./add-course";
 import { CourseSelectChip } from "./course-chip";
 import { daysLeftLabel, formatExamDate, sortCoursesByExam } from "./course-format";
@@ -92,7 +93,7 @@ function HowItWorks() {
  * welcome when there is no fag, otherwise the card grid sorted by nearest
  * exam. `addPanel` is the «Legg til fag» search, owned by the container.
  */
-export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, addPanel }: {
+export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, addPanel, importHint }: {
 	/** null = still loading (skeletons, never a flash of the welcome). */
 	courses: readonly CourseSummary[] | null;
 	error?: string | null;
@@ -100,6 +101,8 @@ export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, 
 	onToggleAdd: () => void;
 	onRetry?: () => void;
 	addPanel: React.ReactNode;
+	/** First-run only: the «Har du brukt LearnHarness før?» line. */
+	importHint?: React.ReactNode;
 }) {
 	const failure = error && (
 		<p role="alert" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 font-ui text-sm">
@@ -117,6 +120,7 @@ export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, 
 				</p>
 				<div className="mt-8" data-tour="add-course">{addPanel}</div>
 				<HowItWorks />
+				{importHint}
 			</section>
 		);
 	}
@@ -194,6 +198,7 @@ export function CoursesHome({ initialConfigured, initialCourses, initialAdding =
 						adding={adding}
 						onToggleAdd={() => setAdding((v) => !v)}
 						onRetry={() => void reload()}
+						importHint={empty ? <LegacyImportHint /> : undefined}
 						addPanel={
 							<AddCourse
 								hero={empty}

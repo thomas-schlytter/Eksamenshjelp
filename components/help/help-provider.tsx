@@ -24,6 +24,8 @@ import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { useAppearance } from "@/components/settings/appearance.tsx";
 import { notifySettingsSaved } from "@/components/settings-signal";
 import { useSidebar } from "@/components/sidebar";
+import { openLegacyImport } from "@/components/import/legacy-import-event";
+import { LegacyImportHost } from "@/components/import/legacy-import-host";
 import { HelpContext, type HelpApi } from "./help-context.ts";
 import { answerInvite, inviteAnswered, loadCompletedTours, markTourCompleted, setPendingArticle } from "./storage.ts";
 import { TOUR_IDLE, tourReducer, type TourEvent, type TourState } from "./tour-machine.ts";
@@ -158,6 +160,10 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 					// Already on the help page: no mount will pick the id up.
 					window.dispatchEvent(new CustomEvent(FOCUS_ARTICLE_EVENT, { detail: { id: action.id } }));
 					break;
+				case "legacy-import":
+					closeSearch();
+					openLegacyImport();
+					break;
 				case "point": {
 					const one: Tour = {
 						id: POINT_TOUR_ID,
@@ -232,6 +238,8 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 	return (
 		<HelpContext.Provider value={api}>
 			{children}
+			{/* The global listener for lh:open-legacy-import (settings, palette, help, home). */}
+			<LegacyImportHost />
 			{palette.open && (
 				// The fallback is a real, focused field: keys typed before the
 				// palette's code has arrived land there and carry over.

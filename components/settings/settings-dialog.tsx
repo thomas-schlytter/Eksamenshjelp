@@ -40,7 +40,9 @@ import {
 	type UserSettings,
 } from "@/src/core";
 import { useAppearance } from "./appearance.tsx";
-import { SettingsSection } from "./controls.tsx";
+import { SettingsGroup, SettingsRow, SettingsSection } from "./controls.tsx";
+import { Button } from "@/components/ui/button";
+import { openLegacyImport } from "@/components/import/legacy-import-event";
 import { UpdateSettings } from "./update-settings.tsx";
 import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
@@ -366,6 +368,25 @@ export function SettingsDialogBody({
 											void write("general", { ...record.general, autoUpdate: on })
 										}
 									/>
+									<SettingsGroup label="Data" testid="settings-data">
+										<SettingsRow
+											label="Importer fra LearnHarness"
+											hint="Hent inn økter, kunnskapskart og innstillinger fra den vanlige LearnHarness-appen. Importen legger bare til og overskriver ingenting."
+											testid="settings-legacy-import"
+										>
+											<Button
+												variant="outline"
+												size="sm"
+												onClick={() => {
+													// One dialog at a time: settings steps aside.
+													onClose();
+													openLegacyImport();
+												}}
+											>
+												Importer
+											</Button>
+										</SettingsRow>
+									</SettingsGroup>
 								</SettingsSection>
 							)}
 							{active === "keys" && (
