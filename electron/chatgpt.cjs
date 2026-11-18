@@ -298,7 +298,7 @@ function createChatGPT({ store, openExternal, fetch: request = globalThis.fetch,
 				// Reject duplicate parameters and unsolicited callbacks without consuming a valid pending attempt.
 				if (["state", "code", "client_id", "error"].some((key) => params.getAll(key).length > 1) || params.get("state") !== expectedState) { res.writeHead(400).end("Innloggingen kunne ikke bekreftes."); return; }
 				consumed = true;
-				res.writeHead(200, { "content-type": "text/plain; charset=utf-8" }).end("Gå tilbake til LearnHarness for å se resultatet av innloggingen. Du kan lukke denne fanen.");
+				res.writeHead(200, { "content-type": "text/plain; charset=utf-8" }).end("Gå tilbake til Eksamenshjelp for å se resultatet av innloggingen. Du kan lukke denne fanen.");
 				cleanup();
 				try {
 					if (params.has("error")) throw fail(params.get("error") === "access_denied" ? "cancelled" : "identity");

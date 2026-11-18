@@ -1,5 +1,5 @@
 /**
- * LearnHarness — the Electron shell (wrapper milestone, 2026-09-17).
+ * Eksamenshjelp (LearnHarness) — the Electron shell (wrapper milestone, 2026-09-17).
  *
  * What this process is and is not:
  *   IS:  a thin launcher + security guard around the app's real server —
@@ -42,15 +42,21 @@ const path = require("node:path");
 // renderer owns the number; this is the IPC widen target).
 const SIDEBAR_AUTOCLOSE = 928;
 
-const PRODUCT_NAME = "LearnHarness";
+const PRODUCT_NAME = "Eksamenshjelp";
+// The app was renamed from LearnHarness (owner, 2026-11-18) but keeps its
+// data where it always was: sessions, the knowledge map, keys and
+// localStorage stay in Application Support/LearnHarness, so nothing moves
+// and nothing is lost. Change this only together with a migration.
+const DATA_FOLDER_NAME = "LearnHarness";
 
-// APP NAME → userData (owner, 2026-10-10): the Application Support dir is
-// exactly "LearnHarness" in dev AND packaged. Packaged Electron would
-// otherwise derive it from package.json "name" (now lowercase
+// APP NAME → menus, dock and window title. Packaged Electron would
+// otherwise derive it from package.json "name" (lowercase
 // "learnharness"), and productName metadata alone doesn't reach app.name.
-// Must run before the LH_DEV_URL suffix below — dev becomes
-// "LearnHarness-dev".
 app.setName(PRODUCT_NAME);
+// userData is pinned explicitly — setName alone would move it to
+// "Eksamenshjelp". Must run before the LH_DEV_URL suffix below — dev
+// becomes "LearnHarness-dev".
+app.setPath("userData", path.join(app.getPath("appData"), DATA_FOLDER_NAME));
 const AUTH_FILE = () => path.join(app.getPath("userData"), "auth.json");
 const DATA_DIR = () => path.join(app.getPath("userData"), "data");
 

@@ -27,12 +27,12 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 	{
 		id: "hva-er-learnharness",
 		category: "komme-i-gang",
-		question: "Hva er LearnHarness?",
+		question: "Hva er Eksamenshjelp?",
 		answer: [
-			"LearnHarness er et verktøy som hjelper deg å lese til eksamen. Du legger til fagene dine, appen finner ut hva du kan og ikke kan, og lager en plan fram til eksamensdagen.",
+			"Eksamenshjelp er et verktøy som hjelper deg å lese til eksamen. Du legger til fagene dine, appen finner ut hva du kan og ikke kan, og lager en plan fram til eksamensdagen.",
 			"Selve læringen skjer i økter. Der forklarer en AI-agent stoffet steg for steg, stiller deg spørsmål og gir deg oppgaver, tilpasset det du faktisk kan.",
 		],
-		keywords: ["hva er", "om appen", "learnharness", "formål", "hvordan virker", "ntnu", "eksamen"],
+		keywords: ["hva er", "om appen", "eksamenshjelp", "learnharness", "formål", "hvordan virker", "ntnu", "eksamen"],
 		actions: [{ label: "Ta omvisningen", action: { kind: "tour", id: "kom-i-gang" } }],
 	},
 	{
@@ -58,7 +58,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "komme-i-gang",
 		question: "Koster appen noe?",
 		answer: [
-			"Nei. LearnHarness er gratis og har åpen kildekode (lisensen AGPL-3.0). Det finnes ikke noe LearnHarness-abonnement og ikke noe påslag.",
+			"Nei. Eksamenshjelp er gratis og har åpen kildekode (lisensen AGPL-3.0). Det finnes ikke noe Eksamenshjelp-abonnement og ikke noe påslag.",
 			"Det som kan koste penger, er AI-modellene du velger å bruke. Det betaler du i så fall direkte til leverandøren, for eksempel gjennom en API-nøkkel eller et abonnement du allerede har.",
 		],
 		keywords: ["pris", "gratis", "koster", "betale", "abonnement", "open source", "åpen kildekode", "agpl", "lisens"],
@@ -69,7 +69,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "komme-i-gang",
 		question: "Må jeg lage en konto eller logge inn?",
 		answer: [
-			"Nei. Appen har ingen LearnHarness-konto og ingen innlogging. Du logger heller ikke inn med NTNU-brukeren din.",
+			"Nei. Appen har ingen Eksamenshjelp-konto og ingen innlogging. Du logger heller ikke inn med NTNU-brukeren din.",
 			"Det eneste du kobler til, er AI-leverandøren du vil bruke. Det gjør du i innstillingene.",
 		],
 		keywords: ["konto", "logge inn", "innlogging", "bruker", "feide", "registrere", "passord", "login"],
@@ -587,7 +587,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "personvern",
 		question: "Hvor lagres dataene mine?",
 		answer: [
-			"Alt lagres lokalt på maskinen din: fagene, øktene, kunnskapskartet, innstillingene og nøklene. Det finnes ingen LearnHarness-server som tar vare på dataene dine.",
+			"Alt lagres lokalt på maskinen din: fagene, øktene, kunnskapskartet, innstillingene og nøklene. Det finnes ingen Eksamenshjelp-server som tar vare på dataene dine.",
 			"Det du har lært, ligger som vanlige filer du kan åpne og se på selv.",
 		],
 		keywords: ["lagres", "data", "lokalt", "maskinen", "sky", "server", "hvor ligger", "personvern", "gdpr"],

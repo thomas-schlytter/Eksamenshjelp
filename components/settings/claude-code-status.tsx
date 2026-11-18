@@ -109,7 +109,7 @@ export function ClaudeCodeInstallationStatus() {
 				<span role="status" className="text-xs text-muted-foreground">{busy ? "Sjekker…" : claudeCodeStatusLabel(status)}</span>
 				<Button type="button" size="xs" variant="outline" className="cursor-pointer disabled:cursor-not-allowed" disabled={busy} onClick={() => void refresh()} data-testid="claude-code-check-again">Sjekk på nytt</Button>
 			</div>
-			<p className="text-xs leading-relaxed text-muted-foreground"><strong className="font-medium">Installer Claude Code og logg inn i terminalen, og velg deretter en Claude Code-modell her.</strong> LearnHarness starter det ved behov, uten noen bakgrunnsprosess.</p>
+			<p className="text-xs leading-relaxed text-muted-foreground"><strong className="font-medium">Installer Claude Code og logg inn i terminalen, og velg deretter en Claude Code-modell her.</strong> Eksamenshjelp starter det ved behov, uten noen bakgrunnsprosess.</p>
 			<p className="text-xs leading-relaxed text-muted-foreground">Sjekker bare installasjon og versjon, ikke innlogging, modelltilgang eller kvote. Claude Code styrer faktureringen. Krever v{CLAUDE_CODE_MINIMUM_VERSION} eller nyere. <a href="https://code.claude.com/docs/en/setup" target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:text-foreground">Oppsett ↗</a></p>
 			<p className="text-xs leading-relaxed text-muted-foreground">Kontroller selv det AI-en påstår. Det kan være unøyaktig, ufullstendig, misvisende eller utdatert.</p>
 		</>}

@@ -85,7 +85,7 @@ export function ModelMenuList({
 				renderItem={(m) => <>
 					<span className="flex items-center justify-between gap-2">
 						<span className="truncate text-card-foreground">{m.name}</span>
-						<span className="shrink-0 tabular-nums text-muted-foreground" title={m.provider === CLAUDE_CODE_PROVIDER ? "Faktureringen styres av Claude Code-oppsettet ditt. LearnHarness anslår den ikke." : subscriptionLabel(`${m.provider}:${m.id}`) ? "Tilkobling via abonnement" : m.cost ? "USD per 1 mill. tokens inn/ut" : "Pris ikke tilgjengelig"}>
+						<span className="shrink-0 tabular-nums text-muted-foreground" title={m.provider === CLAUDE_CODE_PROVIDER ? "Faktureringen styres av Claude Code-oppsettet ditt. Eksamenshjelp anslår den ikke." : subscriptionLabel(`${m.provider}:${m.id}`) ? "Tilkobling via abonnement" : m.cost ? "USD per 1 mill. tokens inn/ut" : "Pris ikke tilgjengelig"}>
 							{m.provider === CLAUDE_CODE_PROVIDER ? "CLI-fakturering" : subscriptionLabel(`${m.provider}:${m.id}`) ?? priceLabel(m.cost)}
 						</span>
 					</span>

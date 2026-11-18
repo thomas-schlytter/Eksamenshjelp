@@ -70,12 +70,12 @@ test("web notices identify the server machine and same-machine ChatGPT sign-in; 
 	const { CHATGPT_NOTICE, chatGPTNotice } = await import("../components/settings/chatgpt-connection.tsx");
 	const { subscriptionNotice, subscriptionDisconnectCopy } = await import("../components/settings/subscription-connections.tsx");
 	assert.equal(chatGPTNotice(), CHATGPT_NOTICE); assert(CHATGPT_NOTICE.includes("på denne enheten"));
-	assert(chatGPTNotice(true).includes("på maskinen som kjører LearnHarness"));
+	assert(chatGPTNotice(true).includes("på maskinen som kjører Eksamenshjelp"));
 	assert(chatGPTNotice(true).endsWith("Fullfør ChatGPT-innloggingen i en nettleser på den samme maskinen."));
 	for (const label of ["GitHub Copilot", "Grok"]) {
 		assert(subscriptionNotice(label).includes("lagres lokalt")); assert(subscriptionDisconnectCopy(label).includes("fra denne enheten"));
-		assert(subscriptionNotice(label, true).includes("på maskinen som kjører LearnHarness"));
-		assert(subscriptionDisconnectCopy(label, true).includes("fra maskinen som kjører LearnHarness"));
+		assert(subscriptionNotice(label, true).includes("på maskinen som kjører Eksamenshjelp"));
+		assert(subscriptionDisconnectCopy(label, true).includes("fra maskinen som kjører Eksamenshjelp"));
 	}
 });
 

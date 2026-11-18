@@ -70,9 +70,9 @@ function fixture({ packaged = true, updaterMissing = false } = {}) {
 	}
 	const app = Object.assign(new EventEmitter(), {
 		isPackaged: packaged,
-		name: "LearnHarness",
+		name: "Eksamenshjelp",
 		setName() {},
-		getPath: () => userData,
+		getPath: (name: string) => name === "appData" ? "/fixture" : userData,
 		setPath: (_: string, value: string) => { userData = value; },
 		requestSingleInstanceLock: () => false,
 		quit() {},
@@ -127,7 +127,7 @@ describe("automatic-update preference gate", () => {
 		f.run("setupAutoUpdater()");
 		await f.check();
 		assert.equal(f.updater.checks, 0);
-		assert.deepEqual(f.settingsReads, ["/fixture/custom-user-data-dev/data/settings.json"]);
+		assert.deepEqual(f.settingsReads, ["/fixture/LearnHarness-dev/data/settings.json"]);
 		await f.check(true);
 		assert.equal(f.updater.checks, 1);
 		assert.equal(f.settingsReads.length, 1);

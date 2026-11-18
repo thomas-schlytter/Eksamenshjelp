@@ -21,10 +21,10 @@ export function createClaudeLauncher({
 		if (!binary) return null;
 		const status = await inspectClaudeInstallation(() => binary, readVersion);
 		if (status.state === "update-required") {
-			throw new ClaudeLaunchError(`Claude Code ${status.version} må oppdateres. LearnHarness krever minst ${status.minimumVersion}. Oppdater Claude Code utenfor LearnHarness.`);
+			throw new ClaudeLaunchError(`Claude Code ${status.version} må oppdateres. Eksamenshjelp krever minst ${status.minimumVersion}. Oppdater Claude Code utenfor Eksamenshjelp.`);
 		}
 		if (status.state !== "meets-minimum") {
-			throw new ClaudeLaunchError("Kunne ikke sjekke versjonen av Claude Code. Sjekk installasjonen utenfor LearnHarness og prøv igjen.");
+			throw new ClaudeLaunchError("Kunne ikke sjekke versjonen av Claude Code. Sjekk installasjonen utenfor Eksamenshjelp og prøv igjen.");
 		}
 		if (options.signal?.aborted) throw new ClaudeLaunchError("Request was aborted");
 		return spawnProcess(binary, args, { cwd: options.cwd, env: options.env, stdio: "pipe" });

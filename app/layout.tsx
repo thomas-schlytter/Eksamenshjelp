@@ -20,7 +20,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" }
 const themeBootstrap = `(function(){try{var m=localStorage.getItem("lh-theme-mode")||"system";var d=m==="dark"||(m==="system"&&matchMedia("(prefers-color-scheme: dark)").matches);document.documentElement.classList.toggle("dark",d);}catch(e){}})();`;
 
 export const metadata: Metadata = {
-	title: "LearnHarness",
+	title: "Eksamenshjelp",
 	description: "Les smartere til eksamen: legg til fagene dine, kartlegg hva du kan, og følg en plan fram til eksamensdagen.",
 };
 

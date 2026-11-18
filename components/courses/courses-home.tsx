@@ -116,7 +116,7 @@ export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, 
 				{failure}
 				<h1 className="font-ui text-3xl font-semibold tracking-tight text-balance">Hvilket fag skal du ha eksamen i?</h1>
 				<p className="mx-auto mt-3 max-w-lg font-ui text-base text-muted-foreground text-pretty">
-					Skriv fagkoden eller navnet. LearnHarness henter emnesiden fra NTNU og hjelper deg å lage en plan fram mot eksamen.
+					Skriv fagkoden eller navnet. Eksamenshjelp henter emnesiden fra NTNU og hjelper deg å lage en plan fram mot eksamen.
 				</p>
 				<div className="mt-8" data-tour="add-course">{addPanel}</div>
 				<HowItWorks />

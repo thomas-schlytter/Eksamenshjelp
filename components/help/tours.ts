@@ -26,7 +26,7 @@ export const TOURS: readonly Tour[] = [
 			{
 				id: "velkommen",
 				route: "/",
-				title: "Velkommen til LearnHarness",
+				title: "Velkommen til Eksamenshjelp",
 				text: "Her får du en omvisning på omtrent ett minutt. Gå videre med «Neste» eller piltastene. Esc avslutter når som helst.",
 			},
 			{

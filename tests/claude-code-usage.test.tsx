@@ -50,6 +50,6 @@ test("model-catalog API and menus never advertise the CLI adapter's placeholder 
 	assert(models.every((model) => model.cost === null));
 	const html = renderToStaticMarkup(<ModelMenuList models={models} effectiveId={undefined} onPick={() => {}} />);
 	assert.equal((html.match(/>CLI-fakturering<\/span>/g) ?? []).length, 3);
-	assert.match(html, /LearnHarness anslår den ikke/);
+	assert.match(html, /Eksamenshjelp anslår den ikke/);
 	assert(!html.includes("$0")); assert(!html.includes("USD per 1 mill.")); assert(!html.includes("(abonnement)"));
 });

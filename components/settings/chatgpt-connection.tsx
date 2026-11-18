@@ -7,8 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Toggle } from "./controls";
 import { useChatGPTBridge } from "./subscription-client";
 
-export const CHATGPT_NOTICE = "LearnHarness lagrer kontoopplysningene og innloggingsdataene dine for ChatGPT i en ukryptert lokal fil på denne enheten. Når tilkoblingen brukes, sendes relevant samtalekontekst, læringsmateriale og verktøyresultater direkte til OpenAI. Grensene i ChatGPT-abonnementet ditt gjelder. Eventuelle ekstra kreditter godkjennes og administreres i ChatGPT, ikke i LearnHarness.";
-export function chatGPTNotice(web = false): string { return web ? `${CHATGPT_NOTICE.replace("på denne enheten", "på maskinen som kjører LearnHarness")} Fullfør ChatGPT-innloggingen i en nettleser på den samme maskinen.` : CHATGPT_NOTICE; }
+export const CHATGPT_NOTICE = "Eksamenshjelp lagrer kontoopplysningene og innloggingsdataene dine for ChatGPT i en ukryptert lokal fil på denne enheten. Når tilkoblingen brukes, sendes relevant samtalekontekst, læringsmateriale og verktøyresultater direkte til OpenAI. Grensene i ChatGPT-abonnementet ditt gjelder. Eventuelle ekstra kreditter godkjennes og administreres i ChatGPT, ikke i Eksamenshjelp.";
+export function chatGPTNotice(web = false): string { return web ? `${CHATGPT_NOTICE.replace("på denne enheten", "på maskinen som kjører Eksamenshjelp")} Fullfør ChatGPT-innloggingen i en nettleser på den samme maskinen.` : CHATGPT_NOTICE; }
 export const CHATGPT_BACKGROUND_HINT = "Arbeid i bakgrunnen teller mot forbruket i ChatGPT-abonnementet ditt.";
 const BACKGROUND_LABEL = "Tillat bruk i bakgrunnen for alle ChatGPT-kontoer";
 // Compared against the status error the desktop shell sends (electron/chatgpt.cjs): keep verbatim.
@@ -265,7 +265,7 @@ export function ChatGPTUIProvider({ children }: { children: React.ReactNode }) {
 			</> : dialog.kind === "manage" && dialog.confirm ? <div data-testid="chatgpt-disconnect-confirmation">
 				<p className="mt-3 text-sm font-semibold text-red-400">{CHATGPT_DISCONNECT_COPY.title}</p>
 				<p className="mt-3 text-xs text-foreground">{managed?.email || "ChatGPT-konto"}</p>
-				<p className="mt-3 text-xs text-muted-foreground">{web ? CHATGPT_DISCONNECT_COPY.body.replace("fra denne enheten", "fra maskinen som kjører LearnHarness") : CHATGPT_DISCONNECT_COPY.body}</p>
+				<p className="mt-3 text-xs text-muted-foreground">{web ? CHATGPT_DISCONNECT_COPY.body.replace("fra denne enheten", "fra maskinen som kjører Eksamenshjelp") : CHATGPT_DISCONNECT_COPY.body}</p>
 				{context.error && <p role="alert" className="mt-3 text-xs text-red-400">{context.error}</p>}
 				<div className="mt-4 flex items-center justify-end gap-2">
 					<Button variant="ghost" size="sm" disabled={busy} onClick={close}>Avbryt</Button>

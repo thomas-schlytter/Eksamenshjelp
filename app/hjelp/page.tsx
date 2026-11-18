@@ -3,8 +3,8 @@ import { HelpCenter } from "@/components/help/help-center";
 import { TopBar } from "@/components/top-bar";
 
 export const metadata: Metadata = {
-	title: "Hjelpesenter · LearnHarness",
-	description: "Spørsmål og svar om LearnHarness, og veivisere som viser deg rundt i appen.",
+	title: "Hjelpesenter · Eksamenshjelp",
+	description: "Spørsmål og svar om Eksamenshjelp, og veivisere som viser deg rundt i appen.",
 };
 
 /**
