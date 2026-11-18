@@ -186,6 +186,7 @@ describe("the source-derived segment list", () => {
 				"shared/25-confidence.md",
 				"shared/30-learner-files.md",
 				"shared/40-formatting.md",
+				"shared/45-learner-rules.md",
 			],
 		);
 		assert.equal(teacher.some((s) => s.path === "teacher/05-method.md"), true);
@@ -216,7 +217,7 @@ describe("the source-derived segment list", () => {
 		}
 		assert.deepEqual(
 			practice.filter((s) => s.shared).map((s) => s.path),
-			["shared/05-language.md", "shared/10-voice.md", "shared/15-accuracy.md", "shared/16-mental-model.md", "shared/40-formatting.md"],
+			["shared/05-language.md", "shared/10-voice.md", "shared/15-accuracy.md", "shared/16-mental-model.md", "shared/40-formatting.md", "shared/45-learner-rules.md"],
 		);
 		assert.equal(allSegmentPaths().includes("shared/05-language.md"), true, "the settings prompt list discovers it");
 		assert.equal(isValidSegmentPath("shared/05-language.md"), true, "and it is an overridable segment path");
