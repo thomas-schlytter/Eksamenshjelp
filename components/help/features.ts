@@ -112,6 +112,13 @@ export const FEATURES: readonly FeatureEntry[] = [
 		action: { kind: "settings", section: "agent" },
 	},
 	{
+		id: "les-av-skjermbilde",
+		title: "Les av skjermbilde til LaTeX",
+		description: "Lim inn et bilde av utregningen din i en økt, og få den som LaTeX du kan gå over.",
+		keywords: ["skjermbilde", "screenshot", "latex", "håndskrift", "håndskrevet", "bilde", "avleser", "les av", "ocr", "formel", "lim inn"],
+		action: { kind: "article", id: "les-av-skjermbilde" },
+	},
+	{
 		id: "innstillinger-diktering",
 		title: "Sett opp diktering",
 		description: "Legg inn Deepgram-nøkkelen som trengs for å snakke i stedet for å skrive.",

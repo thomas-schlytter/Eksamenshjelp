@@ -151,6 +151,19 @@ export function composeSlotModel(
 	return next;
 }
 
+/** Compose: the screenshot reader's own model («Avleser»). null clears the
+ *  override, and the role falls back to the vision slot. The thinking level
+ *  is left to the engine's default ordering. Pure — exported for tests. */
+export function composeTranscriberModel(
+	agent: AgentSettings | undefined,
+	model: { provider: string; id: string } | null,
+): AgentSettings {
+	const models = { ...agent?.models };
+	if (model) models.transcriber = { model };
+	else delete models.transcriber;
+	return { ...agent, models };
+}
+
 /** Retention is slot-only; selecting Pi default removes the field entirely. */
 export function composeSlotCacheRetention(models: ModelsSettings | undefined, slot: ModelSlotName, value: CacheRetention | undefined): ModelsSettings {
 	const next = { ...models?.[slot] };
@@ -316,7 +329,7 @@ export function AgentSection({
 	const [segmentStatus, setSegmentStatus] = useState<string | null>(null);
 	/** One open dropdown for the whole section: which slot (or the search
 	 *  row), which kind. */
-	const [openMenu, setOpenMenu] = useState<{ target: ModelSlotName | "search"; kind: "model" | "thinking" | "engine" | "cache" } | null>(null);
+	const [openMenu, setOpenMenu] = useState<{ target: ModelSlotName | "search" | "transcriber"; kind: "model" | "thinking" | "engine" | "cache" } | null>(null);
 	const [advancedModels, setAdvancedModels] = useState(false);
 	const menuAnchorRef = useRef<HTMLSpanElement>(null);
 
@@ -733,6 +746,64 @@ export function AgentSection({
 						</SettingsRow>
 					);
 				})}
+				{(() => {
+					// «Avleser»: the one per-role row. Its own model for reading
+					// screenshots to LaTeX; unset = the vision slot above.
+					const own = agent?.models?.transcriber?.model;
+					const open = openMenu?.target === "transcriber";
+					return (
+						<SettingsRow
+							label="Avleser"
+							hint={own ? "Leser skjermbilder til LaTeX med sin egen modell" : "Leser skjermbilder til LaTeX. Bruker bilde-modellen til du velger en egen"}
+							testid="role-row-transcriber"
+						>
+							<span ref={open ? menuAnchorRef : undefined} className="relative flex items-center gap-2">
+								{own && (
+									<button
+										type="button"
+										data-testid="role-clear-transcriber"
+										onClick={() => { onSectionChange(composeTranscriberModel(agent, null)); setOpenMenu(null); }}
+										className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+									>Bruk bilde-modellen</button>
+								)}
+								<MenuTrigger
+									value={own ? prettyModel(own.id) : ""}
+									hint={own ? `${own.provider}:${own.id}` : undefined}
+									emptyLabel="Bilde-modellen"
+									ariaLabel="Modell for Avleser"
+									testid="role-model-transcriber"
+									open={open}
+									onClick={() => setOpenMenu(open ? null : { target: "transcriber", kind: "model" })}
+									widthClass="min-w-20"
+								/>
+								{open && (
+									<MenuShell
+										preferredSide="down"
+										anchorTestid="role-model-transcriber"
+										testid="role-model-menu-transcriber"
+										menuClass="flex w-[22rem] flex-col rounded-xl border border-border bg-card p-2 text-xs shadow-xl"
+									>
+										<ModelMenuList
+											models={catalog ?? undefined}
+											effectiveId={own?.id ?? ""}
+											effectiveProvider={own?.provider ?? ""}
+											vision
+											onPick={(entry) => {
+												onSectionChange(composeTranscriberModel(agent, { provider: entry.provider, id: entry.id }));
+												setOpenMenu(null);
+											}}
+											footer={
+												catalog && catalog.length === 0
+													? "Ingen modeller. Legg til en API-nøkkel under Leverandører"
+													: "Brukes bare når du leser av skjermbilder"
+											}
+										/>
+									</MenuShell>
+								)}
+							</span>
+						</SettingsRow>
+					);
+				})()}
 			</SettingsGroup>
 
 			<SettingsGroup label="Verktøy" testid="group-tools">

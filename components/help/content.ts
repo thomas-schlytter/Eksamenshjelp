@@ -298,6 +298,24 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 
 	// ── Økter: lære og øve ──────────────────────────────────────────────────
 	{
+		id: "les-av-skjermbilde",
+		category: "okter",
+		question: "Hvordan får jeg håndskrevne utregninger inn i økta?",
+		answer: [
+			"Med «Les av skjermbilde» skriver appen av et bilde av utregningen din til LaTeX. Et vindu viser bildet ved siden av den ferdig formaterte matematikken, så du kan gå over at alt ble riktig før noe havner i skrivefeltet.",
+			"Bildet skrives av ordrett, også det som er feil, slik at agenten ser arbeidet ditt som det er. Krysser du av for «Fiks opplagte feil», leses bildet på nytt med retting, og vinduet lister opp hva som ble endret. Steder som ikke lot seg lese, merkes [uleselig].",
+			"Bildet sendes til modellen som leser det av, og lagres ikke i appen. Avleseren bruker bilde-modellen din, eller en egen modell du velger på raden «Avleser» under Innstillinger → Agent.",
+		],
+		steps: [
+			"Åpne en økt.",
+			"Lim inn et skjermbilde i skrivefeltet (Cmd+V), slipp en bildefil på økta, eller trykk på avlesningsknappen ved skrivefeltet.",
+			"Sammenlign bildet med visningen, og rett i LaTeX-feltet om noe ble feil.",
+			"Trykk «Sett inn». Teksten legges i skrivefeltet, og du sender den selv.",
+		],
+		keywords: ["skjermbilde", "screenshot", "latex", "håndskrift", "håndskrevet", "bilde", "avlesning", "les av", "ocr", "formel", "lim inn", "utregning"],
+		actions: [{ label: "Velg modell for Avleser", action: { kind: "settings", section: "agent" } }],
+	},
+	{
 		id: "hva-er-en-okt",
 		category: "okter",
 		question: "Hva er en økt?",
