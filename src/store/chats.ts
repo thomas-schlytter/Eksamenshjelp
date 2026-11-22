@@ -15,6 +15,7 @@ import type { ChatStore } from "../core/ports.ts";
 import type { ChatRecord, ChatSettings, ChatSummary, ExtractionRunUsage, PlanTree, TurnUsage } from "../core/contracts.ts";
 import { CURRENT_CHAT_VERSION } from "../core/contracts.ts";
 import type { ChatCourseLink } from "../core/courses.ts";
+import type { SessionWrapDraft } from "../core/session-wrap.ts";
 import type { LhMessage } from "../core/native-messages.ts";
 import { activeProblemOf, danglingQuestionOf } from "../core/native-messages.ts";
 import { phaseAt3Lh } from "../core/phases.ts";
@@ -209,12 +210,23 @@ function saveTree(id: string, tree: PlanTree): void {
 	writeChat(record);
 }
 
+/** Persist or remove the «Oppsummering» draft (the quiz in progress).
+ *  Like saveTree: not conversation activity, updatedAt stays put. */
+function saveWrapDraft(id: string, draft: SessionWrapDraft | null): void {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	if (draft) record.wrapDraft = draft;
+	else delete record.wrapDraft;
+	writeChat(record);
+}
+
 export const chatStore: ChatStore = {
 	createChat,
 	getChat,
 	listChats,
 	saveMessages,
 	saveTree,
+	saveWrapDraft,
 	saveSettings,
 	renameChat,
 	deleteChat,

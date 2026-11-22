@@ -44,6 +44,9 @@ export * from "./math-delims.ts";
 // pure logic, browser-safe.
 export * from "./native-messages.ts";
 export * from "./compaction.ts";
+// session-wrap.ts («Oppsummering», 2026-11-22): the økt scope, the quiz
+// checks and the teacher-facing wrap marker.
+export * from "./session-wrap.ts";
 export * from "./input-events.ts";
 export { parseFilePaths, quoteFilePath, filePathLabel } from "./file-paths.ts";
 export type { FilePathPart } from "./file-paths.ts";

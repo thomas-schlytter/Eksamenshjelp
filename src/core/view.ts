@@ -485,6 +485,17 @@ function projectMarker(marker: LhMarkerMessage, out: LhViewMessage[]): void {
 			});
 			return;
 		}
+		case "session-wrap": {
+			// «Økt avsluttet» (owner, 2026-11-22): a centered divider with the
+			// quiz score and a door back to the summary. User-side scaffolding,
+			// never a bubble; the model reads the marker's content instead.
+			out.push({
+				id: marker.id,
+				role: "user",
+				parts: [{ type: "data-session-wrap", id: `sw_${marker.id}`, data: marker.details }],
+			});
+			return;
+		}
 		case "plan-block": {
 			// No message of its own: splice into the preceding assistant
 			// group, IN FLOW after the last successful plan_init call.

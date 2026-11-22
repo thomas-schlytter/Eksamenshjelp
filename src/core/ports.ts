@@ -28,6 +28,7 @@ import type {
 } from "./contracts.ts";
 import type { UserSettings } from "./settings.ts";
 import type { ChatCourseLink } from "./courses.ts";
+import type { SessionWrapDraft } from "./session-wrap.ts";
 
 // ─── ChatStore — the session record's home (data/chats) ─────────────────────
 
@@ -47,6 +48,9 @@ export interface ChatStore {
 	saveMessages(id: string, messages: LhMessage[]): void;
 	/** Persist the session plan tree (plan tools call this in execute). */
 	saveTree(id: string, tree: PlanTree): void;
+	/** Persist (or with null, remove) the «Oppsummering» draft. Not
+	 *  conversation activity: updatedAt stays put. */
+	saveWrapDraft(id: string, draft: SessionWrapDraft | null): void;
 	/** Append one usage entry to the record's turn log (the money channel,
 	 * 2026-09): idempotent per turn id — each request carries its own, so
 	 * a turn persisted twice appends once while continuation turns (which

@@ -47,7 +47,12 @@ import {
 	type ChatSettings,
 	type LhMessage,
 	type ModelSlotName,
+	type SessionWrapDetails,
+	type SessionWrapDraft,
+	hasWrapContent,
+	hasDanglingToolCall,
 } from "@/src/core";
+import { SessionWrapChip, SessionWrapDialog, SessionWrapDivider, type WrapChipState } from "@/components/session-wrap";
 import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
@@ -223,6 +228,7 @@ export function Chat({
 	initiallyCompacting = false,
 	initialConfigured = false,
 	kind = "teach",
+	initialWrapDraft = null,
 }: {
 	chatId: string;
 	title: string;
@@ -246,6 +252,8 @@ export function Chat({
 	 *  it (BYOK, owner 2026-09-22). The server gate stays the truth; this
 	 *  only decides whether the pill rides the composer. */
 	initialConfigured?: boolean;
+	/** «Oppsummering» in progress on the record (the quiz resumes). */
+	initialWrapDraft?: SessionWrapDraft | null;
 }) {
 	// Reattach plumbing (background-turn runner wave): the hook holds the
 	// settled terminal's callback — a stable ref assigned below, once
@@ -826,8 +834,9 @@ export function Chat({
 	const syncFromServer = useCallback(async () => {
 		const res = await fetch(`/api/chats/${chatId}`);
 		if (!res.ok) return;
-		const record = (await res.json()) as { messages?: LhMessage[]; turns?: TurnUsage[]; pricing?: SessionPricing; turnError?: string };
+		const record = (await res.json()) as { messages?: LhMessage[]; turns?: TurnUsage[]; pricing?: SessionPricing; turnError?: string; wrapDraft?: SessionWrapDraft };
 		if (Array.isArray(record.turns)) setTurns(record.turns);
+		setWrapDraft(record.wrapDraft ?? null);
 		setPricing(record.pricing);
 		if (!Array.isArray(record.messages)) return;
 		setMessages(record.messages, record.turnError);
@@ -918,6 +927,23 @@ export function Chat({
 	// The live plan popup (wave 4): opened by any transcript plan block, the
 	// top-bar plan chip, and the dock band's marginalia.
 	const [planOpen, setPlanOpen] = useState(false);
+	// «Oppsummering» (2026-11-22): the draft on the record (quiz in
+	// progress), the live window, and the read-only review a divider opens.
+	const [wrapDraft, setWrapDraft] = useState<SessionWrapDraft | null>(initialWrapDraft);
+	const [wrapOpen, setWrapOpen] = useState(false);
+	const [wrapReview, setWrapReview] = useState<SessionWrapDetails | null>(null);
+	const closeWrap = useCallback(() => {
+		setWrapOpen(false);
+		setWrapReview(null);
+	}, []);
+	const wrapHasContent = useMemo(() => hasWrapContent(nativeMessages), [nativeMessages]);
+	const wrapChipState: WrapChipState = wrapDraft
+		? "resume"
+		: busy || compacting || pending !== null || hasDanglingToolCall(nativeMessages)
+			? "busy"
+			: wrapHasContent
+				? "ready"
+				: "empty";
 	// Real plan presence — gates the marginalia's clickable flank. A JSX
 	// element is always truthy; gating on the node alone mounted a phantom
 	// (invisible, clickable) button in the bottom-right whenever a question
@@ -1457,6 +1483,15 @@ export function Chat({
 						</button>
 </Hint>
 					)}
+					{/* «Oppsummering» (2026-11-22): wraps the current økt — summary +
+					    10-question recall quiz, then the «Økt avsluttet» divider. */}
+					<SessionWrapChip
+						state={wrapChipState}
+						onClick={() => {
+							setWrapReview(null);
+							setWrapOpen(true);
+						}}
+					/>
 					{/* The extraction ring (owner-locked redesign, 2026-09-24): fills
 					    with uncovered vs the chunk threshold, pulses while a run is in
 					    flight, vanishes when the graph is off. Click → the exact
@@ -1541,6 +1576,17 @@ export function Chat({
 												return <CompactionCutDivider key={pi} data={part.data as CompactionDividerData} />;
 											case "data-practice-thinking":
 												return <ThinkingCard key={pi} data={part.data as PracticeThinkingData} />;
+											case "data-session-wrap":
+												return (
+													<SessionWrapDivider
+														key={pi}
+														data={part.data}
+														onOpen={(wrap) => {
+															setWrapReview(wrap);
+															setWrapOpen(true);
+														}}
+													/>
+												);
 											case "data-practice-next":
 												// The learner's move-on signal (owner round 16): a compact
 												// centered mono-caps line — chrome, the dismissal register.
@@ -1878,6 +1924,15 @@ export function Chat({
 						onClose={() => setFigureFocus(null)}
 					/>
 				)}
+				<SessionWrapDialog
+					chatId={chatId}
+					open={wrapOpen}
+					draft={wrapDraft}
+					review={wrapReview}
+					onClose={closeWrap}
+					onDraft={setWrapDraft}
+					onCompleted={() => void syncFromServer()}
+				/>
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} exam={kind === "exam"} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
 				</div>
