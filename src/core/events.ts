@@ -60,6 +60,14 @@ export interface ServerEvents {
 	 *  background topic classification finished a round): open maps
 	 *  refetch the snapshot. */
 	"map-changed": Record<string, never>;
+	/** The flame (days in a row with a real answer) changed: the count,
+	 *  today's state or the best streak (fase 7b). Open views refetch
+	 *  GET /api/streak. */
+	"streak-changed": Record<string, never>;
+	/** A prøveeksamen for the course got a (new) graded result (fase 7b:
+	 *  the fag page's score curve refetches). `chatId` is not sent; it is
+	 *  declared so consumers that filter the union on it still type-check. */
+	"mock-exams-changed": { code: string; chatId?: string };
 }
 
 export type ServerEventType = keyof ServerEvents;
@@ -79,6 +87,8 @@ export const SERVER_EVENT_TYPES = [
 	"compaction-changed",
 	"courses-changed",
 	"map-changed",
+	"streak-changed",
+	"mock-exams-changed",
 ] as const satisfies readonly ServerEventType[];
 
 /** One notification: the type discriminates the payload. */

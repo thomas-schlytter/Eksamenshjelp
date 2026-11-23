@@ -24,7 +24,7 @@ import { ChainTableOverlay } from "@/components/chain-table.tsx";
 import { GraphCostControl } from "@/components/graph-view.tsx";
 import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
 import { Hint } from "@/components/ui/hint";
-import type { ChatSummary, GraphCostSummary, GraphSnapshot } from "@/src/core";
+import type { GraphCostSummary, GraphSnapshot } from "@/src/core";
 
 /** The quiet centered summary — a pure body (props in, markup out) so
  * the render suite can pin it statically. Very quiet by owner ruling:
@@ -32,39 +32,25 @@ import type { ChatSummary, GraphCostSummary, GraphSnapshot } from "@/src/core";
 export function KnowledgeSummary({
 	propositions,
 	chains,
-	teachSessions,
-	practiceSessions,
 	importedNotes,
 }: {
 	propositions: number;
 	chains: number;
-	teachSessions: number;
-	practiceSessions: number;
 	importedNotes: number;
 }) {
-	const empty =
-		propositions === 0 && chains === 0 && teachSessions === 0 && practiceSessions === 0 && importedNotes === 0;
+	const empty = propositions === 0 && chains === 0 && importedNotes === 0;
 	return (
 		<div data-testid="knowledge-summary" className="flex flex-col items-center text-center">
 			{/* Own-line law (owner, 2026-10-06): every count sits on its own
-			    row — no dot separators; the two blocks (graph, sessions)
-			    part with one empty line; the notes COUNT (never the file
-			    list) rides after the same parting. */}
+			    row — no dot separators; the notes COUNT (never the file
+			    list) rides after one empty line. (Fase 7b: the session
+			    counts by kind are gone.) */}
 			<div className="flex flex-col gap-1">
 				<p className="font-ui text-sm text-muted-foreground">
 					{propositions} {propositions === 1 ? "påstand" : "påstander"}
 				</p>
 				<p className="font-ui text-sm text-muted-foreground">
 					{chains} {chains === 1 ? "resonnementskjede" : "resonnementskjeder"}
-				</p>
-			</div>
-			<div className="h-4" aria-hidden="true" />
-			<div className="flex flex-col gap-1">
-				<p className="font-ui text-sm text-muted-foreground">
-					{teachSessions} {teachSessions === 1 ? "læringsøkt" : "læringsøkter"}
-				</p>
-				<p className="font-ui text-sm text-muted-foreground">
-					{practiceSessions} {practiceSessions === 1 ? "øvingsøkt" : "øvingsøkter"}
 				</p>
 			</div>
 			<div className="h-4" aria-hidden="true" />
@@ -95,7 +81,6 @@ export function MinimalHome({
 }) {
 	const [snapshot, setSnapshot] = useState<GraphSnapshot | null>(null);
 	const [costs, setCosts] = useState<GraphCostSummary | null>(null);
-	const [chats, setChats] = useState<ChatSummary[]>([]);
 	const [chainsOpen, setChainsOpen] = useState(false);
 
 	const readState = useCallback(() => {
@@ -106,10 +91,6 @@ export function MinimalHome({
 		fetch("/api/graph/costs")
 			.then((res) => res.json() as Promise<GraphCostSummary>)
 			.then(setCosts)
-			.catch(() => {});
-		fetch("/api/chats")
-			.then((res) => res.json() as Promise<{ chats: ChatSummary[] }>)
-			.then((body) => setChats(body.chats))
 			.catch(() => {});
 	}, []);
 	useEffect(() => {
@@ -128,9 +109,6 @@ export function MinimalHome({
 	const notesImport = useNotesImport({ onFinish: readState });
 	const { importing, onImportFiles } = notesImport;
 
-	const teachSessions = chats.filter((c) => c.kind === "teach").length;
-	const practiceSessions = chats.filter((c) => c.kind === "practice").length;
-
 	return (
 		<div className="relative h-full">
 			{/* The quiet summary — centered, biased up off the composer. */}
@@ -138,8 +116,6 @@ export function MinimalHome({
 				<KnowledgeSummary
 					propositions={snapshot?.propositions.length ?? 0}
 					chains={snapshot?.chains.length ?? 0}
-					teachSessions={teachSessions}
-					practiceSessions={practiceSessions}
 					importedNotes={Object.keys(snapshot?.fileSources ?? {}).length}
 				/>
 			</div>

@@ -57,6 +57,9 @@ const STORAGE_KEY = "lh:sidebar-open";
 import type { ChatGPTControlBridge, NativeSubscriptionControlBridge } from "@/src/core";
 import type { UpdateState } from "@/components/settings/update-settings.tsx";
 import { FilePathDropZone } from "@/components/file-path-drop-zone";
+import { FocusRuntime, FocusSidebar } from "@/components/focus/focus-ui";
+import { StreakBadge } from "@/components/streak/streak-badge";
+import { StreakCelebration } from "@/components/streak/streak-celebration";
 const SIDEBAR_AUTOCLOSE = 928;
 
 // Module scope, guarded for SSR (the server has no navigator).
@@ -85,6 +88,8 @@ declare global {
 			/** Explicit manual release check (GitHub), even with automatic checks off. */
 			checkForUpdates?: () => Promise<void>;
 			onOpenSettings?: (cb: (section: string) => void) => () => void;
+			/** Fokus (fase 7b): a system notification through Electron. */
+			notify?: (title: string, body: string) => Promise<boolean>;
 		};
 	}
 }
@@ -325,7 +330,7 @@ export function SessionRow({
 			data-testid="session-row"
 			className={cn(
 				"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
-				active && "bg-accent",
+				active && "bg-accent text-primary dark:text-foreground [&>span>span:first-child]:font-semibold",
 			)}
 		>
 			<SessionStatus busy={chat.busy || chat.compacting} />
@@ -366,7 +371,7 @@ export function CourseChatRow({
 			title={sessionMeta(chat)}
 			aria-current={active ? "page" : undefined}
 			data-testid={label ? "course-main-chat" : "course-sub-chat"}
-			className={cn(SUB_ROW, active && "bg-accent text-foreground")}
+			className={cn(SUB_ROW, active && ACTIVE_ROW)}
 		>
 			<span className="min-w-0 flex-1 truncate">{label ?? chat.title}</span>
 			<SessionStatus busy={chat.busy || chat.compacting} />
@@ -428,6 +433,9 @@ const CREDIT_LINK = "rounded-sm underline-offset-2 outline-none hover:text-muted
  *  on open waits this long so it never lands mid-animation. */
 const SIDEBAR_SLIDE_MS = 200;
 const NAV_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 font-ui text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
+/** The open page's row (fase 7b sketch): marine text, weight 600. In dark
+ *  mode marine is too dim for text, so the row keeps the foreground. */
+const ACTIVE_ROW = "bg-accent font-semibold text-primary dark:text-foreground";
 const SUB_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left font-ui text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
 const SECTION_LABEL = "px-2 text-xs uppercase tracking-widest text-muted-foreground/70";
 const ICON_BUTTON = "flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
@@ -505,7 +513,9 @@ export function SidebarCourses({ courses, groups, activeCode, activeChatId, expa
 							<div
 								className={cn(
 									"group/course flex items-center rounded-md transition-colors hover:bg-accent",
-									active && "bg-accent",
+									// The fag page: the filled row; one of its chats: the
+									// marine name only (the chat row is the filled one).
+									active && !activeChatId && "bg-accent",
 								)}
 							>
 								<button
@@ -526,7 +536,7 @@ export function SidebarCourses({ courses, groups, activeCode, activeChatId, expa
 									data-testid="sidebar-course"
 									className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-1 text-left font-ui text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
 								>
-									<span className="w-[4.5rem] shrink-0 truncate font-medium tabular-nums">{course.code}</span>
+									<span className={cn("w-[4.5rem] shrink-0 truncate font-medium tabular-nums", active && "font-semibold text-primary dark:text-foreground")}>{course.code}</span>
 									<span className="sr-only">{course.name}. {daysLeftLabel(course.daysLeft)}.</span>
 									<TopicStatusBar counts={course.counts} className="min-w-0 flex-1" />
 								</button>
@@ -905,6 +915,10 @@ function SessionsSidebar() {
 							<span className="truncate font-ui text-sm font-semibold">Eksamenshjelp</span>
 						</Link>
 					</Hint>
+					{/* The flame (fase 7b): days in a row, for the whole app. */}
+					<span className="ml-auto mr-1 flex items-center">
+						<StreakBadge />
+					</span>
 					<Hint label="Lukk sidemenyen" action="toggle-sidebar">
 						<Button
 							variant="ghost"
@@ -918,12 +932,16 @@ function SessionsSidebar() {
 					</Hint>
 				</div>
 
+				{/* Fokus (fase 7b): the running timer, small, when no chat
+				    header shows it. */}
+				<FocusSidebar />
+
 				{/* OVERSIKT (fase 2): the places, with small icons. «Ny økt» and the
 				    session search are gone: Hjem starts a loose økt, «Søk i appen»
 				    finds sessions too. */}
 				<nav aria-label="Oversikt" className="mx-3 flex flex-col gap-0.5">
 					<span className={cn(SECTION_LABEL, "mb-0.5")}>Oversikt</span>
-					<Link href="/" aria-current={pathname === "/" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/" && "bg-accent text-foreground")}>
+					<Link href="/" aria-current={pathname === "/" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/" && ACTIVE_ROW)}>
 						<HomeIcon className="size-3.5 shrink-0" aria-hidden="true" />
 						Hjem
 					</Link>
@@ -939,7 +957,7 @@ function SessionsSidebar() {
 						</button>
 					</Hint>
 					<Hint label="Kunnskapskart" action="jump-graph" side="right">
-						<Link href="/kart" aria-current={pathname === "/kart" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/kart" && "bg-accent text-foreground")}>
+						<Link href="/kart" aria-current={pathname === "/kart" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/kart" && ACTIVE_ROW)}>
 							<NetworkIcon className="size-3.5 shrink-0" aria-hidden="true" />
 							Kunnskapskart
 						</Link>
@@ -1195,6 +1213,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 			    after the content in the tree, but it's window-level so order only
 			    matters for the events it dispatches, never for DOM priority. */}
 			<KeyboardShortcuts />
+			{/* Fase 7b: the Fokus timer's ticks and toasts, and «Nytt nivå» for
+			    the flame. One each per window, above every page. */}
+			<FocusRuntime />
+			<StreakCelebration />
 		</SettingsDialogProvider>
 	);
 }

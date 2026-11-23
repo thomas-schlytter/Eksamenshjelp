@@ -162,9 +162,9 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		id: "legge-inn-filer",
 		category: "fag-og-kontekst",
 		question: "Hvordan legger jeg inn filer, notater og lenker?",
-		answer: ["Alt dette gjør du under fanen «Kontekst» på fagsiden."],
+		answer: ["Alt dette gjør du under «Kilder» nederst på fagsiden."],
 		steps: [
-			"Åpne faget og velg fanen «Kontekst».",
+			"Åpne faget og klikk på «Kilder» nederst på siden.",
 			"Dra inn en mappe eller enkeltfiler.",
 			"Lim inn tekst som et notat hvis du har noe som ikke ligger i en fil.",
 			"Legg til lenker til åpne nettsider som hører til faget.",
@@ -177,7 +177,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "fag-og-kontekst",
 		question: "Kan appen hente tidligere eksamener fra Canvas eller Blackboard?",
 		answer: [
-			"Nei, appen kan ikke logge inn i Canvas eller Blackboard. Last ned filene og dra dem inn under «Kontekst» på fagsiden, gjerne som én mappe.",
+			"Nei, appen kan ikke logge inn i Canvas eller Blackboard. Last ned filene og dra dem inn under «Kilder» på fagsiden, gjerne som én mappe.",
 		],
 		keywords: ["canvas", "blackboard", "tidligere eksamener", "eksamenssett", "gamle eksamener", "logge inn", "laste ned", "inspera"],
 		actions: [{ label: "Vis meg hvordan", action: { kind: "tour", id: "egen-kontekst" } }],
@@ -200,7 +200,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		question: "Hva er eksamensmodus?",
 		answer: [
 			"Eksamensmodus er måten appen hjelper deg fram til eksamen på: den deler faget i temaer, finner ut hva du kan i hvert tema, og lager en plan for dagene som er igjen.",
-			"Du finner alt på fagsiden, under fanene «Eksamensplan», «Temaer» og «Kontekst».",
+			"Du finner alt på fagsiden: øverst en oppsummering, nederst «Alle temaer», «Eksamensplan» og «Kilder».",
 		],
 		keywords: ["eksamensmodus", "eksamen", "plan", "eksamenslesing", "lese til eksamen", "hvordan virker"],
 		actions: [{ label: "Start veiviseren «Eksamensmodus»", action: { kind: "tour", id: "eksamensmodus" } }],
@@ -224,7 +224,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "eksamensmodus",
 		question: "Hvordan kartlegger jeg hva jeg kan?",
 		answer: [
-			"Den raske måten: sett fargen selv på hvert tema under «Temaer». Den grundige: be fag-chatten teste deg. Agenten stiller spørsmål på tvers av temaene og setter fargene ut fra svarene dine.",
+			"Den raske måten: sett fargen selv på hvert tema under «Alle temaer». Den grundige: be fag-chatten teste deg. Agenten stiller spørsmål på tvers av temaene og setter fargene ut fra svarene dine.",
 			"Fargene oppdateres også av seg selv når du jobber i fag-chatten og underchattene, og når du avslutter en økt.",
 		],
 		keywords: ["kartlegge", "kartlegging", "nivå", "hva kan jeg", "teste", "sette status", "sette farge"],
@@ -249,7 +249,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 			"Fag-chatten er der du jobber. Agenten kartlegger pensum fra tidligere eksamener, finner ut hva du kan, og lager et eksamenskart med én kolonne per emne. Hver boks får farge etter hvert: grå «Ikke kartlagt», rød «Kan ikke ennå», gul «Usikker» og grønn «Kan dette». En boks blir først grønn når du har løst en eksamensoppgave om den med full utregning.",
 		],
 		steps: [
-			"Legg gjerne tidligere eksamener inn under «Kontekst» på fagsiden først. Da bruker agenten dem som grunnlag for pensum.",
+			"Legg gjerne tidligere eksamener inn under «Kilder» på fagsiden først. Da bruker agenten dem som grunnlag for pensum.",
 			"Trykk på faget i sidemenyen. Da åpnes fag-chatten.",
 		],
 		keywords: ["eksamensøkt", "eksamenskart", "fargekart", "forskjell", "eksamensplan", "emner", "kolonner", "pensum", "tidligere eksamener", "grønn", "plan_status", "fag-chat"],
@@ -287,7 +287,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		question: "Hvor kommer temaene fra, og kan jeg endre dem?",
 		answer: [
 			"Appen lager temalista ut fra emnebeskrivelsen og konteksten din. Har du koblet til en modell, bruker den AI til det. Uten modell lager den en enklere liste ut fra læringsutbyttet.",
-			"Du kan endre lista selv under «Temaer», og du kan lage den på nytt når du har lagt inn mer kontekst. Temaer som beholdes, beholder fargen sin.",
+			"Du kan endre lista selv under «Alle temaer», og du kan lage den på nytt når du har lagt inn mer kontekst. Temaer som beholdes, beholder fargen sin.",
 		],
 		keywords: ["temaer", "temaliste", "endre tema", "nytt tema", "lage temaer", "generere", "pensum"],
 	},

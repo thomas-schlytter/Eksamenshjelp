@@ -35,9 +35,12 @@ export function WeightMark({ weight }: { weight: 1 | 2 | 3 }) {
 
 /** One topic: what it is and how well you know it. (Fase 2: the Lær/Øv
  *  starts are gone; the work happens in the fag-chat.) */
-export function TopicRow({ topic, actions }: {
+export function TopicRow({ topic, actions, simple = false }: {
 	topic: CourseTopic;
 	actions: Pick<TopicBoardActions, "onStatus">;
+	/** The fag page's «Alle temaer» (fase 7b): name, colour, the AI's note
+	 *  and the buttons; no importance and no description. */
+	simple?: boolean;
 }) {
 	return (
 		<li data-testid="topic-row" data-status={topic.status} className="grid gap-3 py-4 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-x-6">
@@ -51,9 +54,9 @@ export function TopicRow({ topic, actions }: {
 					<span className={cn("font-ui text-xs font-medium", STATUS_STYLE[topic.status].text)} aria-hidden="true">
 						{TOPIC_STATUS_LABEL[topic.status]}
 					</span>
-					<WeightMark weight={topic.weight} />
+					{!simple && <WeightMark weight={topic.weight} />}
 				</div>
-				{topic.description && (
+				{!simple && topic.description && (
 					<p className="mt-1 pl-6 font-ui text-xs leading-relaxed text-muted-foreground">{topic.description}</p>
 				)}
 				{topic.statusSource === "agent" && topic.statusNote && (
@@ -197,10 +200,12 @@ function TopicListEditor({ topics, onSave, onCancel }: {
  * still: a topic does not jump away under the cursor the moment its status
  * changes. New topics join at the end; the next visit re-sorts.
  */
-export function TopicBoard({ course, actions, onOpenWizard }: {
+export function TopicBoard({ course, actions, onOpenWizard, simple = false }: {
 	course: Course;
 	actions: TopicBoardActions;
 	onOpenWizard: () => void;
+	/** Fase 7b's «Alle temaer»: the rows in their simple form. */
+	simple?: boolean;
 }) {
 	const [editing, setEditing] = useState(false);
 	// Captured once per mount (= per visit to the tab), never re-sorted.
@@ -248,7 +253,7 @@ export function TopicBoard({ course, actions, onOpenWizard }: {
 						</div>
 					</div>
 					<ul className="divide-y divide-border/60 rounded-2xl border bg-card px-4">
-						{ordered.map((topic) => <TopicRow key={topic.id} topic={topic} actions={actions} />)}
+						{ordered.map((topic) => <TopicRow key={topic.id} topic={topic} actions={actions} simple={simple} />)}
 					</ul>
 				</>
 			)}

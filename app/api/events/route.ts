@@ -6,10 +6,12 @@
  * server seam (events-stream.ts); the framework route stays a thin
  * wrapper (the import law; tests drive the seam directly).
  */
-import { eventsResponse } from "@/src/server";
+import { eventsResponse, installStreakWatcher } from "@/src/server";
 
 export const dynamic = "force-dynamic";
 
 export function GET(): Response {
+	// The flame's watcher rides the first open window (idempotent).
+	installStreakWatcher();
 	return eventsResponse();
 }

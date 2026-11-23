@@ -1,25 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import {
-	BookOpenIcon, CalendarClockIcon, CheckIcon, ChevronRightIcon, ClipboardCheckIcon, DumbbellIcon, RotateCcwIcon,
-} from "lucide-react";
+import { CalendarClockIcon, CheckIcon, ChevronRightIcon, ClipboardCheckIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
 	ACTIVITY_LABEL, daysLeftLabel, formatExamDate, formatMinutes, formatPlanDay, MINUTES_PER_DAY_OPTIONS, planItemSubject,
 } from "./course-format";
-import {
-	topicCounts, type Course, type ExamPlan, type ExamPlanDay, type ExamPlanItem, type PlanActivity,
-} from "./course-types";
+import { topicCounts, type Course, type ExamPlan, type ExamPlanDay, type ExamPlanItem } from "./course-types";
 import { StatusDot, TopicStatusBar } from "./status-ui";
-
-const ACTIVITY_ICON: Record<PlanActivity, typeof BookOpenIcon> = {
-	learn: BookOpenIcon,
-	practice: DumbbellIcon,
-	review: RotateCcwIcon,
-	mock: ClipboardCheckIcon,
-};
 
 /** How many upcoming days show before «Vis hele planen». */
 const UPCOMING_PREVIEW = 6;
@@ -57,11 +46,12 @@ export function minutesOptionFor(minutes: number): number {
 const dayMinutes = (day: ExamPlanDay) => day.items.reduce((sum, item) => sum + item.minutes, 0);
 
 /** One plan item: tick it off, see what it is. (Fase 2: the work itself
- *  happens in the fag-chat; the Lær/Øv/Prøveeksamen starts are gone.) */
+ *  happens in the fag-chat; the Lær/Øv/Prøveeksamen starts are gone.
+ *  Fase 7b: no Lær/Øv/Repeter words either; only a prøveeksamen says so.) */
 function PlanItemRow({ course, item, actions }: { course: Course; item: ExamPlanItem; actions: ExamPlanActions }) {
 	const topic = item.topicId ? course.topics.find((t) => t.id === item.topicId) : undefined;
-	const Icon = ACTIVITY_ICON[item.activity];
-	const subject = item.activity === "mock" ? item.title : planItemSubject(item, topic);
+	const mock = item.activity === "mock";
+	const subject = mock ? item.title : planItemSubject(item, topic);
 	return (
 		<li data-testid="plan-item" data-done={item.done || undefined} className="flex items-center gap-3 py-2.5">
 			<label className="flex size-8 shrink-0 cursor-pointer items-center justify-center rounded-md outline-none transition-colors focus-within:ring-[3px] focus-within:ring-ring/50 hover:bg-accent">
@@ -70,7 +60,7 @@ function PlanItemRow({ course, item, actions }: { course: Course; item: ExamPlan
 					checked={item.done}
 					onChange={(e) => actions.onToggleDone(item.key, e.target.checked)}
 					className="peer sr-only"
-					aria-label={`${item.done ? "Ferdig" : "Marker som ferdig"}: ${ACTIVITY_LABEL[item.activity]}, ${subject}`}
+					aria-label={`${item.done ? "Ferdig" : "Marker som ferdig"}: ${subject}`}
 				/>
 				<span className="flex size-5 items-center justify-center rounded-md border border-muted-foreground/50 text-transparent transition-colors peer-checked:border-primary peer-checked:bg-primary peer-checked:text-primary-foreground" aria-hidden="true">
 					<CheckIcon className="size-3.5" strokeWidth={3} />
@@ -82,9 +72,13 @@ function PlanItemRow({ course, item, actions }: { course: Course; item: ExamPlan
 					<span className="truncate">{subject}</span>
 				</p>
 				<p className="mt-0.5 flex items-center gap-1.5 font-ui text-xs text-muted-foreground">
-					<Icon className="size-3 shrink-0" aria-hidden="true" />
-					<span>{ACTIVITY_LABEL[item.activity]}</span>
-					<span aria-hidden="true">·</span>
+					{mock && (
+						<>
+							<ClipboardCheckIcon className="size-3 shrink-0" aria-hidden="true" />
+							<span>{ACTIVITY_LABEL.mock}</span>
+							<span aria-hidden="true">·</span>
+						</>
+					)}
 					<span className="tabular-nums">{formatMinutes(item.minutes)}</span>
 				</p>
 			</div>
@@ -134,12 +128,15 @@ function PlanMessage({ title, children, action }: { title: string; children: Rea
  * the plan itself always comes from the server (`plan`), so ticking an item
  * or changing a status re-plans there.
  */
-export function ExamPlanView({ course, plan, today, actions }: {
+export function ExamPlanView({ course, plan, today, actions, compact = false }: {
 	course: Course;
 	plan: ExamPlan;
 	/** The student's local date, YYYY-MM-DD. */
 	today: string;
 	actions: ExamPlanActions;
+	/** On the fag page (fase 7b) the countdown and the topic colours sit
+	 *  in the cards above: the status line keeps only «Tid per dag». */
+	compact?: boolean;
 }) {
 	const [showAll, setShowAll] = useState(false);
 	const counts = topicCounts(course.topics);
@@ -174,14 +171,22 @@ export function ExamPlanView({ course, plan, today, actions }: {
 			)}
 
 			{/* The status line: three facts, always in the same places. */}
-			<div className="grid gap-4 rounded-2xl border bg-card p-4 sm:grid-cols-[auto_1fr_auto] sm:items-center sm:gap-6">
-				<div>
-					<p className="font-ui text-xl font-semibold tabular-nums">{daysLeftLabel(plan.daysLeft)}</p>
-					<p className="font-ui text-xs text-muted-foreground">
-						{course.exam.date ? formatExamDate(course.exam.date) : "Planen dekker de neste to ukene"}
+			<div className={cn("grid gap-4 rounded-2xl border bg-card p-4 sm:items-center sm:gap-6", compact ? "sm:grid-cols-[1fr_auto]" : "sm:grid-cols-[auto_1fr_auto]")}>
+				{compact ? (
+					<p className="font-ui text-sm text-muted-foreground">
+						{course.exam.date ? "Planen går fram til eksamen." : "Planen dekker de neste to ukene."}
 					</p>
-				</div>
-				<TopicStatusBar counts={counts} legend />
+				) : (
+					<>
+						<div>
+							<p className="font-ui text-xl font-semibold tabular-nums">{daysLeftLabel(plan.daysLeft)}</p>
+							<p className="font-ui text-xs text-muted-foreground">
+								{course.exam.date ? formatExamDate(course.exam.date) : "Planen dekker de neste to ukene"}
+							</p>
+						</div>
+						<TopicStatusBar counts={counts} legend />
+					</>
+				)}
 				<label className="flex flex-col gap-1 font-ui text-xs text-muted-foreground">
 					Tid per dag
 					<select
@@ -217,7 +222,7 @@ export function ExamPlanView({ course, plan, today, actions }: {
 				</PlanMessage>
 			) : plan.days.every((day) => day.items.length === 0) ? (
 				<PlanMessage title="Ingenting igjen å planlegge">
-					Alle temaene er dekket. Bruk fanen Temaer hvis du vil lære eller øve på noe spesielt.
+					Alle temaene er dekket. Vil du jobbe med noe spesielt, gjør du det i fag-chatten.
 				</PlanMessage>
 			) : (
 				<>
@@ -243,7 +248,7 @@ export function ExamPlanView({ course, plan, today, actions }: {
 						</div>
 						{!todayPlan || todayPlan.items.length === 0 ? (
 							<p className="mt-2 font-ui text-sm text-muted-foreground">
-								Fridag i planen. Vil du gjøre noe likevel, finner du alle temaene under Temaer.
+								Fridag i planen. Vil du gjøre noe likevel, finner du alle temaene under «Alle temaer».
 							</p>
 						) : (
 							<>

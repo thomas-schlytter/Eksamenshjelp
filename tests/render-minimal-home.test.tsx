@@ -14,8 +14,6 @@ function render(props: Partial<Parameters<typeof KnowledgeSummary>[0]> = {}) {
 		React.createElement(KnowledgeSummary, {
 			propositions: 12,
 			chains: 5,
-			teachSessions: 3,
-			practiceSessions: 2,
 			importedNotes: 4,
 			...props,
 		}),
@@ -25,7 +23,7 @@ function render(props: Partial<Parameters<typeof KnowledgeSummary>[0]> = {}) {
 describe("KnowledgeSummary — the quiet home summary (2026-10-06)", () => {
 	it("every count on its OWN line — no dot separators (owner refinement, same day)", () => {
 		const html = render();
-		for (const line of ["12 påstander", "5 resonnementskjeder", "3 læringsøkter", "2 øvingsøkter", "4 importerte notater"]) {
+		for (const line of ["12 påstander", "5 resonnementskjeder", "4 importerte notater"]) {
 			const i = html.indexOf(line);
 			assert.ok(i !== -1, `${line} renders`);
 			// own-line: the count is its own text node — the char after the
@@ -36,19 +34,19 @@ describe("KnowledgeSummary — the quiet home summary (2026-10-06)", () => {
 		assert.ok(!html.includes(" · "), "no dot separators anywhere");
 	});
 
-	it("the two blocks part with an empty line — graph counts, then session counts", () => {
+	it("the graph counts and the notes part with an empty line; no session counts by kind (fase 7b)", () => {
 		const html = render();
 		const graphBlock = html.indexOf("12 påstander");
-		const sessionsBlock = html.indexOf("3 læringsøkter");
-		assert.ok(graphBlock !== -1 && sessionsBlock !== -1);
-		assert.ok(sessionsBlock > graphBlock, "sessions come after the graph block");
+		const notesBlock = html.indexOf("4 importerte notater");
+		assert.ok(graphBlock !== -1 && notesBlock > graphBlock);
 		// the parting is a dedicated spacer element (h-4), not a paragraph
 		assert.ok(html.includes('class="h-4"'), "one empty line between blocks");
+		assert.ok(!/læringsøkt|øvingsøkt/.test(html), "the læring/øving split is gone");
 	});
 
 	it("singularizes: one of each reads as single, not '1 sessions'", () => {
-		const html = render({ propositions: 1, chains: 1, teachSessions: 1, practiceSessions: 1, importedNotes: 1 });
-		for (const line of ["1 påstand", "1 resonnementskjede", "1 læringsøkt", "1 øvingsøkt", "1 importert notat"]) {
+		const html = render({ propositions: 1, chains: 1, importedNotes: 1 });
+		for (const line of ["1 påstand", "1 resonnementskjede", "1 importert notat"]) {
 			// singular exactly: the label ends its element, no plural suffix
 			assert.ok(html.includes(`${line}<`), `${line} is singular`);
 		}
@@ -62,7 +60,7 @@ describe("KnowledgeSummary — the quiet home summary (2026-10-06)", () => {
 	});
 
 	it("the empty knowledge base says so, quietly — import is the entry point", () => {
-		const html = render({ propositions: 0, chains: 0, teachSessions: 0, practiceSessions: 0, importedNotes: 0 });
+		const html = render({ propositions: 0, chains: 0, importedNotes: 0 });
 		assert.ok(html.includes("Ingenting her ennå"));
 		assert.ok(html.includes("Importer notater"), "the hint names the entry point");
 	});
