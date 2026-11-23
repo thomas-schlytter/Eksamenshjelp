@@ -83,6 +83,8 @@ import {
 	malformedQuestionsOf,
 	dismissedAnswer,
 	endsInFailedTurn,
+	figureSvgOf,
+	normalizeFigureId,
 	findPendingToolCall,
 	phaseAt3,
 	phaseTimeline,
@@ -386,6 +388,11 @@ export function Chat({
 	abortAskRef.current = abortAsk;
 	useEffect(() => {
 		const onAbort = () => {
+			// A parked question (fase 4): Esc goes back to it, never dismisses it.
+			if (parkedRef.current && abortAskRef.current === null && mermaidFocusRef.current === null && figureFocusRef.current === null && !planOpenRef.current && !setupOpenRef.current) {
+				setParkedKey(null);
+				return;
+			}
 			const target = escAbortTarget({
 				abortAsk: abortAskRef.current !== null,
 				mermaidFocus: mermaidFocusRef.current !== null || figureFocusRef.current !== null,
@@ -405,21 +412,21 @@ export function Chat({
 		window.addEventListener("lh:kbd-abort-turn", onAbort);
 		return () => window.removeEventListener("lh:kbd-abort-turn", onAbort);
 	}, []);
-	/* THE SILENT DISMISSAL of the pending question, shared by its two
-	 * callers: the Esc confirm (a plain dismissal) and the dock's "Spør
-	 * agenten" (`onHold`, 2026-11). Same route, same laws either way: the
+	/* THE SILENT DISMISSAL of the pending question (the Esc confirm). The
 	 * non-answer lands via the SILENT route (no turn, no wake; the next
 	 * plain send carries it to the agent), the reading-thinking draft rides
 	 * along, and MID-TURN the discard also kills the running turn (the
-	 * route parks the dismissal and the settle applies it). */
+	 * route parks the dismissal and the settle applies it). "Spør agenten"
+	 * no longer comes here (fase 4): it parks, and its send carries the
+	 * hold (sendHeld). */
 	const silentlyDismissPending = useCallback(
-		(reason?: "onHold") => {
+		() => {
 			const p = pendingRef.current;
 			if (!p) return;
 			const question = (p.input as { question?: string } | null)?.question ?? "";
 			const reading = readingThinkingRef.current.trim() || undefined;
 			clearReadingThinking();
-			const answer = dismissedAnswer(toolQuestionKind(p.tool), question, reason ? { reason, tool: p.tool } : undefined);
+			const answer = dismissedAnswer(toolQuestionKind(p.tool), question);
 			void dismissQuestion(
 				p.toolCallId,
 				reading ? { ...answer, readingThinking: reading } : answer,
@@ -481,6 +488,14 @@ export function Chat({
 	// listener is mount-scoped; the value it needs is render-scoped).
 	const pendingRef = useRef(pending);
 	pendingRef.current = pending;
+	/* THE PARKED QUESTION (fase 4, «Spør agenten»): the question stays put
+	 * while the learner writes to the agent; only SENDING dismisses it (the
+	 * hold rides the message). Keyed by the question's render key, so a new
+	 * question can never inherit the parked state. */
+	const [parkedKey, setParkedKey] = useState<string | null>(null);
+	const parked = pending !== null && parkedKey === pending.key;
+	const parkedRef = useRef(parked);
+	parkedRef.current = parked;
 
 	// THE ACTIVE PRACTICE PROBLEM (practice sessions, 2026-10-04): the
 	// same dock-ownership rule as a pending question — an active problem
@@ -523,10 +538,10 @@ export function Chat({
 	// the dock stays mounted (the problem is still active until the agent
 	// concludes).
 	const submitThinking = useCallback(
-		(text: string) => {
+		(text: string, hintsOpened?: number) => {
 			const problem = activeProblemRef.current;
 			if (!problem) return;
-			void send({ type: "thinking", problemCallId: problem.toolCallId, text });
+			void send({ type: "thinking", problemCallId: problem.toolCallId, text, ...(hintsOpened ? { hintsOpened } : {}) });
 		},
 		[send],
 	);
@@ -752,16 +767,11 @@ export function Chat({
 		}
 	}, [dictation.active]);
 	/* "Spør agenten" hands the composer back FOCUSED (2026-11): the learner
-	 * pressed it in order to type. The flag is consumed on the very next
-	 * dock-subject change, whatever it is: the composer returning takes
-	 * focus; a sibling question taking the dock instead does not (and must
-	 * not leave a stale flag to steal focus after some later answer). */
-	const focusComposerOwedRef = useRef(false);
+	 * pressed it in order to type. Fase 4: the question is parked, not gone,
+	 * so the focus follows the parked state (the composer mounts with it). */
 	useEffect(() => {
-		if (!focusComposerOwedRef.current) return;
-		focusComposerOwedRef.current = false;
-		if (pendingQuestionId === null) composerInputRef.current?.focus();
-	}, [pendingQuestionId]);
+		if (parked) composerInputRef.current?.focus();
+	}, [parked]);
 
 	// Jobs never gate the composer (contracts.ts "THE ASYNC PROTOCOL" §4): job
 	// tools resolve with an ack mid-turn, so the learner can interject while
@@ -788,7 +798,8 @@ export function Chat({
 	// recovers from it. Later compaction requires new input instead.
 	const retryable = (status === "ready" || status === "error") && !busy && !compacting && endsInFailedTurn(nativeMessages);
 	const retryFailedTurn = () => retryFailedResponse(send, draftRef);
-	const sendAllowed = !pending && !activeProblem && !compacting;
+	// A parked question (fase 4) hands the composer back: sending is allowed.
+	const sendAllowed = (!pending || parked) && !activeProblem && !compacting;
 	/* A question sits ON HOLD (2026-11): derived from the record's tail (the
 	 * onHold result is the last thing in it until the learner's message
 	 * lands), so it survives a reload and needs no latch. Drives only the
@@ -1290,25 +1301,59 @@ export function Chat({
 	};
 
 	/* "SPØR AGENTEN" (2026-11, owner: "sette det på vent for å snakke med
-	 * agenten"): the question is parked through the SILENT dismissal route
-	 * (flagged onHold) and the composer comes straight back, focused. The
-	 * agent sees the hold with the learner's next message, answers it
-	 * without giving the held answer away, and re-poses the question.
-	 * Whatever the learner had typed in the dock becomes the composer
-	 * draft: it is most likely the start of what they wanted to ask, and
-	 * it must never be lost. An existing composer draft is kept in front. */
+	 * agenten"; fase 4): the question is PARKED, not dismissed — it stays
+	 * visible in a slim row while the composer comes back, focused. Only
+	 * sending dismisses it (sendHeld: the onHold result rides the message),
+	 * and the app re-poses it after the agent's reply. Leaving without
+	 * sending (the row's button, Esc) returns to it untouched. Whatever the
+	 * learner had typed in the dock becomes the composer draft: it is most
+	 * likely the start of what they wanted to ask, and it must never be
+	 * lost. An existing composer draft is kept in front. */
 	const holdQuestion = (draft: string) => {
-		if (!pendingRef.current) return;
+		const p = pendingRef.current;
+		if (!p) return;
 		if (draft) {
 			const existing = textRef.current.trimEnd();
 			applyText(existing ? `${existing}\n${draft}` : draft);
 		}
-		focusComposerOwedRef.current = true;
-		silentlyDismissPending("onHold");
+		setParkedKey(p.key);
+	};
+
+	/* The parked question's send (fase 4): ONE input event carries both the
+	 * question's onHold dismissal and the learner's message, so the question
+	 * can never vanish without the message, nor the message arrive with the
+	 * question still dangling. The reading-thinking draft rides the hold. A
+	 * running turn (the posing turn still settling) waits: nothing is sent,
+	 * nothing is cleared. */
+	const sendHeld = () => {
+		const p = pendingRef.current;
+		if (!p || !parkedRef.current || busyRef.current || compacting) return;
+		const t = textRef.current.trim();
+		if (!t) return;
+		if (zeroKeys) {
+			setSetupOpen(true);
+			return;
+		}
+		if (selectedModelUnavailable(catalog, selectedModel)) {
+			openModelPicker();
+			return;
+		}
+		const question = (p.input as { question?: string } | null)?.question ?? "";
+		const reading = readingThinkingRef.current.trim() || undefined;
+		clearReadingThinking();
+		const answer = dismissedAnswer(toolQuestionKind(p.tool), question, { reason: "onHold", tool: p.tool });
+		draftRef.current = t;
+		applyText("");
+		setParkedKey(null);
+		void send({
+			type: "text",
+			text: t,
+			hold: { toolCallId: p.toolCallId, answer: reading ? { ...answer, readingThinking: reading } : answer },
+		});
 	};
 
 	const onSend = () => {
-		if (pending || compacting) return;
+		if ((pending && !parked) || compacting) return;
 		/* FINISH DICTATION FIRST (owner, 2026-10-01): a learner who keeps
 		 * talking right through Enter must not lose the tail — stop the run,
 		 * let the last finals land in the composer, then send the REF value
@@ -1350,6 +1395,11 @@ export function Chat({
 	 * time the send's POST resolved, so the steer lands. Idle takes the
 	 * plain send; a raced settle 409s and falls back to exactly that. */
 	const doSteerOrSend = () => {
+		// Parked (fase 4): the message carries the question's hold.
+		if (parkedRef.current) {
+			sendHeld();
+			return;
+		}
 		if (pending || compacting) return;
 		const t = textRef.current.trim();
 		if (!t) return;
@@ -1897,7 +1947,7 @@ export function Chat({
 							placeholder={
 								nextReady
 									? "Spør om hva som helst, eller trykk Enter for neste oppgave."
-									: questionOnHold
+									: parked || questionOnHold
 										? "Spør om det du lurer på. Spørsmålet kommer tilbake etterpå."
 										: undefined
 							}
@@ -1906,6 +1956,9 @@ export function Chat({
 					onSubmitAnswer={submitPendingAnswer}
 					onSkipQuestion={skipQuestion}
 					onHoldQuestion={holdQuestion}
+					parked={parked}
+					onUnpark={() => setParkedKey(null)}
+					figureSvg={figureSvgOf(nativeMessages, normalizeFigureId((pending?.input as { figure?: unknown } | null | undefined)?.figure))}
 				/>
 				</Conversation>
 
@@ -2114,6 +2167,9 @@ function DockOverlay({
 	onSubmitAnswer,
 	onSkipQuestion,
 	onHoldQuestion,
+	parked,
+	onUnpark,
+	figureSvg,
 	chatId,
 	onModelChange,
 	onReserve,
@@ -2138,7 +2194,7 @@ function DockOverlay({
 	 *  question (the composer is replaced); null in teaching sessions. */
 	practice: { toolCallId: string; input: unknown } | null;
 	/** (commit, text) — the practice dock's two submit lanes. */
-	onSubmitThinking: (text: string) => void;
+	onSubmitThinking: (text: string, hintsOpened?: number) => void;
 	/** Teach-phase pending question: arrives collapsed behind the reveal button (W5). */
 	requiresReveal: boolean;
 	/** The reading-thinking draft (owner 2026-10-03) — owned by ChatView so
@@ -2160,6 +2216,12 @@ function DockOverlay({
 	 *  carrying the learner's dock draft). Owned by ChatView like the submit. */
 	onSkipQuestion: () => void;
 	onHoldQuestion: (draft: string) => void;
+	/** The pending question is parked (fase 4): the slim «På vent» row
+	 *  sits above the composer until the learner sends or goes back. */
+	parked: boolean;
+	onUnpark: () => void;
+	/** The docked task's figure svg (fase 4), resolved from its figure id. */
+	figureSvg: string | null;
 	/** The model control's pass-through (the stats bar hosts it). */
 	chatId: string;
 	onModelChange: (model: string | undefined) => void;
@@ -2249,9 +2311,11 @@ function DockOverlay({
 	expandedRef.current = expanded;
 	// Dock ownership (the fold machine, the reserve immunity, the arrival
 	// states): a pending question OR an active practice problem — either
-	// replaces the composer and owns the band.
-	const pendingRef = useRef(!!pending || !!practice);
-	pendingRef.current = !!pending || !!practice;
+	// replaces the composer and owns the band. A PARKED question (fase 4)
+	// does not: the composer is back, so it behaves like the composer.
+	const docked = (!!pending && !parked) || !!practice;
+	const pendingRef = useRef(docked);
+	pendingRef.current = docked;
 	const requiresRevealRef = useRef(requiresReveal);
 	requiresRevealRef.current = requiresReveal;
 	const revealedRef = useRef(revealed);
@@ -2262,6 +2326,9 @@ function DockOverlay({
 	const bodyRef = useRef<HTMLDivElement>(null);
 	const shellRef = useRef<HTMLDivElement>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
+	// Parking does NOT change the mode (fase 4): the key below remounts the
+	// content, and the parked question's form must survive. The morph still
+	// fires — the state key's docked term flips (dockStateKey).
 	const mode = pending
 		? `question:${pending.key}`
 		: practice
@@ -2331,7 +2398,7 @@ function DockOverlay({
 	const [sbInset, setSbInset] = useState(0);
 	useDockHeight({
 		scrollRef, blockRef, viewportRef, bodyRef, shellRef, contentRef,
-		expanded, enabled: !!pending || !!practice, mode, onScrollbarInset: setSbInset, onHeight: offer,
+		expanded, enabled: docked, mode, onScrollbarInset: setSbInset, onHeight: offer,
 	});
 
 	// GROWTH MUTE (owner round, 2026-10-05 — the generation churn): during a
@@ -2412,7 +2479,7 @@ function DockOverlay({
 	// a focused button activates natively) — this listener claims only
 	// the dead case: plain focus with Enter doing nothing.
 	useEffect(() => {
-		if (!pending || expanded) return;
+		if (!pending || expanded || parked) return; // parked: Enter is the message's
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.key !== "Enter" || e.altKey) return;
 			if (e.shiftKey && !e.metaKey && !e.ctrlKey) return;
@@ -2432,7 +2499,7 @@ function DockOverlay({
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [pending, expanded]);
+	}, [pending, expanded, parked]);
 
 	useEffect(() => {
 		const el = scrollRef.current;
@@ -2497,7 +2564,7 @@ function DockOverlay({
 	// term (the fold) belongs to EVERY docked variant — question AND
 	// practice (owner fix, 2026-10-06). Typing growth keeps the key and
 	// never animates; the fold/unfold morphs like teaching always has.
-	const stateKey = dockStateKey(mode, !!pending || !!practice, expanded);
+	const stateKey = dockStateKey(mode, docked, expanded);
 	const prevRef = useRef<{ key: string; height: number } | null>(null);
 	useIsoLayoutEffect(() => {
 		const el = shellRef.current;
@@ -2545,7 +2612,7 @@ function DockOverlay({
 					    teach-phase check waits — the same cue that collapses it. It
 					    claims dictated speech until the learner reveals the check
 					    (the dock reclaims then). Rides the check answer on submit. */}
-					{pending && requiresReveal && (
+					{pending && requiresReveal && !parked && (
 						<ReadingThinkingField
 							value={readingThinking}
 							revision={readingThinkingRevision}
@@ -2572,6 +2639,7 @@ function DockOverlay({
 							className={mode === initialModeRef.current ? "flow-root" : "flow-root dock-variant"}
 						>
 							{pending ? (
+								<>
 								<QuestionDock
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
 									toolCallId={pending.toolCallId}
@@ -2583,6 +2651,9 @@ function DockOverlay({
 									onSubmit={onSubmitAnswer}
 									onSkip={onSkipQuestion}
 									onHold={onHoldQuestion}
+									parked={parked}
+									onUnpark={onUnpark}
+									figureSvg={figureSvg}
 									initialDraft={initialQuestionDraft}
 									onSaveDraft={onSaveQuestionDraft}
 									onEscape={dictationCancel}
@@ -2590,10 +2661,13 @@ function DockOverlay({
 									compactionRunning={compactionRunning}
 									turnSettling={turnSettling}
 								/>
+								{/* Parked (fase 4): the composer returns under the slim row. */}
+								{parked && composer}
+								</>
 							) : practice ? (
 								<PracticeDock
 									problemCallId={practice.toolCallId}
-									input={practice.input as { statement: string }}
+									input={practice.input as { statement: string; hints?: unknown }}
 									expanded={expanded}
 									onExpand={() => {
 										setExpanded(true);

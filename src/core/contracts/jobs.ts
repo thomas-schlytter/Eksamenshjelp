@@ -216,6 +216,8 @@ export interface DemoResult {
 export interface VisualToolInput {
 	/** Precise brief for ONE visual (what it must show, exactly). */
 	brief: string;
+	/** Fase 4: the call waits for the figure (a figure for a task). */
+	wait?: boolean;
 }
 
 export interface VisualResult {
@@ -373,7 +375,12 @@ export function buildSubagentSteer(
 		id: `steer_${job.id}`,
 		role: "custom",
 		customType: "subagent-steer",
-		content: steerText(job.kind, result),
+		// A delivered figure carries its figure id (fase 4): the waited call's
+		// async fallback poses the task with it once the figure is here.
+		content:
+			job.kind === "visual" && !isSubagentFailure(job.kind, result)
+				? `${steerText(job.kind, result)}\nFigure id: "${job.id}" — set it as \`figure\` on a question that uses this figure.`
+				: steerText(job.kind, result),
 		display: true,
 		details: {
 			jobId: job.id,

@@ -37,6 +37,10 @@ export function svgNaturalWidth(svg: string): number | null {
 
 export function VisualCard({ part }: ArtifactPartProps) {
 	if (part.state !== "output-available") return null;
+	// A WAITED visual (fase 4, wait: true): the figure IS this call's result,
+	// so it renders right here, where the call was made — before the task.
+	const output = (part as { output?: unknown }).output as { inline?: unknown; result?: unknown } | null | undefined;
+	if (output?.inline === true) return <VisualOutputCard output={output.result} />;
 	return <DispatchCard toolCallId={part.toolCallId} kind="visual" />;
 }
 

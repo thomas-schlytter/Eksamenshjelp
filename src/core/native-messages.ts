@@ -34,7 +34,7 @@
  */
 
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
-import type { AssistantMessage, Message, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
+import type { AssistantMessage, Message, ToolCall, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 import { QUESTION_TOOLS, type PendingQuestion } from "./pending.ts";
 import { CLAUDE_CODE_PROVIDER } from "./contracts/claude-code.ts";
 import {
@@ -108,7 +108,8 @@ export function cliContextWindowOf(messages: readonly LhMessage[]): { model: str
 	for (let i = messages.length - 1; i >= 0; i--) {
 		const message = messages[i]!;
 		if (message.role === "custom" && message.customType === "compaction") return null;
-		if (message.role !== "assistant") continue;
+		// App-authored assistants (a re-posed question) report no window.
+		if (message.role !== "assistant" || isSyntheticAssistant(message)) continue;
 		const tokens = message.cliContextWindow;
 		return message.provider === CLAUDE_CODE_PROVIDER && typeof tokens === "number" && Number.isSafeInteger(tokens) && tokens > 0
 			? { model: `${message.provider}:${message.model}`, tokens } : null;
@@ -334,15 +335,17 @@ export function newCourseContextMessage(course: Course, link: ChatCourseLink, to
  *  model READS the text to tell working traces from claimed answers. The
  *  content label is the single "Your thinking"; `details` keeps the raw
  *  payload for the transcript card. One problem may carry many
- *  submissions. */
-export function newThinkingMessage(problemCallId: string, text: string): LhMarkerMessage {
+ *  submissions. `hintsOpened` (fase 4): how many of the problem's hidden
+ *  hints the learner has opened so far — told to the model in one line. */
+export function newThinkingMessage(problemCallId: string, text: string, hintsOpened?: number): LhMarkerMessage {
+	const hints = typeof hintsOpened === "number" && hintsOpened > 0 ? Math.floor(hintsOpened) : 0;
 	return {
 		id: newMessageId(),
 		role: "custom",
 		customType: "practice-thinking",
-		content: `${THINKING_LABEL}:\n${text}`,
+		content: `${THINKING_LABEL}:\n${text}${hints > 0 ? `\n\n(Hints opened so far: ${hints})` : ""}`,
 		display: true,
-		details: { problemCallId, text },
+		details: hints > 0 ? { problemCallId, text, hintsOpened: hints } : { problemCallId, text },
 		timestamp: Date.now(),
 	};
 }
@@ -432,6 +435,119 @@ export function concludedByDismissalPair(
 			timestamp: now,
 		},
 	];
+}
+
+/** The synthetic re-pose's model stamp (heldQuestionRepose). */
+export const REPOSE_MODEL = "synthetic-repose";
+
+/** Is this an app-authored assistant message (a deferred conclude, a
+ *  re-posed question) rather than a model generation? */
+export function isSyntheticAssistant(m: LhMessage): boolean {
+	return m.role === "assistant" && m.provider === "synthetic" && m.api === "faux";
+}
+
+/**
+ * THE HELD-QUESTION RE-POSE (fase 4, 2026-11 — «Spør agenten»): the learner
+ * parked a question, sent his message (the hold result lands with it), and
+ * the agent has answered. The SAME question comes back by itself — the app
+ * appends a synthetic assistant message carrying the held call's tool name
+ * and arguments under a fresh call id, so the dock arms it like any posed
+ * question and the answer binds to it as an ordinary tool result.
+ *
+ * Owed only when ALL hold, read from the record alone (no latch):
+ * - the newest question result is an onHold dismissal;
+ * - a learner message follows it (his question);
+ * - no question call of any kind came after it (the agent posing one —
+ *   the held question or another — owns the dock; and a re-pose already
+ *   appended makes this idempotent);
+ * - the record ends on a COMPLETED reply (stopReason "stop"): a failed or
+ *   aborted reply leaves the Retry banner / the learner's stop in charge,
+ *   and the next completed reply re-poses instead.
+ * Pure; returns the message to append, or null.
+ */
+export function heldQuestionRepose(messages: readonly LhMessage[]): (LhMessage & AssistantMessage) | null {
+	// Plan blocks are UI-only markers the settle may append after the reply.
+	let end = messages.length - 1;
+	while (end >= 0 && messages[end]!.role === "custom" && (messages[end] as LhMarkerMessage).customType === "plan-block") end--;
+	const last = messages[end];
+	if (!last || last.role !== "assistant" || last.stopReason !== "stop" || isSyntheticAssistant(last)) return null;
+	let holdIndex = -1;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i]!;
+		if (m.role !== "toolResult" || !(QUESTION_TOOLS as readonly string[]).includes(m.toolName)) continue;
+		const details = m.details as { dismissed?: unknown; onHold?: unknown } | null | undefined;
+		if (details?.dismissed === true && details.onHold === true) holdIndex = i;
+		break;
+	}
+	if (holdIndex < 0) return null;
+	const after = messages.slice(holdIndex + 1);
+	if (!after.some((m) => m.role === "user")) return null;
+	const posedSince = after.some(
+		(m) => m.role === "assistant" && m.content.some((b) => b.type === "toolCall" && (QUESTION_TOOLS as readonly string[]).includes(b.name)),
+	);
+	if (posedSince) return null;
+	const held = messages[holdIndex] as LhMessage & ToolResultMessage;
+	let call: Pick<ToolCall, "name" | "arguments"> | null = null;
+	for (let i = holdIndex - 1; i >= 0 && !call; i--) {
+		const m = messages[i]!;
+		if (m.role !== "assistant") continue;
+		for (const b of m.content) {
+			if (b.type === "toolCall" && b.id === held.toolCallId && b.name === held.toolName) {
+				call = { name: b.name, arguments: b.arguments };
+				break;
+			}
+		}
+	}
+	if (!call) return null;
+	return {
+		id: newMessageId(),
+		role: "assistant",
+		content: [{ type: "toolCall", id: `call_repose_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`, name: call.name, arguments: structuredClone(call.arguments) }],
+		timestamp: Date.now(),
+		api: "faux",
+		provider: "synthetic",
+		model: REPOSE_MODEL,
+		usage: {
+			input: 0,
+			output: 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+			totalTokens: 0,
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+		},
+		stopReason: "toolUse",
+	};
+}
+
+/**
+ * A question's FIGURE (fase 4, 2026-11): the svg behind a figure id — the
+ * id a waited `visual` call returned (its job id). Two sources carry it:
+ * the waited call's own tool result (details.inline, the normal path) and
+ * a delivered visual steer (the async fallback after a wait timed out).
+ * Newest wins; a failed figure (empty svg) or an unknown id is null.
+ */
+export function figureSvgOf(messages: readonly LhMessage[], figureId: string | undefined): string | null {
+	if (!figureId) return null;
+	for (let i = messages.length - 1; i >= 0; i--) {
+		const m = messages[i]!;
+		let jobId: unknown;
+		let result: unknown;
+		if (m.role === "toolResult" && m.toolName === "visual") {
+			const d = m.details as { inline?: unknown; jobId?: unknown; result?: unknown } | null | undefined;
+			if (d?.inline !== true) continue;
+			jobId = d.jobId;
+			result = d.result;
+		} else if (m.role === "custom" && m.customType === "subagent-steer") {
+			const d = m.details as { jobId?: unknown; kind?: unknown; result?: unknown } | null | undefined;
+			if (d?.kind !== "visual") continue;
+			jobId = d.jobId;
+			result = d.result;
+		} else continue;
+		if (jobId !== figureId) continue;
+		const svg = (result as { svg?: unknown } | null | undefined)?.svg;
+		return typeof svg === "string" && svg.length > 0 ? svg : null;
+	}
+	return null;
 }
 
 /** The active-problem fold (the conclude-before-next-problem gate): the

@@ -94,7 +94,7 @@ function planStatusTool(ctx: PlanToolContext): AgentTool<any> {
 			"Color plan-map nodes by how well the learner masters them — the exam plan's red / yellow / green. " +
 			"Batch: set every node you have evidence for in ONE call (e.g. right after plan_init, from the probe). " +
 			"red = can't do it; yellow = has seen some / shaky; green = mastered, ONLY after he has answered an explain on that node " +
-			"(an exam-style task with full working) and you judged it correct — green without an answered explain is refused. " +
+			"(an exam-style task, posed as on the exam: the task text alone, full working asked for) and you judged it correct and unaided — green without an answered explain is refused. " +
 			"Re-call whenever the evidence changes (downgrades too). The latest color per node wins; untouched nodes show gray (unassessed).",
 		parameters: planStatusInput,
 		execute: serverExecute("plan_status", planStatusInput, async ({ updates }) => {
@@ -109,7 +109,7 @@ function planStatusTool(ctx: PlanToolContext): AgentTool<any> {
 					problems.push(`nodeId "${u.nodeId}" matches no node in the plan map — copy a plan_init slug exactly.`);
 				} else if (u.status === "green" && !explained.has(u.nodeId)) {
 					problems.push(
-						`"${u.nodeId}" can't be green yet: no answered explain on it. Pose an exam-style explain (full working) on this node first; until then use yellow.`,
+						`"${u.nodeId}" can't be green yet: no answered explain on it. Pose an exam-style explain on this node first (the task text alone, as on the exam; full working); until then use yellow.`,
 					);
 				}
 			}

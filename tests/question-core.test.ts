@@ -37,6 +37,9 @@ import {
 	shuffleOptions,
 	type QuestionData,
 	toClientQuestion,
+	hintInputProblems,
+	normalizeHints,
+	ON_HOLD_NOTE,
 } from "../src/core/question-core.ts";
 import { toolQuestionKind } from "../src/core/pending.ts";
 import { parseQuizInput } from "../src/core/tool-parts.ts";
@@ -72,7 +75,9 @@ describe("the schema's argument order (reasoning before the pick)", () => {
 				`explanation must precede correctAnswer in the emitted schema (got: ${keys.join(", ")})`,
 			);
 			assert.deepEqual(keys, schema === quizInputSchema
-				? ["type", "nodeId", "question", "options", "multiSelect", "explanation", "correctAnswer", "details"]
+				// Fase 4: the teach-only hints + figure trail everything (written
+				// after the commitment they must not give away).
+				? ["type", "nodeId", "question", "options", "multiSelect", "explanation", "correctAnswer", "details", "hints", "figure"]
 				: ["question", "options", "multiSelect", "explanation", "correctAnswer", "details"]);
 		}
 	});
@@ -609,7 +614,7 @@ describe("skipped / onHold (Hopp over, Spør agenten)", () => {
 		assert.ok(!("skipped" in ad) && !("onHold" in ad) && !("tool" in ad));
 	});
 
-	it("the MODEL format: exactly {kind, dismissed, skipped|onHold} — nothing else leaks", () => {
+	it("the MODEL format: {kind, dismissed, skipped} for a skip; a hold also restates the question and the re-pose note", () => {
 		assert.deepEqual(compactAnswerForModel(dismissedAnswer("quiz", "Pick one", { reason: "skipped", tool: "quiz" })), {
 			kind: "quiz",
 			dismissed: true,
@@ -619,10 +624,70 @@ describe("skipped / onHold (Hopp over, Spør agenten)", () => {
 			kind: "explain",
 			dismissed: true,
 			onHold: true,
+			question: "Why?",
+			note: ON_HOLD_NOTE,
 		});
+		assert.match(ON_HOLD_NOTE, /re-poses this same question automatically/);
+		assert.match(ON_HOLD_NOTE, /pose no question of your own/);
 		// The reading channel rides the record (the card), never the model's non-answer.
 		const withReading = { ...dismissedAnswer("quiz", "Pick one", { reason: "skipped" }), readingThinking: "hm" };
 		assert.deepEqual(compactAnswerForModel(withReading), { kind: "quiz", dismissed: true, skipped: true });
+	});
+});
+
+// ─── hints (fase 4, «oppgaver som på eksamen») ──────────────────────────────
+
+describe("hints: hidden until opened, counted in the answer", () => {
+	const explainQd = {
+		id: "e1",
+		kind: "explain" as const,
+		question: "Løs oppgaven.",
+		mode: "text" as const,
+		options: [],
+		committedAnswer: "Svaret.",
+		createdAt: "2026-11-23T00:00:00.000Z",
+	};
+
+	it("the teach schemas take 2-5 hints; the probe schema has none", () => {
+		const teach = { type: "check", nodeId: "n", question: "Q", correctAnswer: "A" };
+		assert.ok(Value.Check(explainInputObject, { ...teach, hints: ["vagt", "start her"] }));
+		assert.ok(!Value.Check(explainInputObject, { ...teach, hints: ["bare ett"] }), "fewer than two is refused");
+		assert.ok(!Value.Check(explainInputObject, { ...teach, hints: ["1", "2", "3", "4", "5", "6"] }), "more than five is refused");
+		assert.ok(Value.Check(explainInputObject, teach), "hints stay optional");
+		assert.ok(!("hints" in quizInputBase.properties), "probing measures the unaided state — no hints field");
+		assert.ok(!("figure" in quizInputBase.properties), "no visual while probing — no figure field");
+	});
+
+	it("empty hint entries are an authoring problem", () => {
+		assert.deepEqual(hintInputProblems(undefined), []);
+		assert.deepEqual(hintInputProblems(["a", "b"]), []);
+		assert.equal(hintInputProblems(["a", "  "]).length, 1);
+	});
+
+	it("normalizeHints cleans the read seam and never throws", () => {
+		assert.deepEqual(normalizeHints([" a ", "", 3, "b"]), ["a", "b"]);
+		assert.deepEqual(normalizeHints("nope"), []);
+		assert.equal(normalizeHints(["1", "2", "3", "4", "5", "6", "7"]).length, 5);
+	});
+
+	it("buildAnswer records hints only when some were opened, clamped to the task's count", () => {
+		const none = buildAnswer(explainQd, { text: "x", hintsOpened: 0, hintsTotal: 3 });
+		assert.equal(none.hintsUsed, undefined);
+		const some = buildAnswer(explainQd, { text: "x", hintsOpened: 2, hintsTotal: 3 });
+		assert.equal(some.hintsUsed, 2);
+		assert.equal(some.hintsTotal, 3);
+		const tooMany = buildAnswer(explainQd, { text: "x", hintsOpened: 9, hintsTotal: 3 });
+		assert.equal(tooMany.hintsUsed, 3);
+		const noHints = buildAnswer(explainQd, { text: "x", hintsOpened: 2 });
+		assert.equal(noHints.hintsUsed, undefined, "a task without hints can never report any");
+	});
+
+	it("the model sees hintsUsed (the count only), and nothing when none were opened", () => {
+		const some = compactAnswerForModel(buildAnswer(explainQd, { text: "x", hintsOpened: 2, hintsTotal: 4 }));
+		assert.equal(some.hintsUsed, 2);
+		assert.ok(!("hintsTotal" in some));
+		const none = compactAnswerForModel(buildAnswer(explainQd, { text: "x" }));
+		assert.ok(!("hintsUsed" in none));
 	});
 });
 
@@ -759,7 +824,7 @@ describe("explainInputBase / explainInputProblems (the commitment contract)", ()
 		// least, and the order doubles as the authoring order (role, target,
 		// then the question). Mirrors the quiz reorder (see above).
 		const keys = Object.keys(explainInputObject.properties);
-		assert.deepEqual(keys, ["type", "nodeId", ...Object.keys(explainInputBase.properties)]);
+		assert.deepEqual(keys, ["type", "nodeId", ...Object.keys(explainInputBase.properties), "hints", "figure"]);
 	});
 
 	it("an empty commitment is the one authoring problem", () => {

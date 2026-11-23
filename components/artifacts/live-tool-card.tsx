@@ -40,6 +40,19 @@ export function LiveToolCard({ part }: ArtifactPartProps) {
 
 	const hasInput = p.input != null && Object.keys(inp).length > 0;
 
+	// The WAITED figure (fase 4, visual with wait: true): the task is held
+	// until its figure is done — one calm working line, no raw input.
+	if (tool === "visual" && inp.wait === true) {
+		return (
+			<div data-testid="visual-waiting" className="my-1 flex w-full max-w-2xl items-center gap-2 text-xs text-muted-foreground">
+				<BrailleSpinner label="Genererer oppgave, pågår" />
+				<Shimmer duration={1} className="text-xs">
+					Genererer oppgave …
+				</Shimmer>
+			</div>
+		);
+	}
+
 	return (
 		<details
 			data-testid="live-tool-card"

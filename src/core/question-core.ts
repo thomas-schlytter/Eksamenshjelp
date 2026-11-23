@@ -71,6 +71,76 @@ export function parseOptionsIfString<T>(options: string | T[] | undefined): unkn
 	return options;
 }
 
+// ─── hints and figures (fase 4, «oppgaver som på eksamen», 2026-11) ──────────
+//
+// A task is posed exactly as on an exam: the question text alone. Help is
+// the learner's to ask for: the agent authors 2-5 HINTS with the task,
+// hidden until he presses «Hint» in the dock (vague first, then where to
+// start, then the next step; never the whole solution). How many he opened
+// rides his answer back (`hintsUsed`). A FIGURE made by a waited `visual`
+// call is referenced by its figure id, so the dock shows it above the task.
+
+/** The most hints a task may carry (and the dock ever shows). */
+export const MAX_HINTS = 5;
+/** The fewest hints a task that carries hints must have. */
+export const MIN_HINTS = 2;
+
+/** The authoring field (teach quiz/explain and the practice problem). */
+export const hintsField = Type.Optional(
+	Type.Array(Type.String(), {
+		minItems: MIN_HINTS,
+		maxItems: MAX_HINTS,
+		description:
+			`Optional hidden hints, ${MIN_HINTS}-${MAX_HINTS} strings ordered from vague to concrete: first a vague tip, then where to start, ` +
+			"then the next step, and so on. Never the full solution. The learner sees none of them until he presses " +
+			"Hint and steps through them himself; how many he opened comes back with his answer as hintsUsed.",
+	}),
+);
+
+/** The figure reference (the teach quiz and explain — the tools beside
+ *  which `visual` is registered). */
+export const figureField = Type.Optional(
+	Type.String({
+		description:
+			"Optional figure id of a finished figure (returned by a visual call made with wait: true). " +
+			"The figure is shown above the question text. Omit when the question has no figure.",
+	}),
+);
+
+/** The lenient DISPLAY twin of hintsField: persisted records parse even
+ *  when a count or an entry is off; normalizeHints cleans at the read seam. */
+const hintsDisplayField = Type.Optional(Type.Array(Type.String()));
+const figureDisplayField = Type.Optional(Type.String());
+
+/** Authoring problems with the hints (run in the tools' execute). Empty
+ *  entries are rejected; the count is the schema's job. */
+export function hintInputProblems(hints: readonly string[] | undefined): string[] {
+	if (!hints) return [];
+	return hints.some((h) => h.trim().length === 0) ? ["hints contains an empty entry — every hint needs text."] : [];
+}
+
+/** The read seam for hints: trimmed, non-empty, at most MAX_HINTS. Never
+ *  throws on foreign shapes (old records, model wobble). */
+export function normalizeHints(raw: unknown): string[] {
+	if (!Array.isArray(raw)) return [];
+	return raw
+		.filter((h): h is string => typeof h === "string")
+		.map((h) => h.trim())
+		.filter((h) => h.length > 0)
+		.slice(0, MAX_HINTS);
+}
+
+/** The read seam for a figure id: a non-empty trimmed string, else undefined. */
+export function normalizeFigureId(raw: unknown): string | undefined {
+	return typeof raw === "string" && raw.trim().length > 0 ? raw.trim() : undefined;
+}
+
+/** The graded tools' `details` (exam ruling 2026-11): context the task
+ *  itself needs, never help toward solving it. */
+const TASK_DETAILS_DESCRIPTION =
+	"Optional context the task itself needs, shown under the question (given data, a table, units). " +
+	"Never steps, a checklist of what to show, method tips or hints.";
+
 // ─── cross-field authoring validation (tool-schema refinements) ──────────
 // Enforced at the tool-call boundary (see the superRefines below): an invalid
 // question NEVER reaches the learner — the SDK returns the validation error
@@ -188,7 +258,7 @@ export const quizInputBase = Type.Object({
 			"A value that matches no option fails validation and the call is returned to you to fix.",
 	}),
 	details: Type.Optional(
-		Type.String({ description: "Optional extra context or instructions shown under the question." }),
+		Type.String({ description: TASK_DETAILS_DESCRIPTION }),
 	),
 });
 
@@ -275,6 +345,8 @@ export const quizInputObject = Type.Object({
 			"For off-map checks use ask_user_question.",
 	}),
 	...quizInputBase.properties,
+	hints: hintsField,
+	figure: figureField,
 });
 
 /** The PROBE-side quiz declaration: the shared authoring contract, no
@@ -296,6 +368,8 @@ export const probeQuizInputSchema = quizInputBase;
 export const quizDisplayInputSchema = Type.Object({
 	...quizInputBase.properties,
 	type: Type.Optional(Type.String()),
+	hints: hintsDisplayField,
+	figure: figureDisplayField,
 });
 
 // ─── the explain tool (free-recall quizzing, owner 2026-09-27) ─────────────
@@ -323,7 +397,7 @@ export const explainInputBase = Type.Object({
 			"It is shown to him on submit; your next reply grades the nuance of what he wrote.",
 	}),
 	details: Type.Optional(
-		Type.String({ description: "Optional extra context or instructions shown under the question." }),
+		Type.String({ description: TASK_DETAILS_DESCRIPTION }),
 	),
 });
 
@@ -345,6 +419,8 @@ export const explainInputObject = Type.Object({
 			"For off-map checks use ask_user_question.",
 	}),
 	...explainInputBase.properties,
+	hints: hintsField,
+	figure: figureField,
 });
 
 /** The DISPLAY parse for persisted explain calls (tool-parts.ts): the
@@ -355,6 +431,8 @@ export const explainInputObject = Type.Object({
 export const explainDisplayInputSchema = Type.Object({
 	...explainInputBase.properties,
 	type: Type.Optional(Type.String()),
+	hints: hintsDisplayField,
+	figure: figureDisplayField,
 });
 
 /** The explain authoring contract: the commitment must exist. Empty
@@ -485,9 +563,10 @@ export interface QuestionAnswerData {
 	 *  (cards, exports, the model record) keeps reading it as a non-answer. */
 	skipped?: boolean;
 	/** "Spør agenten" (2026-11): the learner paused the question to talk to
-	 *  the agent. Rides the SILENT dismissal route (the composer returns,
-	 *  nothing wakes); the agent re-poses the question afterwards. Always
-	 *  paired with `dismissed: true`. */
+	 *  the agent. Lands together with his message (the text input's `hold`,
+	 *  fase 4) — never before it is sent; the app re-poses the same question
+	 *  after the agent's reply (heldQuestionRepose). Always paired with
+	 *  `dismissed: true`. */
 	onHold?: boolean;
 	/** «Avslutt økt» (2026-11-23): the learner ended the økt while the
 	 *  question was open; the end flow closed it unanswered. Always paired
@@ -497,6 +576,11 @@ export interface QuestionAnswerData {
 	 *  written explanation before submit (2026-11): the client verdict only
 	 *  grades the OPTION; the agent approves the answer on the explanation. */
 	explanationRequired?: boolean;
+	/** How many of the task's hidden hints the learner opened before
+	 *  answering (fase 4, 2026-11). Absent = none opened (or no hints). */
+	hintsUsed?: number;
+	/** How many hints the task carried — rendering only ("2 av 4"). */
+	hintsTotal?: number;
 	answeredAt: string;
 }
 
@@ -519,6 +603,9 @@ export interface AnswerRequest {
 	thinking?: string; // the reasoning-on-the-question channel (was `note`)
 	readingThinking?: string; // the thinking-while-reading channel (check answers)
 	confidence?: number; // quiz only: 0-100 raw probability — 50 is a real coin flip, always sent (owner, 2026-10-01)
+	/** Hints opened in the dock, and how many the task carried (fase 4). */
+	hintsOpened?: number;
+	hintsTotal?: number;
 }
 
 /** The confidence slider's snap stops (owner, 2026-10-01): raw probability
@@ -567,6 +654,8 @@ export interface QuestionFormDraft {
 	other: string;
 	text: string;
 	confidenceIndex: number;
+	/** How many hints were opened (the stepper's high-water mark). */
+	hintsRevealed?: number;
 }
 
 export interface QuestionDraft {
@@ -778,6 +867,14 @@ export function buildAnswer(qd: QuestionData, req: AnswerRequest, tool?: string)
 	}
 	if (req.other?.trim()) base.other = req.other.trim();
 	if (req.text?.trim()) base.text = req.text.trim();
+	// Hints (fase 4): recorded only when some were opened; clamped to the
+	// task's own count so the record never claims more than existed.
+	const hintsTotal = Math.max(0, Math.floor(req.hintsTotal ?? 0));
+	const hintsOpened = Math.min(hintsTotal, Math.max(0, Math.floor(req.hintsOpened ?? 0)));
+	if (hintsOpened > 0) {
+		base.hintsUsed = hintsOpened;
+		base.hintsTotal = hintsTotal;
+	}
 
 	if (qd.kind === "quiz") {
 		base.correctIndices = qd.correctIndices ?? [];
@@ -844,16 +941,28 @@ export function dismissedAnswer(
 	};
 }
 
+/** What the agent reads on an onHold result (fase 4, 2026-11): the
+ *  learner's message follows; the app itself re-poses the held question
+ *  (heldQuestionRepose), so the agent answers briefly and asks nothing. */
+export const ON_HOLD_NOTE =
+	"The learner paused this question to ask you something — his message follows. Answer it briefly, " +
+	"without giving away the answer to the held question, and pose no question of your own in this reply. " +
+	"The app re-poses this same question automatically right after your reply.";
+
 export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, unknown> {
 	if (ad.dismissed) {
 		// A non-answer, three ways (2026-11): the bare flag is the Esc
 		// dismissal; `skipped` and `onHold` tell the agent WHICH non-answer
-		// (move on vs. answer the learner, then re-pose). Nothing else rides.
+		// (move on vs. answer the learner; the app re-poses a held one).
+		// The hold also restates the question: the agent answers the
+		// learner's message about it without having to dig it up.
+		if (ad.onHold === true) {
+			return { kind: ad.kind, dismissed: true, onHold: true, question: ad.questionText, note: ON_HOLD_NOTE };
+		}
 		return {
 			kind: ad.kind,
 			dismissed: true,
 			...(ad.skipped === true ? { skipped: true } : {}),
-			...(ad.onHold === true ? { onHold: true } : {}),
 			...(ad.sessionEnded === true ? { sessionEnded: true } : {}),
 		};
 	}
@@ -873,6 +982,8 @@ export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, un
 	// The explanation gate: `correct` grades the OPTION only; the agent
 	// approves the answer on `thinking` (prompt doctrine, question tools).
 	if (ad.explanationRequired === true) out.explanationRequired = true;
+	// Hints (fase 4): the agent authored them, so the count is all it needs.
+	if (typeof ad.hintsUsed === "number" && ad.hintsUsed > 0) out.hintsUsed = ad.hintsUsed;
 	// Two DISTINCT thinking channels, clearly keyed so the model never
 	// conflates them (owner 2026-10-03): reasoning on the question vs
 	// thinking while reading the teaching. `note` is the pre-rename key —

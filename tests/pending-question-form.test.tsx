@@ -349,3 +349,84 @@ test("while the posing turn settles, Send svar and Hopp over wait with «Et øye
 		assert.match(collapsed.host.querySelector('[data-testid="question-collapsed-actions"]')!.textContent!, /Et øyeblikk…/);
 	} finally { await collapsed.unmount(); }
 });
+
+// ─── fase 4: hints on request, the parked question, the figure ──────────────
+
+const hintedExplain = {
+	type: "check", nodeId: "n1", question: "Finn x.", correctAnswer: "x = 2",
+	hints: ["Tenk på hva som er gitt.", "Start med å isolere x.", "Del begge sider på 3."],
+};
+
+test("Hint: nothing shows before the press; → opens the next, ← goes back without hiding; the count rides the answer", async () => {
+	let submitted: { hintsUsed?: number; hintsTotal?: number } | undefined;
+	const dock = await mountDock({ toolName: "explain", input: hintedExplain, onSubmit: (a) => { submitted = a; } });
+	try {
+		const text = () => dock.host.textContent!;
+		const position = () => dock.host.querySelector('[data-testid="hint-position"]')!.textContent!;
+		const click = (id: string) => act(async () => dock.host.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!.click());
+		assert.doesNotMatch(text(), /Tenk på hva som er gitt/, "no hint before he asks");
+		assert.equal(dock.host.querySelector('[data-testid="hint-stepper"]'), null);
+		await click("hint-open");
+		assert.match(position(), /Hint 1 av 3/);
+		assert.match(text(), /Tenk på hva som er gitt/);
+		assert.equal(dock.host.querySelector<HTMLButtonElement>('[data-testid="hint-prev"]')!.disabled, true);
+		await click("hint-next");
+		assert.match(position(), /Hint 2 av 3/);
+		await click("hint-prev");
+		assert.match(position(), /Hint 1 av 3/);
+		assert.equal(dock.host.querySelector('[data-testid="hint-next"]')!.getAttribute("aria-label"), "Neste hint", "hint 2 is already seen");
+		await dock.type("answer-field", "x = 2");
+		await dock.submitForm();
+		assert.equal(submitted?.hintsUsed, 2, "the high-water mark, not the page he ended on");
+		assert.equal(submitted?.hintsTotal, 3);
+	} finally { await dock.unmount(); }
+});
+
+test("a question without hints shows no Hint button; an unopened hint set reports nothing", async () => {
+	let submitted: { hintsUsed?: number } | undefined;
+	const plain = await mountDock({ toolName: "explain", input: { question: "Why?", correctAnswer: "Because." } });
+	try {
+		assert.equal(plain.host.querySelector('[data-testid="hint-open"]'), null);
+	} finally { await plain.unmount(); }
+	const unopened = await mountDock({ toolName: "explain", input: hintedExplain, onSubmit: (a) => { submitted = a; } });
+	try {
+		await unopened.type("answer-field", "x = 2");
+		await unopened.submitForm();
+		assert.ok(submitted, "the answer went out");
+		assert.equal(submitted?.hintsUsed, undefined);
+	} finally { await unopened.unmount(); }
+});
+
+test("parked: a slim «På vent» row with the way back; the form stays mounted (picks survive) but is hidden", async () => {
+	let unparks = 0;
+	const host = document.createElement("div"); document.body.append(host);
+	const root = createRoot(host);
+	const render = (parked: boolean) => act(async () => root.render(<QuestionDock toolName="quiz" toolCallId="q1" expanded
+		onExpand={() => {}} onSubmit={() => {}} dictationClaim={false} input={quizArgs as QuizToolInput}
+		onHold={() => {}} parked={parked} onUnpark={() => { unparks++; }} />));
+	try {
+		await render(false);
+		await act(async () => host.querySelector<HTMLButtonElement>('[role="radio"]')!.click());
+		const form = host.querySelector('[data-testid="question-dock"]');
+		await render(true);
+		const row = host.querySelector('[data-testid="question-parked"]')!;
+		assert.ok(row, "the question is still visible while he writes");
+		assert.match(row.textContent!, /På vent/);
+		assert.equal(host.querySelector('[data-testid="question-dock"]'), form, "same form instance — nothing typed or picked is lost");
+		assert.match(form!.parentElement!.className, /invisible/);
+		await act(async () => host.querySelector<HTMLButtonElement>('[data-testid="question-unpark"]')!.click());
+		assert.equal(unparks, 1);
+		await render(false);
+		assert.ok(host.querySelector('[role="radio"][aria-checked="true"]'), "back to the question exactly as it was");
+		assert.equal(host.querySelector('[data-testid="question-parked"]'), null);
+	} finally { await act(async () => root.unmount()); host.remove(); }
+});
+
+test("the figure (fase 4) sits above the question text", async () => {
+	const dock = await mountDock({ toolName: "explain", input: hintedExplain, figureSvg: '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>' });
+	try {
+		assert.ok(dock.host.querySelector('[data-testid="question-figure"]'));
+		const html = dock.host.innerHTML;
+		assert.ok(html.indexOf('data-testid="question-figure"') < html.indexOf("Finn x."), "figure first, then the task");
+	} finally { await dock.unmount(); }
+});

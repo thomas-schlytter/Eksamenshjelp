@@ -1,9 +1,11 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { Button } from "@/components/ui/button";
+import { HintStepper } from "@/components/hint-stepper";
+import { normalizeHints } from "@/src/core";
 import { joinDictation, useDictationTarget } from "@/components/dictation";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
@@ -34,12 +36,13 @@ export interface PracticeDockProps {
 	problemCallId: string;
 	/** The pose's arguments — only the statement is the learner's (the
 	 *  mode badge would edge toward announcing the target; dropped). */
-	input: { statement: string };
+	input: { statement: string; hints?: unknown };
 	/** Collapse state, owned by the DockOverlay. */
 	expanded: boolean;
 	onExpand: () => void;
-	/** text — POST {type:"thinking"} (one lane; the register is read from the text). */
-	onSubmit: (text: string) => void;
+	/** text — POST {type:"thinking"} (one lane; the register is read from
+	 *  the text). `hintsOpened`: how many hidden hints are open so far. */
+	onSubmit: (text: string, hintsOpened?: number) => void;
 	/** Escape in the thinking field stops dictation (threaded from the page). */
 	onEscape?: () => void;
 	/** Compaction is running for this chat (owner round 14): the thinking
@@ -51,6 +54,10 @@ export interface PracticeDockProps {
 
 export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmit, onEscape, compactionRunning = false }: PracticeDockProps) {
 	const [thinking, setThinking] = useState("");
+	// The problem's hidden hints (fase 4): opened only by the learner; the
+	// count so far rides every submission on this problem.
+	const hints = useMemo(() => normalizeHints(input.hints), [input.hints]);
+	const [hintsRevealed, setHintsRevealed] = useState(0);
 	// Ref MIRRORS the field ("nothing gets lost", the question-dock
 	// discipline): a submit resuming after `await finishDictation()` reads
 	// the tail, never a stale closure.
@@ -74,7 +81,7 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 		if (text.length === 0) return;
 		thinkingRef.current = "";
 		setThinking("");
-		onSubmit(text);
+		onSubmit(text, hintsRevealed > 0 ? hintsRevealed : undefined);
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): dictation
@@ -111,6 +118,11 @@ export function PracticeDock({ problemCallId, input, expanded, onExpand, onSubmi
 				<div className="lh-prose text-[15px]">
 					<ToolContentResponse>{input.statement}</ToolContentResponse>
 				</div>
+				{hints.length > 0 && (
+					<div className="mt-2">
+						<HintStepper hints={hints} revealed={hintsRevealed} onReveal={setHintsRevealed} />
+					</div>
+				)}
 			</div>
 
 			{/* The learner's half: Enter SENDS (owner round 2, 2026-10-05);

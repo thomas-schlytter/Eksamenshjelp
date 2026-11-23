@@ -28,6 +28,7 @@ import type { LhMessage } from "../../core/native-messages.ts";
 import { concludeResult, invalidInputResult, problemResult } from "../tool-execute.ts";
 import { healEncodedArguments, healToolRecord } from "./heal.ts";
 import { courseTools, type CourseToolContext } from "./course.ts";
+import { hintInputProblems, hintsField } from "../../core/question-core.ts";
 
 
 /** The record-reading context the gates need (the plan-tools idiom). */
@@ -94,6 +95,9 @@ export const problemInputObject = Type.Object({
 	modelSolution: Type.String({
 		description: "REQUIRED — the full solution, moves in order, committed BEFORE the learner sees the problem. This IS the reveal — conclude shows it verbatim; never re-author it.",
 	}),
+	// Fase 4 (2026-11): the hidden hint ladder the learner opens himself.
+	// (No figure field: visual is not in the practice registry.)
+	hints: hintsField,
 });
 
 export type ProblemInput = Static<typeof problemInputObject>;
@@ -109,7 +113,8 @@ export function problemTool(
 			"Pose one practice problem. Ends the turn — the learner works in the thinking field; their thinking " +
 			"traces and answer commits arrive back as labeled messages. The modelSolution rides this call's " +
 			"arguments and stays hidden from the learner until you conclude (conclude shows it verbatim — the " +
-			"reveal needs no new field). Only one problem may be active — conclude it before posing the next.",
+			"reveal needs no new field). Only one problem may be active — conclude it before posing the next. " +
+			"Optional `hints` stay hidden until the learner opens them himself; each submission says how many he has opened.",
 		parameters: problemInputObject,
 		executionMode: "sequential",
 		prepareArguments: (args: unknown) => {
@@ -143,6 +148,8 @@ export function problemTool(
 					"a problem is already active — call conclude on it before posing the next one",
 				]);
 			}
+			const hintProblems = hintInputProblems(input.hints);
+			if (hintProblems.length > 0) return invalidInputResult("problem", hintProblems);
 			// TARGET VALIDATION (owner round 9, round 12): against the WHOLE
 			// graph, and ONLY when targets are present — absent means an
 			// untagged problem (topic sessions, owner round 12), which poses
