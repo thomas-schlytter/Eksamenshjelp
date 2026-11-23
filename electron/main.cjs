@@ -105,6 +105,9 @@ if (process.argv.includes("--browser-service")) {
 			// platform (no window-all-closed handler is installed here).
 			const win = new BrowserWindow({ show: false });
 			await win.loadURL("about:blank");
+			// Prøveeksamen PDFs (fase 6): print requests arrive over the same
+			// parent IPC channel (electron/print-pdf.cjs).
+			require("./print-pdf.cjs").installPrintPdf(BrowserWindow);
 			// Window load is not a DevTools HTTP readiness barrier. Confirm the
 			// endpoint before both production and smoke clients see the handshake.
 			await waitForBrowserService(port, { signal: lifetime.signal });

@@ -9,10 +9,12 @@
 import type { CallUsage } from "./chat.ts";
 import type { LhMessage, LhMarkerMessage } from "../native-messages.ts";
 import { newHandoffMessage } from "../native-messages.ts";
+import { mockExamSteerText, mockGradeSteerText, type MockExamJobResult, type MockGradeJobResult } from "../mock-exam.ts";
 
 // ─── Async sub-agent jobs (vision §2.5; plan.md Wave 0 protocol) ────────────
 
-export type JobKind = "research" | "demo" | "visual" | "pdf";
+/** mockExam / mockGrade (fase 6): the prøveeksamen generator and grader. */
+export type JobKind = "research" | "demo" | "visual" | "pdf" | "mockExam" | "mockGrade";
 export type JobStatus = "running" | "done" | "error";
 
 export interface JobRecord {
@@ -254,6 +256,25 @@ export interface PdfResult {
 	pagesConsulted: number[];
 }
 
+/** The prøveeksamen generator's input (fase 6): the course is the
+ *  session's own (the tool stamps its code); focus is what the learner
+ *  asked for, if anything. */
+export interface MockExamToolInput {
+	code: string;
+	focus?: string;
+}
+
+/** The grader's input (fase 6): no files = the digital answers given in
+ *  the app; files = a handed-in scan, PDF or photos. */
+export interface MockGradeToolInput {
+	code: string;
+	examId: string;
+	files?: string[];
+}
+
+/** Every sub-agent result shape (the steer artifact payload). */
+export type SubagentResult = ResearchResult | DemoResult | VisualResult | PdfResult | MockExamJobResult | MockGradeJobResult;
+
 // ─── Sub-agent steer messages (THE ASYNC PROTOCOL §3–4) ─────────────────────
 //
 // Wave B (owner-approved 2026-09-26): steers are NATIVE record messages —
@@ -279,7 +300,7 @@ export interface SubagentResultMeta {
 /** The data-subagent-artifact part payload: what the UI renders. */
 export interface SubagentArtifactData {
 	kind: JobKind;
-	result: ResearchResult | DemoResult | VisualResult | PdfResult;
+	result: SubagentResult;
 	/** The learner's pinned UI state (invert switch) riding the record. */
 	ui?: { inverted?: boolean };
 }
@@ -287,7 +308,7 @@ export interface SubagentArtifactData {
 /** A result steer's marker details: the UI's meta + artifact in one
  *  payload (the projection splits it into metadata + data part). */
 export interface SteerDetails extends SubagentResultMeta {
-	result: ResearchResult | DemoResult | VisualResult | PdfResult;
+	result: SubagentResult;
 	/** LEARNER UI state pinned onto the artifact (owner, 2026-10-07): the
 	 *  invert switch's position, persisted so navigating away and back (or
 	 *  restarting) keeps it. A VIEW preference — never enters the teacher's
@@ -318,7 +339,7 @@ export type SteerMessage = LhMarkerMessage;
 /** Whether a result is the failure shape (html/svg empty, failure brief). */
 export function isSubagentFailure(
 	kind: JobKind,
-	result: ResearchResult | DemoResult | VisualResult | PdfResult,
+	result: SubagentResult,
 ): boolean {
 	if (kind === "research") {
 		const r = result as ResearchResult;
@@ -332,12 +353,17 @@ export function isSubagentFailure(
 		const r = result as PdfResult;
 		return /^PDF failed:/i.test(r.brief);
 	}
+	if (kind === "mockExam") return !(result as MockExamJobResult).examId;
+	if (kind === "mockGrade") return !(result as MockGradeJobResult).result;
 	const r = result as VisualResult;
 	return typeof r.svg !== "string" || r.svg.length === 0;
 }
 
 /** The model-facing text of a steer: what the result IS, what to do with it. */
-function steerText(kind: JobKind, result: ResearchResult | DemoResult | VisualResult | PdfResult): string {
+function steerText(kind: JobKind, result: SubagentResult): string {
+	// Prøveeksamen (fase 6): success and failure texts live with the contract.
+	if (kind === "mockExam") return mockExamSteerText(result as MockExamJobResult);
+	if (kind === "mockGrade") return mockGradeSteerText(result as MockGradeJobResult);
 	if (isSubagentFailure(kind, result)) {
 		if (kind === "research")
 			return `${(result as ResearchResult).brief}\n\nContinue with what you can establish and flag the uncertainty to the learner.`;
@@ -369,7 +395,7 @@ function steerText(kind: JobKind, result: ResearchResult | DemoResult | VisualRe
  */
 export function buildSubagentSteer(
 	job: Pick<JobRecord, "id" | "kind" | "toolCallId">,
-	result: ResearchResult | DemoResult | VisualResult | PdfResult,
+	result: SubagentResult,
 ): SteerMessage {
 	return {
 		id: `steer_${job.id}`,
@@ -419,6 +445,10 @@ function abortText(kind: JobKind): string {
 		return "The demo job was aborted by the learner — no demo is coming. Acknowledge it in one line and teach the topic in prose instead (a re-dispatch is fine if the learner wants it).";
 	if (kind === "pdf")
 		return "The PDF reading job was aborted by the learner — no brief is coming. Acknowledge it in one line and continue without it (a re-dispatch is fine if the learner wants it).";
+	if (kind === "mockExam")
+		return "The mock exam job was aborted by the learner — no mock exam is coming. Acknowledge it in one line and continue (a new mock_exam call is fine if he asks again).";
+	if (kind === "mockGrade")
+		return "The grading job was aborted by the learner — the hand-in was not graded. Acknowledge it in one line; grade_mock_exam can be called again when he wants it graded.";
 	return "The figure job was aborted by the learner — no figure is coming. Acknowledge it in one line and teach without it (a re-dispatch is fine if the learner wants it).";
 }
 

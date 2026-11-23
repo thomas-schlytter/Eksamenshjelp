@@ -64,6 +64,11 @@ export * from "./session-wrap.ts";
 export * from "./session-topics.ts";
 // «Legg inn besvarelse»: the /api/attachments service (pasted images → files).
 export * from "./attachments.ts";
+// Prøveeksamen (fase 6): the /api/mock-exams service and the results read API.
+export {
+	getMockExamView, saveMockExamDraft, submitMockExam, openMockExamPdf, listCourseMockExams,
+	listMockExamResults, mockExamFailureResponse, mockExamSeams,
+} from "./mock-exams.ts";
 export { NtnuUnreachableError, createNtnuClient, parseNtnuCoursePage } from "./ntnu.ts";
 // "Importer fra LearnHarness": additive import of another data folder.
 export {

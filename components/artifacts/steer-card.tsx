@@ -1,12 +1,13 @@
 "use client";
 
 import { CheckIcon, CircleX } from "lucide-react";
-import type { PdfResult, ResearchResult, SubagentArtifactData } from "@/src/core";
+import type { MockExamJobResult, MockGradeJobResult, PdfResult, ResearchResult, SubagentArtifactData } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
 import { isSubagentFailure } from "@/src/core";
 import { DemoOutputCard } from "@/components/artifacts/demo-card";
 import { PdfBriefCard, ResearchBriefCard } from "@/components/artifacts/job-card";
 import { VisualOutputCard } from "@/components/artifacts/visual-card";
+import { MockExamCard, MockGradeCard } from "@/components/artifacts/mock-exam-card";
 
 /**
  * The sub-agent result delivery card (contracts.ts "THE ASYNC PROTOCOL" §4).
@@ -59,13 +60,18 @@ export function SubagentSteerCard({ message }: { message: LhViewMessage }) {
 			return <DemoOutputCard output={data.result} messageId={message.id} initialInverted={data.ui?.inverted ?? false} />;
 		case "visual":
 			return <VisualOutputCard output={data.result} messageId={message.id} initialInverted={data.ui?.inverted ?? false} />;
+		// Prøveeksamen (fase 6): the exam card and the result card.
+		case "mockExam":
+			return <MockExamCard result={data.result as MockExamJobResult} />;
+		case "mockGrade":
+			return <MockGradeCard result={data.result as MockGradeJobResult} />;
 	}
 }
 
 /** The aborted-job chip: mirrors the complete-badge one-liner — the
  * teacher's wake turn acknowledges the abort in the lesson itself,
  * this just marks what happened. */
-const ABORTED_KIND_LABEL: Record<string, string> = { research: "research", demo: "demo", visual: "visualisering", pdf: "PDF", job: "jobb" };
+const ABORTED_KIND_LABEL: Record<string, string> = { research: "research", demo: "demo", visual: "visualisering", pdf: "PDF", mockExam: "prøveeksamen", mockGrade: "retting", job: "jobb" };
 function AbortedBadge({ kind }: { kind: string }) {
 	return (
 		<div data-testid="job-aborted-badge" className="flex items-center gap-2 text-xs text-muted-foreground">

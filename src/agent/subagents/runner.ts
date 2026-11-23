@@ -7,6 +7,9 @@ import {
 	piUsageToStep,
 	type DemoResult,
 	type DemoToolInput,
+	type MockExamToolInput,
+	type MockGradeToolInput,
+	type SubagentResult,
 	type JobKind,
 	type JobRecord,
 	type JobUsage,
@@ -31,6 +34,17 @@ import { runDemoBuilder } from "./demo-builder.ts";
 import { runPdfReaderAgent } from "./pdf-reader.ts";
 import { runResearcherAgent } from "./researcher.ts";
 import { runVisualMaker } from "./visual-maker.ts";
+import { runMockExamMaker, type MockExamMakerInput } from "./mock-exam-maker.ts";
+import { runMockExamGrader } from "./mock-exam-grader.ts";
+import {
+	computeMockExamResult,
+	mockExamJobResult,
+	type MockExam,
+	type MockExamAnswers,
+	type MockExamJobResult,
+	type MockExamResult,
+	type MockGradeJobResult,
+} from "../../core/mock-exam.ts";
 
 /**
  * The background job runner (contracts.ts "THE ASYNC PROTOCOL" §2–3), created
@@ -61,9 +75,28 @@ export const researchModelOverride: { current?: PiEngine } = {};
 export const demoModelOverride: { current?: PiEngine } = {};
 export const visualModelOverride: { current?: PiEngine } = {};
 export const pdfModelOverride: { current?: PiEngine } = {};
+export const mockExamModelOverride: { current?: PiEngine } = {};
+export const mockGradeModelOverride: { current?: PiEngine } = {};
+
+/** The prøveeksamen jobs' storage + printing port (fase 6), injected by the
+ *  composition root so this layer never imports a store or the server. */
+export interface MockExamPort {
+	/** The course snapshot the generator reads; null = the course is gone. */
+	course(code: string): MockExamMakerInput["course"] | null;
+	/** The learner's today, YYYY-MM-DD. */
+	today(): string;
+	newExamId(): string;
+	newResultId(): string;
+	saveExam(exam: MockExam): void;
+	/** Print the paper beside the exam; throws with a readable reason. */
+	renderPdf(exam: MockExam): Promise<{ pdfPath: string; pageCount: number }>;
+	getExam(code: string, examId: string): MockExam | null;
+	answers(code: string, examId: string): MockExamAnswers | null;
+	saveResult(result: MockExamResult): void;
+}
 
 /** The dispatch-time tool input (from src/agent/tools/jobs.ts schemas). */
-type JobToolInput = ResearchToolInput | DemoToolInput | VisualToolInput | PdfToolInput;
+type JobToolInput = ResearchToolInput | DemoToolInput | VisualToolInput | PdfToolInput | MockExamToolInput | MockGradeToolInput;
 
 export interface JobRunnerDeps {
 	chatStore: ChatStore;
@@ -93,6 +126,9 @@ export interface JobRunnerDeps {
 	 *  Injected because the agent layer may not read the key store; absent
 	 *  in tests that inject engines directly (test engines never owe a key). */
 	providerKeyMissing?: (provider: string, tier: ModelSlotName) => ProviderKeyMissing | null;
+	/** Prøveeksamen storage + printing (fase 6). Absent = the two mock-exam
+	 *  kinds fail honestly (tests that never dispatch them leave it out). */
+	mockExams?: MockExamPort;
 }
 
 export interface JobRunner {
@@ -124,6 +160,10 @@ const KIND_ROLE: Record<JobKind, ModelRole> = {
 	demo: "demoBuilder",
 	visual: "visualMaker",
 	pdf: "pdfReader",
+	// Prøveeksamen (fase 6): authoring and grading an exam is strong-tier
+	// work — the same slot as the conversation (no new settings role).
+	mockExam: "teacher",
+	mockGrade: "teacher",
 };
 
 export function createJobRunner(deps: JobRunnerDeps): JobRunner {
@@ -170,13 +210,15 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 	 *  settings-resolved engineFor. undefined = the BYOK chain came up
 	 *  empty (owner, 2026-09-22) — runJob refuses below, honestly. */
 	function pickEngine(kind: JobKind): PiEngine | undefined {
-		const testOverride: Record<string, { current?: PiEngine } | undefined> = {
-			researcher: researchModelOverride,
-			demoBuilder: demoModelOverride,
-			visualMaker: visualModelOverride,
-			pdfReader: pdfModelOverride,
+		const testOverride: Record<JobKind, { current?: PiEngine }> = {
+			research: researchModelOverride,
+			demo: demoModelOverride,
+			visual: visualModelOverride,
+			pdf: pdfModelOverride,
+			mockExam: mockExamModelOverride,
+			mockGrade: mockGradeModelOverride,
 		};
-		return testOverride[KIND_ROLE[kind]]?.current ?? deps.engineFor?.(KIND_ROLE[kind]);
+		return testOverride[kind].current ?? deps.engineFor?.(KIND_ROLE[kind]);
 	}
 
 	const KIND_RUNNERS: Record<
@@ -187,6 +229,8 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		demo: (jobId, engine, input, loop) => runDemoJob(jobId, engine, input, loop),
 		visual: (jobId, engine, input, loop) => runVisualJob(jobId, engine, input, loop),
 		pdf: (jobId, engine, input, loop) => runPdfJob(jobId, engine, input, loop),
+		mockExam: (jobId, engine, input, loop) => runMockExamJob(jobId, engine, input, loop),
+		mockGrade: (jobId, engine, input, loop) => runMockGradeJob(jobId, engine, input, loop),
 	};
 
 	async function runJob(jobId: string, input?: JobToolInput): Promise<void> {
@@ -213,15 +257,14 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		// instead of waiting forever on a job it already dispatched.
 		const refuse = async (reason: string): Promise<void> => {
 			if (stillRunning(jobId)) jobStore.updateJob(jobId, { error: reason });
-			const resolved = resolveInput(job, input) as
-				| ResearchToolInput
-				| DemoToolInput
-				| VisualToolInput
-				| PdfToolInput
-				| undefined;
+			const resolved = resolveInput(job, input);
 			const pdf = resolved as PdfToolInput | undefined;
-			const failure: ResearchResult | DemoResult | VisualResult | PdfResult =
-				job.kind === "research"
+			const failure: SubagentResult =
+				job.kind === "mockExam"
+					? mockExamFailure((resolved as MockExamToolInput | undefined)?.code, reason)
+					: job.kind === "mockGrade"
+						? { examId: (resolved as MockGradeToolInput | undefined)?.examId ?? "", resultId: "", notes: reason }
+						: job.kind === "research"
 					? { brief: `Research failed: ${reason}`, sources: [] }
 					: job.kind === "demo"
 						? {
@@ -301,7 +344,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 	 * Save the computation outcome and session delivery obligation together.
 	 * Worker liveness ends after cleanup, not after a lesson consumes the result.
 	 */
-	async function finishJob(jobId: string, result: ResearchResult | DemoResult | VisualResult | PdfResult): Promise<void> {
+	async function finishJob(jobId: string, result: SubagentResult): Promise<void> {
 		const job = jobStore.getJob(jobId);
 		if (!job) return;
 		// Aborted mid-run (abortJob flips the record before
@@ -532,7 +575,133 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		}
 	}
 
+	// ─── prøveeksamen (fase 6) ──────────────────────────────────────────────
+
+	async function runMockExamJob(
+		jobId: string,
+		model: PiEngine | undefined,
+		passedInput: JobToolInput | undefined,
+		loop: LoopContext,
+	): Promise<void> {
+		const ctx = jobContext(jobId);
+		if (!ctx) return;
+		const input = (passedInput ?? resolveInput(ctx.job, passedInput)) as MockExamToolInput | undefined;
+		const code = typeof input?.code === "string" ? input.code : "";
+		const fail = async (reason: string) => {
+			if (stillRunning(jobId)) jobStore.updateJob(jobId, { error: reason });
+			await finishJob(jobId, mockExamFailure(code, reason));
+		};
+		const port = deps.mockExams;
+		if (!port) return fail("mock exams are not wired in this build");
+		const course = code ? port.course(code) : null;
+		if (!course) return fail(`the course ${code || "(none)"} no longer exists in the app`);
+		try {
+			jobStore.updateJob(jobId, { activity: "leser tidligere eksamener" });
+			const draft = await runMockExamMaker(
+				{ course, ...(input?.focus ? { focus: input.focus } : {}), today: port.today() },
+				{
+					engine: model,
+					abortSignal: loop.abortSignal,
+					chatId: loop.chatId,
+					onUsage: (usage) => loop.onUsage(piUsageToStep(usage)),
+					onActivity: (line) => jobStore.updateJob(jobId, { activity: line }),
+				},
+			);
+			if (!stillRunning(jobId)) return;
+			const exam: MockExam = {
+				...draft,
+				id: port.newExamId(),
+				code: course.code,
+				courseName: course.name,
+				createdAt: new Date().toISOString(),
+			};
+			port.saveExam(exam);
+			jobStore.updateJob(jobId, { activity: "lager PDF" });
+			let pdf: { pdfPath?: string; pdfError?: string };
+			let stored = exam;
+			try {
+				const printed = await port.renderPdf(exam);
+				stored = { ...exam, pageCount: printed.pageCount };
+				pdf = { pdfPath: printed.pdfPath };
+			} catch (err) {
+				// The exam exists without its paper: «Svar i appen» still works.
+				pdf = { pdfError: err instanceof Error ? err.message : String(err) };
+			}
+			await finishJob(jobId, mockExamJobResult(stored, pdf));
+		} catch (err) {
+			if (loop.abortSignal.aborted) return;
+			await fail(err instanceof Error ? err.message : String(err));
+		}
+	}
+
+	async function runMockGradeJob(
+		jobId: string,
+		model: PiEngine | undefined,
+		passedInput: JobToolInput | undefined,
+		loop: LoopContext,
+	): Promise<void> {
+		const ctx = jobContext(jobId);
+		if (!ctx) return;
+		const input = (passedInput ?? resolveInput(ctx.job, passedInput)) as MockGradeToolInput | undefined;
+		const code = typeof input?.code === "string" ? input.code : "";
+		const examId = typeof input?.examId === "string" ? input.examId : "";
+		const files = Array.isArray(input?.files) ? input.files.filter((f): f is string => typeof f === "string" && f.trim() !== "") : [];
+		const fail = async (reason: string) => {
+			if (stillRunning(jobId)) jobStore.updateJob(jobId, { error: reason });
+			const failure: MockGradeJobResult = { examId, resultId: "", notes: reason };
+			await finishJob(jobId, failure);
+		};
+		const port = deps.mockExams;
+		if (!port) return fail("mock exams are not wired in this build");
+		const exam = port.getExam(code, examId);
+		if (!exam) return fail(`no mock exam ${examId} exists for ${code}`);
+		const answers = files.length === 0 ? port.answers(code, examId) : null;
+		if (files.length === 0 && !answers?.submittedAt) return fail("no hand-in: no files, and no answers handed in («Lever») in the app");
+		try {
+			jobStore.updateJob(jobId, { activity: files.length > 0 ? "leser besvarelsen" : "retter" });
+			const graded = await runMockExamGrader(
+				{ exam, ...(files.length > 0 ? { files } : { answers: answers!.answers }) },
+				{
+					engine: model,
+					abortSignal: loop.abortSignal,
+					chatId: loop.chatId,
+					onUsage: (usage) => loop.onUsage(piUsageToStep(usage)),
+					onActivity: (line) => jobStore.updateJob(jobId, { activity: line }),
+				},
+			);
+			if (!stillRunning(jobId)) return;
+			const result = computeMockExamResult(exam, graded.grades, {
+				id: port.newResultId(),
+				gradedAt: new Date().toISOString(),
+				source: files.length > 0 ? "scan" : "digital",
+				...(files.length > 0 ? { files } : {}),
+				summary: graded.summary,
+			});
+			port.saveResult(result);
+			const done: MockGradeJobResult = { examId, resultId: result.id, result };
+			await finishJob(jobId, done);
+		} catch (err) {
+			if (loop.abortSignal.aborted) return;
+			await fail(err instanceof Error ? err.message : String(err));
+		}
+	}
+
 	return { runJob };
+}
+
+/** The generation failure shape: no exam id, the reason in notes. */
+function mockExamFailure(code: string | undefined, reason: string): MockExamJobResult {
+	return {
+		examId: "",
+		code: code ?? "",
+		title: "",
+		taskCount: 0,
+		durationMinutes: 0,
+		scoring: "points",
+		totalPoints: 0,
+		multipleChoicePercent: 0,
+		notes: reason,
+	};
 }
 
 // ─── module-level pure helpers ──────────────────────────────────────────────

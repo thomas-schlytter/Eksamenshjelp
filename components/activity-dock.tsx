@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIcon, BotIcon, FileTextIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
+import { ActivityIcon, BotIcon, ClipboardCheckIcon, FileTextIcon, NotebookPenIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
 import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
@@ -291,6 +291,8 @@ const KIND_ICON: Record<JobKind, typeof SearchIcon> = {
 	demo: PlayIcon,
 	visual: PenToolIcon,
 	pdf: FileTextIcon, // sources v0 — type-forced entry (JobKind grew "pdf")
+	mockExam: NotebookPenIcon,
+	mockGrade: ClipboardCheckIcon,
 };
 
 /** Abort states per blob id: pending (fired) / failed (backend absent). */
@@ -409,7 +411,11 @@ function ActivityBlobRow({
 						? "Visualisering"
 						: blob.jobKind === "pdf"
 							? "PDF-leser"
-							: "Bakgrunnsagent";
+							: blob.jobKind === "mockExam"
+								? "Prøveeksamen"
+								: blob.jobKind === "mockGrade"
+									? "Retting"
+									: "Bakgrunnsagent";
 	return (
 		<div
 			data-testid={`activity-blob-${blob.process}`}
