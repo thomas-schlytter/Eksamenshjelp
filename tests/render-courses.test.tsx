@@ -446,7 +446,7 @@ describe("Kontekst", () => {
 		const details = Array.from(panel.querySelectorAll("details"));
 		assert.deepEqual(details.map((d) => d.querySelector("summary")!.textContent!.replace("›", "").trim()), ["Faglig innhold", "Læringsutbytte"]);
 		assert.ok(details.every((d) => !d.hasAttribute("open")));
-		assert.match(panel.textContent!, /Appen kan ikke logge inn i Canvas for deg\. Last ned tidligere eksamener og løsningsforslag derfra og dra mappen hit\./);
+		assert.doesNotMatch(panel.textContent!, /Canvas/, "the Canvas explanation lives in Hjelp, not on the page");
 		assert.equal(panel.querySelector('a[href="/kart"]')!.textContent, "kunnskapskartet");
 		const removable = Array.from(panel.querySelectorAll('[data-testid="source-row"] button')).map((b) => b.getAttribute("aria-label"));
 		assert.deepEqual(removable, ["Fjern eksamener", "Fjern Beskjed fra faglærer"], "the automatic NTNU source cannot be removed");
@@ -478,12 +478,21 @@ describe("Kontekst", () => {
 
 describe("the first-run wizard", () => {
 	it("step 1: the exam date, prefilled from NTNU, skippable", () => {
-		const document = dom(<CourseWizard course={course({ topics: [] })} actions={wizardActions} />);
+		const document = dom(<CourseWizard course={course({ topics: [], examDateSetBy: "ntnu" })} actions={wizardActions} />);
 		assert.equal(document.querySelector('[data-testid="wizard-step"]')!.textContent, "Steg 1 av 3");
 		assert.equal(document.querySelector("h2")!.textContent, "Når er eksamen?");
-		assert.match(document.body.textContent!, /NTNU oppgir 7\. desember 2026\. Stemmer det\?/);
+		assert.match(document.body.textContent!, /NTNU oppgir 07\/12\/2026/);
+		assert.doesNotMatch(document.body.textContent!, /Stemmer det/);
 		assert.equal(document.querySelector('input[type="date"]')!.getAttribute("value"), "2026-12-07");
 		assert.deepEqual(Array.from(document.querySelectorAll("button")).map((b) => b.textContent), ["Neste", "Hopp over"]);
+	});
+
+	it("step 1: a date the learner set is not credited to NTNU", () => {
+		for (const examDateSetBy of ["self", undefined] as const) {
+			const document = dom(<CourseWizard course={course({ topics: [], examDateSetBy })} actions={wizardActions} />);
+			assert.doesNotMatch(document.body.textContent!, /NTNU oppgir/);
+			assert.equal(document.querySelector('input[type="date"]')!.getAttribute("value"), "2026-12-07");
+		}
 	});
 
 	it("step 2: material is optional and says what helps most", () => {

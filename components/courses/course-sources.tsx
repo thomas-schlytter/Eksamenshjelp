@@ -415,10 +415,7 @@ export function SourcesPanel({ course, onAdd, onRemove }: {
 
 			<div>
 				<h2 className="font-ui text-base font-semibold">Ditt materiale</h2>
-				<p className="mt-1 max-w-2xl font-ui text-sm leading-relaxed text-muted-foreground">
-					Appen kan ikke logge inn i Canvas for deg. Last ned tidligere eksamener og løsningsforslag derfra og dra mappen hit. Jo mer av fagets eget materiale appen får, jo bedre treffer temalista, planen og oppgavene.
-				</p>
-				<div className="mt-4 flex flex-col gap-4">
+				<div className="mt-2 flex flex-col gap-4">
 					<SourceAdder onAdd={onAdd} />
 					<SourceList sources={own} onRemove={onRemove} emptyText="Du har ikke lagt til noe ennå." />
 				</div>

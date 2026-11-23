@@ -177,8 +177,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "fag-og-kontekst",
 		question: "Kan appen hente tidligere eksamener fra Canvas eller Blackboard?",
 		answer: [
-			"Nei. Appen kan ikke logge inn i Canvas, Blackboard eller andre systemer som krever NTNU-brukeren din.",
-			"Last ned filene til maskinen din, og dra dem inn under «Kontekst» på fagsiden. Legg gjerne alle eksamenssettene i én mappe og dra inn hele mappa.",
+			"Nei, appen kan ikke logge inn i Canvas eller Blackboard. Last ned filene og dra dem inn under «Kontekst» på fagsiden, gjerne som én mappe.",
 		],
 		keywords: ["canvas", "blackboard", "tidligere eksamener", "eksamenssett", "gamle eksamener", "logge inn", "laste ned", "inspera"],
 		actions: [{ label: "Vis meg hvordan", action: { kind: "tour", id: "egen-kontekst" } }],

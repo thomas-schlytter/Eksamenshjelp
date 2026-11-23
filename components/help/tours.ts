@@ -185,8 +185,8 @@ export const TOURS: readonly Tour[] = [
 				anchor: "course-sources",
 				openTab: "Kontekst",
 				title: "Dra inn mappe eller filer",
-				text: "Dra inn en mappe eller enkeltfiler, for eksempel tidligere eksamener, øvinger og forelesningsnotater. Appen kan ikke logge inn i Canvas eller Blackboard, så last ned filene først.",
-				fallback: "Under «Kontekst» kan du dra inn en mappe eller enkeltfiler, for eksempel tidligere eksamener. Appen kan ikke logge inn i Canvas eller Blackboard, så last ned filene først.",
+				text: "Dra inn en mappe eller enkeltfiler, for eksempel tidligere eksamener, øvinger og forelesningsnotater.",
+				fallback: "Under «Kontekst» kan du dra inn en mappe eller enkeltfiler, for eksempel tidligere eksamener.",
 			},
 			{
 				id: "notat",

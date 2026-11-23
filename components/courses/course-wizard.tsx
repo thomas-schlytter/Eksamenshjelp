@@ -5,7 +5,7 @@ import { ArrowLeftIcon, ArrowRightIcon, LoaderCircleIcon, SparklesIcon } from "l
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { formatExamDate, mappingSession, type CourseSessionStart, type SelfStatus } from "./course-format";
+import { formatNumericDate, mappingSession, type CourseSessionStart, type SelfStatus } from "./course-format";
 import { SourceAdder, SourceList, type AddSource } from "./course-sources";
 import { ExamSessionCard, type ExamSessionState } from "./exam-session";
 import { topicCounts, type Course } from "./course-types";
@@ -67,7 +67,8 @@ export function CourseWizard({ course, actions, initialStep = 0, examSession = n
 	const own = course.sources.filter((source) => !source.auto);
 	const counts = topicCounts(course.topics);
 	const assessed = course.topics.length - counts.unknown;
-	const fromNtnu = !course.custom && !!course.exam.date;
+	// Only a date NTNU actually gave (not one the learner typed in).
+	const fromNtnu = !course.custom && !!course.exam.date && course.examDateSetBy === "ntnu";
 
 	const generate = async () => {
 		setGenerating(true);
@@ -104,7 +105,7 @@ export function CourseWizard({ course, actions, initialStep = 0, examSession = n
 				>
 					<p className="font-ui text-sm leading-relaxed text-muted-foreground">
 						{fromNtnu
-							? `NTNU oppgir ${formatExamDate(course.exam.date)}. Stemmer det? Du kan endre datoen når som helst.`
+							? `NTNU oppgir ${formatNumericDate(course.exam.date)}`
 							: "Datoen brukes til å lage en plan som rekker fram. Vet du den ikke ennå, hopper du bare over."}
 					</p>
 					<div className="flex flex-col gap-1">
