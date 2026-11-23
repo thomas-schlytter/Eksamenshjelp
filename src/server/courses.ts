@@ -747,15 +747,15 @@ export function parseChatCourseLink(raw: unknown): ChatCourseLink | null {
 	if (!code) return null;
 	const course = courseStore.getCourse(code);
 	if (!course) return null;
-	const mode = input.mode === "learn" || input.mode === "practice" || input.mode === "mapping" || input.mode === "exam" ? input.mode : undefined;
+	const mode = input.mode === "learn" || input.mode === "practice" || input.mode === "mapping" || input.mode === "exam" || input.mode === "sub" ? input.mode : undefined;
 	const topicId = typeof input.topicId === "string" && course.topics.some((t) => t.id === input.topicId) ? input.topicId : undefined;
 	return { code, ...(topicId ? { topicId } : {}), ...(mode ? { mode } : {}) };
 }
 
 /** The course-context marker for a new session; null when the course is gone. */
-export function courseContextMessageFor(link: ChatCourseLink): LhMarkerMessage | null {
+export function courseContextMessageFor(link: ChatCourseLink, opts: { kind?: "teach" | "practice" | "exam" } = {}): LhMarkerMessage | null {
 	const course = courseStore.getCourse(link.code);
-	return course ? newCourseContextMessage(course, link, courseSeams.today()) : null;
+	return course ? newCourseContextMessage(course, link, courseSeams.today(), opts) : null;
 }
 
 /** The topic_status tool's port for one session (the agent layer never

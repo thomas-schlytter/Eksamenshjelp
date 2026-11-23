@@ -47,6 +47,35 @@ export function readOpeningPrompt(id: string): string | undefined {
 	return readOpeningPromptEntry(id)?.text;
 }
 
+/* THE CARRIED MESSAGE (fase 2): the fag page's start box sends into the
+ * fag-chat. When that chat already has a conversation, the opening prompt
+ * (first turn only) does not apply: the text rides here instead, and the
+ * chat view takes it once on mount and sends it like a composer send (or
+ * leaves it in the composer while a question waits for an answer). */
+const carryKeyFor = (id: string) => `lh.carriedMessage.${id}`;
+
+export function stashCarriedMessage(id: string, text: string): boolean {
+	try {
+		const storage = globalThis.sessionStorage;
+		storage.setItem(carryKeyFor(id), text);
+		return storage.getItem(carryKeyFor(id)) === text;
+	} catch {
+		return false;
+	}
+}
+
+/** Read AND remove: a remount never sends the same text twice. */
+export function takeCarriedMessage(id: string): string | undefined {
+	try {
+		const storage = globalThis.sessionStorage;
+		const text = storage.getItem(carryKeyFor(id));
+		storage.removeItem(carryKeyFor(id));
+		return text ? text : undefined;
+	} catch {
+		return undefined;
+	}
+}
+
 export function clearOpeningPrompt(id: string): boolean {
 	try {
 		globalThis.sessionStorage.removeItem(keyFor(id));

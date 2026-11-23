@@ -127,9 +127,56 @@ export interface CourseSearchHit {
 export interface ChatCourseLink {
 	code: string;
 	topicId?: string;
-	/** "exam" = the link of an eksamensøkt (ChatRecord.kind "exam"): the
-	 *  whole fag, with its sources as the pensum basis. */
-	mode?: "learn" | "practice" | "mapping" | "exam";
+	/** "exam" = the link of the fag's MAIN chat, the fag-chat (ChatRecord
+	 *  kind "exam"): the whole fag, with its sources as the pensum basis.
+	 *  "sub" (fase 2, 2026-11-23) = an underchat: an extra chat in the fag
+	 *  (the «+» in the sidebar, the fag-chat's menu, «Flytt til fag»).
+	 *  "learn" / "practice" / "mapping" are the retired Lær / Øv /
+	 *  Kartlegging starts; old records keep them and list as underchats. */
+	mode?: "learn" | "practice" | "mapping" | "exam" | "sub";
+}
+
+/** The link mode of an underchat. */
+export const SUB_CHAT_MODE = "sub" as const satisfies ChatCourseLink["mode"];
+
+/** Is this session its fag's main chat (the fag-chat)? An eksamensøkt
+ *  linked to the fag: kind "exam" with a course link that is not an
+ *  underchat's. Every other linked session is an underchat. */
+export function isCourseMainChat(chat: { kind?: string; course?: ChatCourseLink | null }): boolean {
+	return chat.kind === "exam" && !!chat.course && chat.course.mode !== SUB_CHAT_MODE;
+}
+
+/** One fag's chats: the fag-chat (null until it exists) and its
+ *  underchats, newest activity first. */
+export interface CourseChatGroup<T> {
+	main: T | null;
+	subs: T[];
+}
+
+/**
+ * The sidebar's and the fag page's grouping (fase 2). `chats` comes newest
+ * activity first (GET /api/chats); the order is kept inside each group.
+ * A fag's fag-chat is its most recently active main chat; an older second
+ * eksamensøkt (possible on records from before fase 2) lists as an
+ * underchat, so nothing disappears. A session linked to a fag that no
+ * longer exists is loose («Uten fag»), like a session with no link.
+ */
+export function groupChatsByCourse<T extends { kind?: string; course?: ChatCourseLink | null }>(
+	chats: readonly T[],
+	courseCodes: readonly string[],
+): { byCourse: Map<string, CourseChatGroup<T>>; loose: T[] } {
+	const byCourse = new Map<string, CourseChatGroup<T>>(courseCodes.map((code) => [code, { main: null, subs: [] }]));
+	const loose: T[] = [];
+	for (const chat of chats) {
+		const group = chat.course ? byCourse.get(chat.course.code) : undefined;
+		if (!group) {
+			loose.push(chat);
+			continue;
+		}
+		if (group.main === null && isCourseMainChat(chat)) group.main = chat;
+		else group.subs.push(chat);
+	}
+	return { byCourse, loose };
 }
 
 // ─── Small shared rules ──────────────────────────────────────────────────────
@@ -607,6 +654,11 @@ const MODE_INSTRUCTION: Record<NonNullable<ChatCourseLink["mode"]>, string> = {
 		"which topics you marked and why, tell the learner the exam plan for the course is now updated and that they can go " +
 		"back to it and start from today's item, and end your turn. Only if the learner then explicitly asks to keep going " +
 		"and be taught here do you conclude the assessment the normal way.",
+	sub:
+		"Mode: SIDE CHAT. This chat sits beside the course's main chat, where the learner's exam plan for the whole course " +
+		"lives. He opened it to work on one part of the course in its own thread: follow his lead, explain or pose exam-style " +
+		"tasks as the conversation calls for, and ground both in the sources. The exam plan map and its colors belong to the " +
+		"main chat, not to this one. What you learn here about his mastery goes onto the course topics with `topic_status`.",
 	exam:
 		"Mode: EXAM SESSION. This is one continuous exam session for the whole course, with no single focus topic. The sources " +
 		"listed below are the pensum basis: the earlier exam papers, solutions and notes among them are where the emner and the " +
@@ -653,7 +705,14 @@ export function courseContextDetails(course: Course, link: ChatCourseLink): Cour
  * to a user-role message on the wire, so it opens with the bracketed
  * "[Session context]" convention instead of posing as learner speech.
  */
-export function courseContextText(course: Course, link: ChatCourseLink, todayIso: string): string {
+export function courseContextText(
+	course: Course,
+	link: ChatCourseLink,
+	todayIso: string,
+	/** The session's kind. A practice session grades through `problem`,
+	 *  not explain, so the explain approval rule stays out of its text. */
+	opts: { kind?: "teach" | "practice" | "exam" } = {},
+): string {
 	const lines: string[] = [
 		"[Session context] — this session belongs to one of the learner's university courses and is exam preparation. " +
 			"The learner studies at NTNU and uses the app in Norwegian: speak Norwegian (bokmål) unless they write in another language.",
@@ -732,7 +791,7 @@ export function courseContextText(course: Course, link: ChatCourseLink, todayIso
 			"do this yet, yellow = unsure or partly there, green = can do it at exam level. Add a one-sentence note in Norwegian " +
 			"with the reason. The learner sees these colors in their exam plan." +
 			// Practice sessions grade through `problem`, not explain: no approval rule there.
-			(link.mode === "practice"
+			(link.mode === "practice" || opts.kind === "practice"
 				? ""
 				: " Green is an approval: while teaching, set it only after he has solved a task on that topic correctly in " +
 					"his own words with `explain`. While probing you have only multiple choice, so green is allowed there " +

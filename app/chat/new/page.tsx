@@ -1,6 +1,6 @@
 import { NewSession } from "@/components/new-session";
 import { readSettingsRecord } from "@/src/server";
-import { normalizeCourseCode, slotsConfigured, type ChatCourseLink } from "@/src/core";
+import { normalizeCourseCode, slotsConfigured, SUB_CHAT_MODE, type ChatCourseLink } from "@/src/core";
 
 export const dynamic = "force-dynamic";
 
@@ -11,12 +11,15 @@ export const dynamic = "force-dynamic";
  * the real page, whose opening-prompt path delivers the message as turn 1.
  * Static segment beats the dynamic [id] route: "new" is never a chat id.
  *
- * One mode outwardly. Two optional doors in the URL:
- *  - `?mode=practice` (the knowledge map, the fag page) makes it an øvingsøkt;
- *  - `?mode=exam` (the fag page, the help center) makes it an eksamensøkt:
+ * One mode outwardly. The optional doors in the URL:
+ *  - `?mode=practice` (the knowledge map) makes it an øvingsøkt;
+ *  - `?mode=exam` (the help center) makes it an eksamensøkt without a fag:
  *    one session that maps the whole pensum and follows it on a colored map;
- *  - `?fag=<KODE>` (+ `&tema=<id>`) links the draft to a fag, so the server
- *    writes the fag's context as the session's first message.
+ *  - `?fag=<KODE>` makes the draft an UNDERCHAT of that fag (fase 2: the
+ *    sidebar's «+» and the fag-chat's menu): the server writes the fag's
+ *    context as the session's first message. A fag's own eksamensøkt is
+ *    its fag-chat (POST /api/courses/[code]/chat), never a draft, so
+ *    `?mode=exam` together with `?fag=` drafts an ordinary underchat.
  *
  * The draft's model control binds the STRONG SLOT (the new-session
  * default); the session the first send creates is stamped from it
@@ -25,21 +28,13 @@ export const dynamic = "force-dynamic";
 export default async function NewSessionPage({
 	searchParams,
 }: {
-	searchParams: Promise<{ mode?: string; fag?: string; tema?: string }>;
+	searchParams: Promise<{ mode?: string; fag?: string }>;
 }) {
-	const { mode, fag, tema } = await searchParams;
-	const practice = mode === "practice";
-	const exam = mode === "exam";
+	const { mode, fag } = await searchParams;
 	const code = normalizeCourseCode(fag);
-	// A topic id is a slug; anything else is dropped rather than trusted.
-	const topicId = typeof tema === "string" && /^[a-z0-9-]{1,64}$/.test(tema) ? tema : undefined;
-	// An eksamensøkt spans the whole fag: no single tema, and the link's
-	// mode tells the server to present the fag's sources as the pensum.
-	const course: ChatCourseLink | undefined = code
-		? exam
-			? { code, mode: "exam" }
-			: { code, ...(topicId ? { topicId, mode: practice ? "practice" : "learn" } : {}) }
-		: undefined;
+	const practice = mode === "practice";
+	const exam = mode === "exam" && !code;
+	const course: ChatCourseLink | undefined = code ? { code, mode: SUB_CHAT_MODE } : undefined;
 	return (
 		<NewSession
 			initialConfigured={slotsConfigured(readSettingsRecord()?.models)}

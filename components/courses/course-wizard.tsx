@@ -5,9 +5,8 @@ import { ArrowLeftIcon, ArrowRightIcon, LoaderCircleIcon, SparklesIcon } from "l
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { formatNumericDate, mappingSession, type CourseSessionStart, type SelfStatus } from "./course-format";
+import { formatNumericDate, type SelfStatus } from "./course-format";
 import { SourceAdder, SourceList, type AddSource } from "./course-sources";
-import { ExamSessionCard, type ExamSessionState } from "./exam-session";
 import { topicCounts, type Course } from "./course-types";
 import { StatusButtons, StatusDot } from "./status-ui";
 
@@ -19,11 +18,9 @@ export interface WizardActions {
 	/** Make the topic list. Resolves how it was made, or null on failure. */
 	onGenerate: () => Promise<"ai" | "fallback" | null>;
 	onStatus: (topicId: string, status: SelfStatus) => void;
-	onStart: (session: CourseSessionStart) => void;
 	/** Open model setup (offered when the list was made without AI). */
 	onOpenSetup: () => void;
 	onDone: () => void;
-	starting: boolean;
 }
 
 const STEPS = ["Når er eksamen?", "Har du noe materiale?", "Kartlegg hva du kan"] as const;
@@ -48,13 +45,10 @@ function StepIndicator({ step }: { step: number }) {
  * material, (3) make the topic list and say how well you know each topic.
  * Every answer is saved as it is given, so leaving halfway loses nothing.
  */
-export function CourseWizard({ course, actions, initialStep = 0, examSession = null }: {
+export function CourseWizard({ course, actions, initialStep = 0 }: {
 	course: Course;
 	actions: WizardActions;
 	initialStep?: 0 | 1 | 2;
-	/** The fag's eksamensøkt, if it has one (the last step offers the
-	 *  eksamensøkt as an alternative to the topic list and the plan). */
-	examSession?: ExamSessionState;
 }) {
 	const [step, setStep] = useState<number>(initialStep);
 	const [date, setDate] = useState(course.exam.date ?? "");
@@ -191,19 +185,6 @@ export function CourseWizard({ course, actions, initialStep = 0, examSession = n
 							for en bedre liste, og velg så «Lag temaliste på nytt» under Temaer.
 						</p>
 					)}
-					<div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-background px-3 py-2.5">
-						<p className="min-w-0 flex-1 font-ui text-sm text-muted-foreground">Usikker på hva du kan? AI-en kan stille deg noen spørsmål og sette fargene for deg.</p>
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={actions.starting}
-							onClick={() => actions.onStart(mappingSession(course))}
-							data-testid="start-mapping"
-						>
-							<SparklesIcon aria-hidden="true" />
-							La AI-en teste meg i stedet
-						</Button>
-					</div>
 					<ul className="flex flex-col gap-3">
 						{course.topics.map((topic) => (
 							<li key={topic.id} data-testid="wizard-topic" className="rounded-xl border bg-background p-3">
@@ -232,14 +213,6 @@ export function CourseWizard({ course, actions, initialStep = 0, examSession = n
 							<ArrowRightIcon aria-hidden="true" />
 						</Button>
 					</div>
-				</div>
-			)}
-
-			{/* The alternative to the plan: one continuous eksamensøkt. */}
-			{step === 2 && !generating && (
-				<div className="mt-4 border-t border-border/60 pt-4">
-					<p className="mb-2 font-ui text-xs font-medium uppercase tracking-widest text-muted-foreground">Eller</p>
-					<ExamSessionCard course={course} session={examSession} onStart={actions.onStart} starting={actions.starting} compact />
 				</div>
 			)}
 		</section>

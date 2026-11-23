@@ -219,7 +219,9 @@ export function CoursesHome({ initialConfigured, initialCourses, initialAdding =
 						tourId="home-composer"
 						placeholder="Hva vil du lære?"
 						ownsFieldCycle={false}
-						buildSession={(text) => ({ title: text, ...(linked ? { course: { code: linked } } : {}) })}
+						// No fag: a loose økt («Uten fag»). A fag picked in the chip:
+						// an underchat of that fag (fase 2).
+						buildSession={(text) => ({ title: text, ...(linked ? { course: { code: linked, mode: "sub" } } : {}) })}
 						leadingSlot={<CourseSelectChip courses={courses ?? []} value={linked} onChange={setLinkedCode} />}
 					/>
 				</div>

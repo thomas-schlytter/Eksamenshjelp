@@ -5,9 +5,9 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
 import { DeleteSessionDialog } from "@/components/delete-session-dialog";
-import type { ChatDeleteMode } from "@/src/core";
+import { groupChatsByCourse, type ChatDeleteMode, type CourseChatGroup } from "@/src/core";
 import {
-	CircleHelpIcon, DumbbellIcon, GraduationCapIcon, HomeIcon, NetworkIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon,
+	ChevronRightIcon, CircleHelpIcon, HomeIcon, NetworkIcon, PanelLeftCloseIcon, PanelLeftOpenIcon, PlusIcon, SearchIcon, SettingsIcon,
 } from "lucide-react";
 import { ActivitySection } from "@/components/activity-dock";
 import { CoverageMenuBlock } from "@/components/extraction-coverage";
@@ -17,11 +17,10 @@ import { KeyboardShortcuts } from "@/components/keyboard-shortcuts";
 import { SettingsDialogProvider, useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { Hint } from "@/components/ui/hint";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { AUTHOR_NAME, AUTHOR_URL, UPSTREAM_NAME, UPSTREAM_URL } from "@/lib/credits";
-import { fuzzyScore } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
+import { moveChatToCourse, newSubChatHref, openCourseChatId } from "@/components/courses/course-chats";
 import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
@@ -288,8 +287,8 @@ export function timeAgo(iso: string, now = new Date()): string {
  *  otherwise just how long ago. The message count is DROPPED (owner,
  *  typography round 5): it informed no decision — clutter. messageCount
  *  still rides the API payload, so this is a one-line flip back if it's
- *  ever wanted. */
-function sessionMeta(chat: ChatListItem): string {
+ *  ever wanted. Exported: the fag page's chat list says the same. */
+export function sessionMeta(chat: ChatListItem): string {
 	if (chat.compacting) return `Komprimerer kontekst · ${timeAgo(chat.updatedAt)}`;
 	if (chat.pendingQuestion) return `Venter på svar · ${timeAgo(chat.updatedAt)}`;
 	if ((chat.kind ?? "teach") === "practice" && chat.pendingProblem) {
@@ -300,24 +299,21 @@ function sessionMeta(chat: ChatListItem): string {
 }
 
 /**
- * One session row: the status spinner (only while working), then title +
- * state-aware meta. Exported for render tests — pure function of the
- * list item.
+ * One session row (the «Uten fag» list): the status spinner (only while
+ * working), then title + state-aware meta. Fase 2: no kind badges — the
+ * Læring/Øving split is gone from the UI, and a fag's sessions list
+ * under the fag. Exported for render tests — pure function of the item.
  */
 export function SessionRow({
 	chat,
 	active,
 	onOpen,
-	kbdSelected = false,
 	onContextMenu,
 }: {
 	chat: ChatListItem;
 	active: boolean;
 	onOpen: () => void;
-	/** Keyboard-cycle highlight (shortcut wave A: Alt+↑/↓ + Alt+Enter) —
-	 *  visually distinct from the active session, which stays filled. */
-	kbdSelected?: boolean;
-	/** Right-click opens the context menu (wave 6: Rename / Delete). */
+	/** Right-click opens the context menu (Rename / Move / Export / Delete). */
 	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
 	return (
@@ -325,72 +321,58 @@ export function SessionRow({
 			type="button"
 			onClick={onOpen}
 			onContextMenu={onContextMenu}
-			data-testid={kbdSelected ? "session-row-kbd" : "session-row"}
+			aria-current={active ? "page" : undefined}
+			data-testid="session-row"
 			className={cn(
 				"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
 				active && "bg-accent",
-				kbdSelected && !active && "bg-accent/60 ring-1 ring-border",
 			)}
 		>
 			<SessionStatus busy={chat.busy || chat.compacting} />
 			<span className="min-w-0 flex-1">
-				{/* Titles are the learner's/teacher's WORDS — Source Sans 3, the
-				    same voice the words were typed in (every input is lh-prose);
-				    the meta line below stays JetBrains Mono (machine data). One
-				    rule, finally applied to the picker too (owner, typography
-				    round): mono = chrome, Source Sans = human words. */}
+				{/* Titles are the learner's/teacher's WORDS — the prose face;
+				    the meta line below stays the UI face (machine data). */}
 				<span className="block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
 				<span className="block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
 			</span>
-			{/* The dumbbell rides the FAR RIGHT (owner round 6, 2026-10-05) —
-			    was left of the name; right-aligned keeps the titles flush with
-			    the teaching rows and reads cleaner. */}
-			{/* The fag a session belongs to (NTNU round): its fagkode as a
-			    quiet label, so a list of sessions across several fag scans. */}
-			{chat.course && (
-				<span
-					data-testid="session-course"
-					className="shrink-0 rounded-sm border border-border/70 px-1 font-ui text-[10px] tabular-nums text-muted-foreground"
-				>
-					<span className="sr-only">Fag: </span>
-					{chat.course.code}
-				</span>
-			)}
-			{(chat.kind ?? "teach") === "practice" && (
-				<DumbbellIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Øvingsøkt" />
-			)}
-			{chat.kind === "exam" && (
-				<GraduationCapIcon className="size-3.5 shrink-0 text-muted-foreground/70" aria-label="Eksamensøkt" />
-			)}
 		</button>
 	);
 }
 
-/** SessionRow for the live list: memoized, with id-keyed callbacks, so a
- *  sidebar toggle or a sibling's state change does not re-render every row. */
-const SessionListRow = memo(function SessionListRow({
+/**
+ * One chat under a fag (fase 2): the fag-chat («Fag-chat») or an
+ * underchat (its title). One line, like the approved sketch; the state
+ * line rides the tooltip. The spinner still shows a running turn.
+ */
+export function CourseChatRow({
 	chat,
+	label,
 	active,
-	kbdSelected,
-	onOpenChat,
-	onChatContextMenu,
+	onOpen,
+	onContextMenu,
 }: {
 	chat: ChatListItem;
+	/** Overrides the title (the fag-chat reads «Fag-chat»). */
+	label?: string;
 	active: boolean;
-	kbdSelected: boolean;
-	onOpenChat: (id: string) => void;
-	onChatContextMenu: (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => void;
+	onOpen: () => void;
+	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
 }) {
 	return (
-		<SessionRow
-			chat={chat}
-			active={active}
-			kbdSelected={kbdSelected}
-			onOpen={() => onOpenChat(chat.id)}
-			onContextMenu={(e) => onChatContextMenu(e, chat)}
-		/>
+		<button
+			type="button"
+			onClick={onOpen}
+			onContextMenu={onContextMenu}
+			title={sessionMeta(chat)}
+			aria-current={active ? "page" : undefined}
+			data-testid={label ? "course-main-chat" : "course-sub-chat"}
+			className={cn(SUB_ROW, active && "bg-accent text-foreground")}
+		>
+			<span className="min-w-0 flex-1 truncate">{label ?? chat.title}</span>
+			<SessionStatus busy={chat.busy || chat.compacting} />
+		</button>
 	);
-});
+}
 
 /** The inline-rename row (wave 6): same geometry as SessionRow, but the
  *  title line becomes a text input — select-all on entry (the click means
@@ -411,13 +393,9 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 			data-testid="session-rename-row"
 			className="relative mb-0.5 flex w-full items-center rounded-lg bg-accent px-3 py-2"
 		>
-			{/* NOTHING MOVES (owner, polish round): an idle row renders no
-			    status spacer (SessionStatus is null when not busy), so the
-			    title starts at the row's own px-3 — 12px in. The old rename
-			    row always carried a 14px spacer + gap + the input's border
-			    and padding, landing the text ~41px in (and the meta with
-			    it). The input here is borderless and padding-free at the
-			    exact title x; the underline is the only editing cue. */}
+			{/* NOTHING MOVES (owner, polish round): the input here is
+			    borderless and padding-free at the exact title x; the
+			    underline is the only editing cue. */}
 			<span className="flex min-w-0 w-full flex-col">
 				<input
 					ref={inputRef}
@@ -442,20 +420,6 @@ export function RenameRow({ chat, onCommit, onCancel }: { chat: ChatListItem; on
 	);
 }
 
-/** The three-way kind filter (practice sessions, owner 2026-10-04):
- *  Alle / Læring / Øving — a client-side filter over the same
- *  snapshot, persisted in localStorage, defaulting to Alle. */
-export type SessionKindFilter = "teach" | "all" | "practice";
-const KIND_FILTER_KEY = "lh:session-kind-filter";
-const KIND_FILTER_LABEL: Record<SessionKindFilter, string> = { all: "Alle", teach: "Læring", practice: "Øving" };
-
-/** Does a session belong under a filter choice? Eksamensøkter sort under
- *  «Læring»: they run the teach flow (prober, then teacher) with the exam
- *  overlay, so a third choice would only split one kind of work in two. */
-export function matchesKindFilter(kind: ChatListItem["kind"] | undefined, filter: SessionKindFilter): boolean {
-	return filter === "all" || (kind === "practice" ? "practice" : "teach") === filter;
-}
-
 /** The window event that opens «Legg til fag» on the home screen. */
 export const ADD_COURSE_EVENT = "lh:add-course";
 
@@ -464,98 +428,176 @@ const CREDIT_LINK = "rounded-sm underline-offset-2 outline-none hover:text-muted
  *  on open waits this long so it never lands mid-animation. */
 const SIDEBAR_SLIDE_MS = 200;
 const NAV_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 font-ui text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
+const SUB_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left font-ui text-[13px] text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
+const SECTION_LABEL = "px-2 text-xs uppercase tracking-widest text-muted-foreground/70";
+const ICON_BUTTON = "flex size-6 shrink-0 items-center justify-center rounded-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
+const MENU_ITEM = "flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent";
+
+/** A thin line between the sidebar's sections. */
+function SidebarDivider() {
+	return <div className="mx-5 my-2 border-t border-border" aria-hidden="true" />;
+}
+
+/** Which fag a route belongs to: the fag page, or a chat linked to a fag
+ *  that still exists. Pure — exported for tests. */
+export function activeCourseCode(
+	pathname: string | null | undefined,
+	chats: readonly Pick<ChatListItem, "id" | "course">[] | null,
+	courseCodes: readonly string[],
+): string | undefined {
+	const page = /^\/fag\/([^/]+)/.exec(pathname ?? "")?.[1];
+	if (page) return decodeURIComponent(page);
+	const chatId = /^\/chat\/([A-Za-z0-9_-]+)\/?$/.exec(pathname ?? "")?.[1];
+	const code = chatId ? chats?.find((c) => c.id === chatId)?.course?.code : undefined;
+	return code && courseCodes.includes(code) ? code : undefined;
+}
+
+/** What one chat row needs from the sidebar (the rename row swaps in). */
+export type ChatRowRenderer = (chat: ChatListItem, label?: string) => React.ReactNode;
 
 /**
- * The fag section (NTNU round): every fag as a link to its page, nearest
- * exam first, with the same segmented progress line as the home cards and
- * the days left. Pure (props in, markup out) for the render pins.
+ * THE FAG SECTION (fase 2: one chat per fag). Every fag as a row with its
+ * fagkode, the topic colours and the days left, nearest exam first. The
+ * row opens the fag-chat. Under the active fag (or one the learner
+ * unfolded) sit the fag-chat and the underchats, indented on a thin line;
+ * the chevron folds a fag in and out, and the «+» that shows on hover
+ * starts an underchat. Pure (props in, markup out) for the render pins.
  */
-export function SidebarCourses({ courses, activeCode, onAdd }: {
+export function SidebarCourses({ courses, groups, activeCode, activeChatId, expanded, onToggle, onOpenCourse, onOpenMainChat, renderChat, onAdd }: {
 	courses: readonly CourseSummary[] | null;
-	/** The fag whose page is open, if any. */
+	groups: ReadonlyMap<string, CourseChatGroup<ChatListItem>>;
+	/** The fag the open page belongs to, if any. */
 	activeCode?: string;
+	/** The open chat, if any. */
+	activeChatId?: string;
+	/** Is the fag unfolded? */
+	expanded: (code: string) => boolean;
+	onToggle: (code: string) => void;
+	/** Open the fag: its fag-chat, created the first time. */
+	onOpenCourse: (code: string) => void;
+	/** The «Fag-chat» row of a fag that has none yet. */
+	onOpenMainChat: (code: string) => void;
+	renderChat: ChatRowRenderer;
 	onAdd?: () => void;
 }) {
 	return (
-		<nav aria-label="Fag" data-tour="sidebar-courses" data-testid="sidebar-courses" className="mx-3 mb-2">
-			<div className="mb-0.5 flex items-center justify-between px-2">
-				<span className="text-xs uppercase tracking-widest text-muted-foreground/70">Fag</span>
+		<nav aria-label="Fag" data-tour="sidebar-courses" data-testid="sidebar-courses" className="mx-3">
+			<div className="mb-0.5 flex items-center justify-between pr-1">
+				<span className={SECTION_LABEL}>Fag</span>
+				{/* The query opens the panel on arrival; the click's event opens it
+				    when home is already showing (same URL, no navigation). */}
+				<Hint label="Legg til fag" side="right">
+					<Link href="/?leggtil=1" onClick={onAdd} aria-label="Legg til fag" data-testid="sidebar-add-course" className={ICON_BUTTON}>
+						<PlusIcon className="size-3.5" aria-hidden="true" />
+					</Link>
+				</Hint>
 			</div>
-			<ul className="max-h-40 overflow-y-auto">
-				{sortCoursesByExam(courses ?? []).map((course) => (
-					<li key={course.code}>
-						<Link
-							href={`/fag/${encodeURIComponent(course.code)}`}
-							title={`${course.code} ${course.name}. ${daysLeftLabel(course.daysLeft)}.`}
-							aria-current={activeCode === course.code ? "page" : undefined}
-							data-testid="sidebar-course"
-							className={cn(NAV_ROW, "text-foreground", activeCode === course.code && "bg-accent")}
-						>
-							<span className="w-[4.5rem] shrink-0 truncate font-medium tabular-nums">{course.code}</span>
-							<span className="sr-only">{course.name}. {daysLeftLabel(course.daysLeft)}.</span>
-							<TopicStatusBar counts={course.counts} className="min-w-0 flex-1" />
-							<span className="w-9 shrink-0 text-right text-xs tabular-nums text-muted-foreground" aria-hidden="true">
-								{daysLeftShort(course.daysLeft)}
-							</span>
-						</Link>
-					</li>
-				))}
+			{courses !== null && courses.length === 0 && (
+				<p className="px-2 py-1 font-ui text-xs text-muted-foreground">Ingen fag ennå.</p>
+			)}
+			<ul>
+				{sortCoursesByExam(courses ?? []).map((course) => {
+					const group = groups.get(course.code) ?? { main: null, subs: [] };
+					const open = expanded(course.code);
+					const active = activeCode === course.code;
+					return (
+						<li key={course.code} data-testid="sidebar-course-group" data-expanded={open || undefined}>
+							<div
+								className={cn(
+									"group/course flex items-center rounded-md transition-colors hover:bg-accent",
+									active && "bg-accent",
+								)}
+							>
+								<button
+									type="button"
+									onClick={() => onToggle(course.code)}
+									aria-expanded={open}
+									aria-label={open ? `Skjul chattene i ${course.code}` : `Vis chattene i ${course.code}`}
+									data-testid="sidebar-course-toggle"
+									className={cn(ICON_BUTTON, "hover:bg-transparent")}
+								>
+									<ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden="true" />
+								</button>
+								<button
+									type="button"
+									onClick={() => onOpenCourse(course.code)}
+									title={`${course.code} ${course.name}. ${daysLeftLabel(course.daysLeft)}.`}
+									aria-current={active && !activeChatId ? "page" : undefined}
+									data-testid="sidebar-course"
+									className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-1 text-left font-ui text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+								>
+									<span className="w-[4.5rem] shrink-0 truncate font-medium tabular-nums">{course.code}</span>
+									<span className="sr-only">{course.name}. {daysLeftLabel(course.daysLeft)}.</span>
+									<TopicStatusBar counts={course.counts} className="min-w-0 flex-1" />
+								</button>
+								<Hint label="Ny underchat" side="right">
+									<Link
+										href={newSubChatHref(course.code)}
+										aria-label={`Ny underchat i ${course.code}`}
+										data-testid="sidebar-new-sub-chat"
+										className={cn(ICON_BUTTON, "opacity-0 group-hover/course:opacity-100 focus-visible:opacity-100")}
+									>
+										<PlusIcon className="size-3.5" aria-hidden="true" />
+									</Link>
+								</Hint>
+								<span className="w-9 shrink-0 pr-2 text-right font-ui text-xs tabular-nums text-muted-foreground" aria-hidden="true">
+									{daysLeftShort(course.daysLeft)}
+								</span>
+							</div>
+							{open && (
+								<ul data-testid="sidebar-course-chats" className="mb-1 ml-[1.1rem] flex flex-col gap-0.5 border-l border-border py-0.5 pl-2">
+									<li>
+										{group.main ? (
+											renderChat(group.main, "Fag-chat")
+										) : (
+											<button
+												type="button"
+												onClick={() => onOpenMainChat(course.code)}
+												data-testid="course-main-chat"
+												className={SUB_ROW}
+											>
+												<span className="min-w-0 flex-1 truncate">Fag-chat</span>
+											</button>
+										)}
+									</li>
+									{group.subs.map((chat) => <li key={chat.id}>{renderChat(chat)}</li>)}
+								</ul>
+							)}
+						</li>
+					);
+				})}
 			</ul>
-			{/* The query opens the panel on arrival; the click's event opens it
-			    when home is already showing (same URL, no navigation). */}
-			<Link href="/?leggtil=1" onClick={onAdd} data-testid="sidebar-add-course" className={NAV_ROW}>
-				<PlusIcon className="size-3.5 shrink-0" aria-hidden="true" />
-				Legg til fag
-			</Link>
 		</nav>
 	);
+}
+
+/** Expanded state per fag: an explicit fold wins; otherwise the active fag
+ *  is open and the rest are folded. Pure — exported for tests. */
+export function courseExpanded(overrides: Readonly<Record<string, boolean>>, code: string, activeCode?: string): boolean {
+	return overrides[code] ?? code === activeCode;
 }
 
 function SessionsSidebar() {
 	const { open, toggle } = useSidebar();
 	const [chats, setChats] = useState<ChatListItem[] | null>(null);
-	const [query, setQuery] = useState("");
-	const [kindFilter, setKindFilter] = useState<SessionKindFilter>("all");
-	useEffect(() => {
-		const stored = window.localStorage.getItem(KIND_FILTER_KEY);
-		if (stored === "teach" || stored === "all" || stored === "practice") setKindFilter(stored);
-	}, []);
-	const setFilter = useCallback((f: SessionKindFilter) => {
-		setKindFilter(f);
-		window.localStorage.setItem(KIND_FILTER_KEY, f);
-	}, []);
 	const pathname = usePathname();
 	const router = useRouter();
 	const { open: openSettings } = useSettingsDialog();
-	// The fag list (NTNU round): kept fresh by `courses-changed`.
+	// The fag list (NTNU round): kept fresh by `courses-changed`, which a
+	// topic_status call and the end-of-økt update both send (fase 2: from
+	// the fag-chat, an underchat and a moved session alike).
 	const { courses } = useCourseSummaries();
-	const activeCourse = /^\/fag\/([^/]+)/.exec(pathname ?? "")?.[1];
+	const courseCodes = useMemo(() => (courses ?? []).map((c) => c.code), [courses]);
+	const grouped = useMemo(() => groupChatsByCourse(chats ?? [], courseCodes), [chats, courseCodes]);
+	const activeCode = activeCourseCode(pathname, chats, courseCodes);
+	const activeChatId = /^\/chat\/([A-Za-z0-9_-]+)\/?$/.exec(pathname ?? "")?.[1];
 
-	/* New session (owner, 2026-09-13): NO POST — the button opens the
-	   sessionless draft view; the session is created only when the first
-	   message is sent (and that message becomes its title). Search: a
-	   client-side filter over the poll snapshot — no server round trip. */
-	const newSession = useCallback(() => {
-		router.push("/chat/new");
-	}, [router]);
-
-	/* FUZZY (owner round 8, 2026-10-05): subsequence match ranked by
-	 * fuzzyScore — prefix beats word-boundary beats scattered. Empty query
-	 * keeps the natural list order (scores are all 0, sort is stable). */
-	const shown = useMemo(() => {
-		const q = query.trim();
-		let list = chats;
-		if (list && kindFilter !== "all") {
-			list = list.filter((c) => matchesKindFilter(c.kind, kindFilter));
-		}
-		if (!list) return list;
-		if (!q) return list;
-		return list
-			.map((c) => ({ c, score: fuzzyScore(q, c.title) }))
-			.filter((r): r is { c: (typeof list)[number]; score: number } => r.score !== null)
-			.sort((a, b) => b.score - a.score)
-			.map((r) => r.c);
-	}, [chats, query, kindFilter]);
+	// Folding (fase 2): explicit choices per fag, for this window's life.
+	const [folds, setFolds] = useState<Record<string, boolean>>({});
+	const isExpanded = useCallback((code: string) => courseExpanded(folds, code, activeCode), [folds, activeCode]);
+	const toggleCourse = useCallback((code: string) => {
+		setFolds((prev) => ({ ...prev, [code]: !courseExpanded(prev, code, activeCode) }));
+	}, [activeCode]);
 
 	const refreshInFlightRef = useRef(false);
 	const loadedRef = useRef(false);
@@ -577,6 +619,33 @@ function SessionsSidebar() {
 			refreshInFlightRef.current = false;
 		}
 	}, []);
+
+	/* Open a fag = open its fag-chat (fase 2). The list knows it when it
+	   exists; otherwise the server finds or creates it (one per fag, also
+	   under two quick clicks). Clicking a fag also unfolds it again. */
+	const openingRef = useRef(false);
+	const openMainChat = useCallback((code: string) => {
+		if (openingRef.current) return;
+		openingRef.current = true;
+		void openCourseChatId(code, fetch)
+			.then((chat) => {
+				router.push(`/chat/${chat.id}`);
+				void refresh();
+			})
+			.catch((err) => console.error("fag-chat failed:", err))
+			.finally(() => { openingRef.current = false; });
+	}, [router, refresh]);
+	const openCourse = useCallback((code: string) => {
+		setFolds((prev) => {
+			if (!(code in prev)) return prev;
+			const next = { ...prev };
+			delete next[code];
+			return next;
+		});
+		const main = grouped.byCourse.get(code)?.main;
+		if (main) router.push(`/chat/${main.id}`);
+		else openMainChat(code);
+	}, [grouped, router, openMainChat]);
 
 	/* Instant rename propagation (2026-09-17): the chat header's rename
 	   commits dispatch lh:chat-renamed; patch the snapshot in place instead
@@ -622,7 +691,7 @@ function SessionsSidebar() {
 
 	/* PUSH (architecture S6, 2026-10-02): the 2.5s poll is RETIRED — the
 	   last standing network poll in the app. List truth arrives as
-	   events: chats-changed (create/rename/delete — the list-SHAPE
+	   events: chats-changed (create/rename/delete/move — the list-SHAPE
 	   writes), and turn-started/turn-settled for EVERY chat (unfiltered:
 	   any chat's turn flips busy/order/phase in this list). Announced
 	   fetches ride the 250ms trailing debounce (the S4/S5 law); resync
@@ -651,29 +720,25 @@ function SessionsSidebar() {
 		[],
 	);
 
-	/* ── Keyboard seams (shortcut wave A, 2026-09-17; search-walk round
-	   2026-10-10) ── ⌘⇧F focuses the search field — and THE SEARCH OWNS THE
-	   WALK: ↑/↓ cycle the filtered list (wrap — "cycle"), Enter opens the
-	   walked row, or the FIRST match when nothing is walked (owner,
-	   2026-10-10 — the quick-open pattern: ⌘⇧F, type, Enter, done). The
-	   Alt+↑/↓/↵ global cycle was RETIRED the same round: barely used,
-	   felt laggy. The selection is a row index into `shown`, so the walk
-	   follows whatever the query + kind filter leave. Mouse and keyboard
-	   coexist: hovering doesn't claim, a click or an open clears the
-	   selection. */
-	const [kbdIndex, setKbdIndex] = useState<number | null>(null);
-	const searchRef = useRef<HTMLInputElement>(null);
-	const listRef = useRef<HTMLDivElement>(null);
+	/* The old session search's shortcut (⌘⇧F): the search box is gone
+	   (fase 2: «Søk i appen» covers search), so the shortcut opens it. */
+	useEffect(() => {
+		const onFocusSearch = () => window.dispatchEvent(new CustomEvent("lh:open-help"));
+		window.addEventListener("lh:kbd-sessions-search", onFocusSearch);
+		return () => window.removeEventListener("lh:kbd-sessions-search", onFocusSearch);
+	}, []);
 
 	/* ── Wave 6 chunk A: context menu + inline rename + deletion ──
-	   Right-click a session row → MenuShell: the two management actions
+	   Right-click a session row → MenuShell: the management actions
 	   first (owner ruling), then — below a hairline — the extraction
-	   coverage block (owner-locked redesign 2026-09-24, order refined
-	   2026-09-24: Rename/Delete on top, the numbers + manual Extract
-	   affordance at the bottom). The anchor is the row that was
-	   right-clicked — assigned into a ref before the state flip so the
-	   shell measures it on its first (hidden) pass. */
+	   coverage block. Fase 2 adds «Flytt til fag…» for a session without
+	   a fag: it swaps the menu body for the list of fag. The anchor is the
+	   row that was right-clicked — assigned into a ref before the state
+	   flip so the shell measures it on its first (hidden) pass. */
 	const [ctxChatId, setCtxChatId] = useState<string | null>(null);
+	const [ctxStep, setCtxStep] = useState<"menu" | "move">("menu");
+	const [moveError, setMoveError] = useState<string | null>(null);
+	const [moving, setMoving] = useState(false);
 	const ctxAnchorRef = useRef<HTMLElement | null>(null);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<ChatListItem | null>(null);
@@ -681,6 +746,8 @@ function SessionsSidebar() {
 	const openContext = useCallback((e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
 		e.preventDefault(); // suppress the native menu
 		ctxAnchorRef.current = e.currentTarget;
+		setCtxStep("menu");
+		setMoveError(null);
 		setCtxChatId(chat.id);
 	}, []);
 
@@ -732,6 +799,23 @@ function SessionsSidebar() {
 		}
 	}, []);
 
+	// «Flytt til fag…» (fase 2): the session becomes an underchat of the
+	// fag; the server writes the fag's context into it and announces the
+	// change (the list regroups on chats-changed; refreshed here at once).
+	const moveToCourse = useCallback(async (chatId: string, code: string) => {
+		setMoving(true);
+		setMoveError(null);
+		const error = await moveChatToCourse(chatId, code, fetch);
+		setMoving(false);
+		if (error) {
+			setMoveError(error);
+			return;
+		}
+		setCtxChatId(null);
+		setFolds((prev) => ({ ...prev, [code]: true }));
+		void refresh();
+	}, [refresh]);
+
 	// Delete success: patch the list instantly (the poll is the backstop),
 	// navigate home if the open session died (the chat view unmounts —
 	// drafts die with it, no orphan bubbles), and announce the graph
@@ -746,24 +830,6 @@ function SessionsSidebar() {
 		},
 		[pathname, router],
 	);
-
-	useEffect(() => {
-		const onFocusSearch = () => {
-			if (!open) toggle();
-			// A clipped (overflow-hidden) input still focuses — the sidebar's
-			// slide-in doesn't gate the keystroke.
-			requestAnimationFrame(() => searchRef.current?.focus());
-		};
-		window.addEventListener("lh:kbd-sessions-search", onFocusSearch);
-		return () => window.removeEventListener("lh:kbd-sessions-search", onFocusSearch);
-	}, [open, toggle]);
-
-	// Keep the kbd-selected row in view (the rows are the container's only
-	// buttons, so the index matches).
-	useEffect(() => {
-		if (kbdIndex === null) return;
-		listRef.current?.querySelectorAll("button")[kbdIndex]?.scrollIntoView({ block: "nearest" });
-	}, [kbdIndex]);
 
 	// Opening + navigation refetch; while open, the events channel owns
 	// freshness (S6) — no interval, nothing standing. On OPEN the fetch
@@ -788,9 +854,20 @@ function SessionsSidebar() {
 
 	// Stable row callbacks so memoized rows skip re-rendering on a toggle.
 	const openChat = useCallback((id: string) => {
-		setKbdIndex(null);
 		router.push(`/chat/${id}`);
 	}, [router]);
+
+	const renderCourseChat: ChatRowRenderer = (chat, label) =>
+		renamingId === chat.id ? (
+			<RenameRow chat={chat} onCommit={(next) => void commitRename(chat.id, next)} onCancel={() => setRenamingId(null)} />
+		) : (
+			<CourseChatListRow chat={chat} label={label} active={activeChatId === chat.id} onOpenChat={openChat} onChatContextMenu={openContext} />
+		);
+
+	const ctxChat = ctxChatId !== null ? chats?.find((c) => c.id === ctxChatId) : undefined;
+	// Only a session without a fag moves (a link to a deleted fag counts).
+	const ctxLoose = !!ctxChat && grouped.loose.some((c) => c.id === ctxChat.id);
+	const moveTargets = sortCoursesByExam(courses ?? []);
 
 	return (
 		// SMOOTH TOGGLE (owner 2026-11-23): the aside's WIDTH SNAPS, so the
@@ -812,29 +889,20 @@ function SessionsSidebar() {
 					open ? "visible translate-x-0" : "invisible -translate-x-full",
 				)}
 			>
-				{/* LH wordmark — the owner's header; close toggle sits at the edge.
-				    Merged chrome (2026-09-17): in Electron this band is the
-				    window's drag surface and starts after the traffic lights
-				    (.lh-lights-gutter); in the browser those classes are inert. */}
+				{/* The logo (fase 2 sketch: mark + name) — the home link; the
+				    close toggle sits at the edge. Merged chrome (2026-09-17): in
+				    Electron this band is the window's drag surface and starts
+				    after the traffic lights (.lh-lights-gutter); in the browser
+				    those classes are inert. */}
 				<div className="lh-drag lh-lights-gutter flex items-center justify-between px-4 py-3">
-					{/* The owner's mark (2026-09-17) replaces the "LH" text — still the
-					    home link, still vertically centered by the band's items-center.
-					    The 92px .lh-lights-gutter keeps it clear of the traffic lights
-					    with the lights' own edge-inset as the gap. */}
-					{/* Hover mirrors the ghost toggle buttons (owner ask, 2026-09-17):
-					    same size-9 chip geometry, same hover:bg-accent treatment. */}
-					<Hint
-						// The mark is the home link: «Mine fag». (⌘G now belongs to
-						// the Kunnskapskart row below, where it leads.)
-						label="Hjem"
-						side="right"
-					>
+					<Hint label="Hjem" side="right">
 						<Link
 							href="/"
-							aria-label="Hjem"
-							className="lh-no-drag flex size-9 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
+							aria-label="Eksamenshjelp, til Hjem"
+							className="lh-no-drag flex h-9 min-w-0 items-center gap-2 rounded-md px-1.5 transition-colors hover:bg-accent hover:text-accent-foreground dark:hover:bg-accent/50"
 						>
-							<LhMark className="size-6" />
+							<LhMark className="size-6 shrink-0" />
+							<span className="truncate font-ui text-sm font-semibold">Eksamenshjelp</span>
 						</Link>
 					</Hint>
 					<Hint label="Lukk sidemenyen" action="toggle-sidebar">
@@ -850,16 +918,15 @@ function SessionsSidebar() {
 					</Hint>
 				</div>
 
-				{/* TOP NAVIGATION (NTNU round): one door to a new session (the
-				    lær/øv pair is gone: one mode outwardly), the app-wide search,
-				    then the places: Hjem, the fag, the knowledge map. */}
-				<div className="mx-3 mb-2 flex flex-col gap-0.5">
-					<Hint label="Ny økt" action="new-session" side="right">
-						<button type="button" data-testid="new-session" onClick={() => void newSession()} className={NAV_ROW}>
-							<PlusIcon className="size-3.5 shrink-0" aria-hidden="true" />
-							Ny økt
-						</button>
-					</Hint>
+				{/* OVERSIKT (fase 2): the places, with small icons. «Ny økt» and the
+				    session search are gone: Hjem starts a loose økt, «Søk i appen»
+				    finds sessions too. */}
+				<nav aria-label="Oversikt" className="mx-3 flex flex-col gap-0.5">
+					<span className={cn(SECTION_LABEL, "mb-0.5")}>Oversikt</span>
+					<Link href="/" aria-current={pathname === "/" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/" && "bg-accent text-foreground")}>
+						<HomeIcon className="size-3.5 shrink-0" aria-hidden="true" />
+						Hjem
+					</Link>
 					<Hint label="Søk i appen" action="open-search" side="right">
 						<button
 							type="button"
@@ -871,260 +938,252 @@ function SessionsSidebar() {
 							Søk i appen
 						</button>
 					</Hint>
-					<Link href="/" aria-current={pathname === "/" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/" && "bg-accent text-foreground")}>
-						<HomeIcon className="size-3.5 shrink-0" aria-hidden="true" />
-						Hjem
-					</Link>
 					<Hint label="Kunnskapskart" action="jump-graph" side="right">
 						<Link href="/kart" aria-current={pathname === "/kart" ? "page" : undefined} className={cn(NAV_ROW, pathname === "/kart" && "bg-accent text-foreground")}>
 							<NetworkIcon className="size-3.5 shrink-0" aria-hidden="true" />
 							Kunnskapskart
 						</Link>
 					</Hint>
-				</div>
+				</nav>
 
-				<SidebarCourses
-					courses={courses}
-					activeCode={activeCourse ? decodeURIComponent(activeCourse) : undefined}
-					onAdd={() => window.dispatchEvent(new CustomEvent(ADD_COURSE_EVENT))}
-				/>
+				<SidebarDivider />
 
-				<div className="mx-3 mb-2 flex items-center gap-2">
-					<span className="px-2 text-xs uppercase tracking-widest text-muted-foreground/70">Økter</span>
-					<Hint label="Søk i økter" action="sessions-search" side="bottom">
-					<span className="relative flex-1">
-						<Input
-							ref={searchRef}
-							data-testid="session-search"
-							value={query}
-							onChange={(e) => {
-								setQuery(e.target.value);
-								// The list reorders under the query every keystroke —
-								// a stale walk index would point at the wrong row.
-								setKbdIndex(null);
-							}}
-							// THE SEARCH OWNS THE WALK (owner, 2026-10-10 — the
-							// retired Alt+↑/↓/↵ cycle's successor): ↑/↓ cycle the
-							// filtered rows (wrap), Enter opens the walked row —
-							// or the FIRST match when nothing is walked (the
-							// quick-open pattern) — then blurs (focus returns to
-							// the app per the Enter law; the query stays for
-							// re-searching). Esc leaves the search (owner,
-							// keyboard wave): blur back to normal, and claim the
-							// key so the window Esc chain (dictation / abort)
-							// doesn't also fire.
-							onKeyDown={(e) => {
-								if (e.key === "Escape") {
-									e.stopPropagation();
-									e.currentTarget.blur();
-									return;
-								}
-								// Modified keys belong to the surface (⇧↵ etc.).
-								if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
-								const n = shown?.length ?? 0;
-								if (n === 0) return;
-								if (e.key === "ArrowDown" || e.key === "ArrowUp") {
-									// The rows move, not the caret.
-									e.preventDefault();
-									const dir = e.key === "ArrowDown" ? 1 : -1;
-									setKbdIndex((i) =>
-										i === null || i >= n ? (dir === 1 ? 0 : n - 1) : (i + dir + n) % n,
-										);
-									return;
-								}
-								if (e.key === "Enter") {
-									const target = shown![kbdIndex !== null && kbdIndex < n ? kbdIndex : 0];
-									if (!target) return;
-									e.preventDefault();
-									router.push(`/chat/${target.id}`);
-									setKbdIndex(null);
-									e.currentTarget.blur();
-								}
-							}}
-							placeholder="Søk …"
-							aria-label="Søk i økter"
-							className="h-6 rounded-sm border-border bg-background pl-6 text-xs placeholder:text-muted-foreground/60"
-						/>
-						<SearchIcon className="pointer-events-none absolute left-1.5 top-1/2 size-3 -translate-y-1/2 text-muted-foreground/70" />
-					</span>
-					</Hint>
-				</div>
+				{/* FAG and UTEN FAG share one scroller; it takes the free space, so
+				    the background agents and the bottom rows pin to the bottom. */}
+				<div className="min-h-0 flex-1 overflow-y-auto pb-2">
+					<SidebarCourses
+						courses={courses}
+						groups={grouped.byCourse}
+						activeCode={activeCode}
+						activeChatId={activeChatId}
+						expanded={isExpanded}
+						onToggle={toggleCourse}
+						onOpenCourse={openCourse}
+						onOpenMainChat={openMainChat}
+						renderChat={renderCourseChat}
+						onAdd={() => window.dispatchEvent(new CustomEvent(ADD_COURSE_EVENT))}
+					/>
 
-				{/* The kind filter, HEADING THE LIST (owner round 8b; quieter in
-				    the NTNU round): it scopes what the list shows, so it sits
-				    directly above it. «Alle» leads: it is the default, and the
-				    lær/øv split is no longer how sessions are started. A real
-				    radio group; persisted client-side. */}
-				<div role="radiogroup" aria-label="Vis økter" className="mx-3 flex items-center gap-0.5 px-1" data-testid="session-kind-filter">
-					{(["all", "teach", "practice"] as const).map((f) => (
-						<button
-							key={f}
-							type="button"
-							role="radio"
-							aria-checked={kindFilter === f}
-							data-testid={`kind-filter-${f}`}
-							onClick={() => setFilter(f)}
-							className={cn(
-								"rounded-sm px-2 py-0.5 font-ui text-xs outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
-								kindFilter === f
-									? "bg-accent text-foreground"
-									: "text-muted-foreground hover:text-foreground",
+					{chats === null ? (
+						<div className="px-5 py-4 text-xs text-muted-foreground">Laster …</div>
+					) : grouped.loose.length > 0 && (
+						<section aria-label="Uten fag" data-testid="sidebar-loose" className="mx-3 mt-3">
+							<span className={cn(SECTION_LABEL, "mb-0.5 block")}>Uten fag</span>
+							{grouped.loose.map((c) =>
+								renamingId === c.id ? (
+									<RenameRow
+										key={c.id}
+										chat={c}
+										onCommit={(next) => void commitRename(c.id, next)}
+										onCancel={() => setRenamingId(null)}
+									/>
+								) : (
+									<SessionListRow
+										key={c.id}
+										chat={c}
+										active={activeChatId === c.id}
+										onOpenChat={openChat}
+										onChatContextMenu={openContext}
+									/>
+								),
 							)}
-						>
-							{KIND_FILTER_LABEL[f]}
-						</button>
-					))}
-				</div>
-
-				<div ref={listRef} className="flex-1 overflow-y-auto p-2">
-					{shown === null ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">Laster …</div>
-					) : shown.length === 0 ? (
-						<div className="px-2 py-4 text-xs text-muted-foreground">
-							{query.trim() ? "Ingen økter passer med søket." : "Ingen økter ennå."}
-						</div>
-					) : (
-						shown.map((c, i) =>
-							renamingId === c.id ? (
-								<RenameRow
-									key={c.id}
-									chat={c}
-									onCommit={(next) => void commitRename(c.id, next)}
-									onCancel={() => setRenamingId(null)}
-								/>
-							) : (
-								<SessionListRow
-									key={c.id}
-									chat={c}
-									active={pathname === `/chat/${c.id}`}
-									kbdSelected={i === kbdIndex}
-									onOpenChat={openChat}
-									onChatContextMenu={openContext}
-								/>
-							),
-						)
+						</section>
 					)}
 				</div>
 
-					{/* Background agents (owner, sidebar round): the section is
-					    ALWAYS here — empty means empty (the header sits alone); it
-					    populates and grows when processes run. The session list is
-					    flex-1, so this pins to the bottom. Sidebar closed = the
-					    learner opted out (no ambient signal, user decision). */}
-					<ActivitySection />
+				{/* Background agents (owner, sidebar round): the section is
+				    ALWAYS here — empty means empty (the header sits alone); it
+				    populates and grows when processes run. Sidebar closed = the
+				    learner opted out (no ambient signal, user decision). */}
+				<ActivitySection />
 
-					{/* Help + settings (settings-app wave; help in the NTNU round):
-					    quiet, bottom-pinned, side by side. Hjelp opens the help
-					    center; Innstillinger the centered dialog (also mod+,). */}
-					<div className="flex items-center gap-1 px-3 pt-1">
-						<Hint label="Hjelpesenter" action="open-help" side="top">
-							<Link href="/hjelp" data-tour="sidebar-help" data-testid="help-entry" className={cn(NAV_ROW, "w-auto flex-1")}>
-								<CircleHelpIcon className="size-3.5 shrink-0" aria-hidden="true" />
-								Hjelp
-							</Link>
-						</Hint>
-						<Hint label="Innstillinger" action="open-settings" side="top">
+				<SidebarDivider />
+
+				{/* Help + settings (settings-app wave; help in the NTNU round):
+				    quiet, bottom-pinned, side by side. Hjelp opens the help
+				    center; Innstillinger the centered dialog (also mod+,). */}
+				<div className="flex items-center gap-1 px-3">
+					<Hint label="Hjelpesenter" action="open-help" side="top">
+						<Link href="/hjelp" data-tour="sidebar-help" data-testid="help-entry" className={cn(NAV_ROW, "w-auto flex-1")}>
+							<CircleHelpIcon className="size-3.5 shrink-0" aria-hidden="true" />
+							Hjelp
+						</Link>
+					</Hint>
+					<Hint label="Innstillinger" action="open-settings" side="top">
+						<button
+							type="button"
+							onClick={() => openSettings()}
+							data-tour="sidebar-settings"
+							data-testid="settings-entry"
+							className={cn(NAV_ROW, "w-auto flex-1")}
+						>
+							<SettingsIcon className="size-3.5 shrink-0" aria-hidden="true" />
+							Innstillinger
+						</button>
+					</Hint>
+				</div>
+				{/* Credits (owner 2026-11-23): small and quiet, under the two
+				    bottom rows. External links open in the system browser
+				    (the shell routes target=_blank to shell.openExternal). */}
+				<p data-testid="sidebar-credits" className="px-5 pt-0.5 pb-2.5 font-ui text-[10px] leading-snug text-muted-foreground/45">
+					Laget av{" "}
+					<a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{AUTHOR_NAME}</a>
+					<br />
+					Basert på{" "}
+					<a href={UPSTREAM_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{UPSTREAM_NAME}</a>
+				</p>
+			</div>
+
+			{/* The context menu (wave 6 + the extraction-UX redesign + fase 2):
+			    the management actions, then the coverage block. «Flytt til fag…»
+			    swaps the body for the list of fag. MenuShell owns placement/
+			    focus/arrow cycling; the dismissal effect above owns the
+			    contract. */}
+			{ctxChatId !== null && (
+				<MenuShell
+					anchorRef={ctxAnchorRef}
+					testid="session-context-menu"
+					preferredSide="down"
+					menuClass="flex w-52 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
+				>
+					{ctxStep === "move" ? (
+						<>
+							<p className="px-2.5 pb-1 pt-0.5 font-ui text-[11px] uppercase tracking-widest text-muted-foreground/70">Flytt til fag</p>
+							{moveTargets.map((course) => (
+								<button
+									key={course.code}
+									type="button"
+									disabled={moving}
+									data-testid="ctx-move-target"
+									onClick={() => void moveToCourse(ctxChatId, course.code)}
+									className={cn(MENU_ITEM, "gap-2 disabled:opacity-60")}
+								>
+									<span className="shrink-0 font-medium tabular-nums">{course.code}</span>
+									<span className="min-w-0 flex-1 truncate text-muted-foreground">{course.name}</span>
+								</button>
+							))}
+							{moveError && <p role="alert" className="px-2.5 py-1 text-destructive">{moveError}</p>}
+						</>
+					) : (
+						<>
 							<button
 								type="button"
-								onClick={() => openSettings()}
-								data-tour="sidebar-settings"
-								data-testid="settings-entry"
-								className={cn(NAV_ROW, "w-auto flex-1")}
+								data-testid="ctx-rename"
+								onClick={() => {
+									setRenamingId(ctxChatId);
+									setCtxChatId(null);
+								}}
+								className={MENU_ITEM}
 							>
-								<SettingsIcon className="size-3.5 shrink-0" aria-hidden="true" />
-								Innstillinger
+								Gi nytt navn
 							</button>
-						</Hint>
-					</div>
-					{/* Credits (owner 2026-11-23): small and quiet, under the two
-					    bottom rows. External links open in the system browser
-					    (the shell routes target=_blank to shell.openExternal). */}
-					<p data-testid="sidebar-credits" className="px-5 pt-0.5 pb-2.5 font-ui text-[10px] leading-snug text-muted-foreground/45">
-						Laget av{" "}
-						<a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{AUTHOR_NAME}</a>
-						<br />
-						Basert på{" "}
-						<a href={UPSTREAM_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{UPSTREAM_NAME}</a>
-					</p>
-				</div>
+							{ctxLoose && moveTargets.length > 0 && (
+								<button
+									type="button"
+									data-testid="ctx-move-to-course"
+									onClick={() => setCtxStep("move")}
+									className={MENU_ITEM}
+								>
+									Flytt til fag …
+								</button>
+							)}
+							{/* Export as Markdown (owner, release polish 2026-10-06):
+							    same-origin anchor download; the route's
+							    Content-Disposition names the file. Above Delete (the
+							    destructive action stays last — the danger-fence law). */}
+							<button
+								type="button"
+								data-testid="ctx-export-md"
+								onClick={() => {
+									const chatId = ctxChatId;
+									setCtxChatId(null);
+									const a = document.createElement("a");
+									a.href = `/api/chats/${chatId}/markdown`;
+									a.download = ""; // the route's filename wins
+									document.body.appendChild(a);
+									a.click();
+									a.remove();
+								}}
+								className={MENU_ITEM}
+							>
+								Eksporter som Markdown …
+							</button>
+							<button
+								type="button"
+								data-testid="ctx-delete"
+								onClick={() => {
+									if (ctxChat) setDeleting(ctxChat);
+									setCtxChatId(null);
+								}}
+								className={cn(MENU_ITEM, "text-muted-foreground/80 hover:text-foreground")}
+							>
+								Slett …
+							</button>
+							<div className="my-0.5 border-t border-border/60" aria-hidden="true" />
+							<CoverageMenuBlock chatId={ctxChatId} />
+						</>
+					)}
+				</MenuShell>
+			)}
 
-				{/* The context menu (wave 6 + the extraction-UX redesign): the
-				    coverage block above, then exactly two management actions
-				    (owner ruling — no more). MenuShell owns placement/focus/arrow
-				    cycling; the dismissal effect above owns the contract. */}
-				{ctxChatId !== null && (
-					<MenuShell
-						anchorRef={ctxAnchorRef}
-						testid="session-context-menu"
-						preferredSide="down"
-						menuClass="flex w-52 flex-col gap-0.5 rounded-xl border bg-card p-2 text-xs shadow-xl"
-					>
-						{/* The two management actions first, then the extraction block
-						    (owner refinement round, 2026-09-24): Rename/Delete stay at the
-						    top, the coverage numbers + Extract affordance sit below the
-						    hairline — the block is info + a stateful affordance, the
-						    actions above it. Fetched on menu open (the block mounts WITH
-						    the menu); 409 = benign. Renders nothing on a failed read. */}
-						<button
-							type="button"
-							data-testid="ctx-rename"
-							onClick={() => {
-								setRenamingId(ctxChatId);
-								setCtxChatId(null);
-							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
-						>
-							Gi nytt navn
-						</button>
-						{/* Export as Markdown (owner, release polish 2026-10-06): the
-					    session-markdown engine's user-facing debut — same-origin
-						    anchor download; the route's Content-Disposition names the
-						    file. Sits with the management actions, above Delete (the
-						    destructive action stays last — the danger-fence law). */}
-						<button
-							type="button"
-							data-testid="ctx-export-md"
-							onClick={() => {
-								const chatId = ctxChatId;
-								setCtxChatId(null);
-								const a = document.createElement("a");
-								a.href = `/api/chats/${chatId}/markdown`;
-								a.download = ""; // the route's filename wins
-								document.body.appendChild(a);
-								a.click();
-								a.remove();
-							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"
-						>
-							Eksporter som Markdown …
-						</button>
-						<button
-							type="button"
-							data-testid="ctx-delete"
-							onClick={() => {
-								const target = chats?.find((c) => c.id === ctxChatId);
-								if (target) setDeleting(target);
-								setCtxChatId(null);
-							}}
-							className="flex items-center rounded-lg px-2.5 py-1.5 text-left text-muted-foreground/80 transition-colors hover:bg-accent hover:text-foreground"
-						>
-							Slett …
-						</button>
-						<div className="my-0.5 border-t border-border/60" aria-hidden="true" />
-						<CoverageMenuBlock chatId={ctxChatId} />
-					</MenuShell>
-				)}
-
-				{/* The two-option delete dialog (wave 6) — portaled to body
-				    by the component itself, lives here for state locality. */}
-				<DeleteSessionDialog
-					chat={deleting}
-					onClose={() => setDeleting(null)}
-					onDeleted={onDeleted}
-				/>
-			</aside>
+			{/* The two-option delete dialog (wave 6) — portaled to body
+			    by the component itself, lives here for state locality. */}
+			<DeleteSessionDialog
+				chat={deleting}
+				onClose={() => setDeleting(null)}
+				onDeleted={onDeleted}
+			/>
+		</aside>
 	);
 }
+
+/** SessionRow for the live list: memoized, with id-keyed callbacks, so a
+ *  sidebar toggle or a sibling's state change does not re-render every row. */
+const SessionListRow = memo(function SessionListRow({
+	chat,
+	active,
+	onOpenChat,
+	onChatContextMenu,
+}: {
+	chat: ChatListItem;
+	active: boolean;
+	onOpenChat: (id: string) => void;
+	onChatContextMenu: (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => void;
+}) {
+	return (
+		<SessionRow
+			chat={chat}
+			active={active}
+			onOpen={() => onOpenChat(chat.id)}
+			onContextMenu={(e) => onChatContextMenu(e, chat)}
+		/>
+	);
+});
+
+/** CourseChatRow for the live list, memoized the same way. */
+const CourseChatListRow = memo(function CourseChatListRow({
+	chat,
+	label,
+	active,
+	onOpenChat,
+	onChatContextMenu,
+}: {
+	chat: ChatListItem;
+	label?: string;
+	active: boolean;
+	onOpenChat: (id: string) => void;
+	onChatContextMenu: (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => void;
+}) {
+	return (
+		<CourseChatRow
+			chat={chat}
+			label={label}
+			active={active}
+			onOpen={() => onOpenChat(chat.id)}
+			onContextMenu={(e) => onChatContextMenu(e, chat)}
+		/>
+	);
+});
 
 /** The app frame: sidebar inline + content. Rendered once in the root layout. */
 export function AppShell({ children }: { children: React.ReactNode }) {

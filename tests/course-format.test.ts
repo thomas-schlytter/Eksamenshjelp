@@ -1,15 +1,15 @@
 /**
- * The fag UI's pure helpers (components/courses/course-format.ts and
- * course-api.ts): labels, dates, sorting, the session each Start button
- * creates, and the error lines a student sees. No React, no network.
+ * The fag UI's pure helpers (components/courses/course-format.ts,
+ * course-chats.ts and course-api.ts): labels, dates, sorting, the fag-chat
+ * client, and the error lines a student sees. No React, no network.
  */
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	countsSummary, daysBetween, daysLeftLabel, daysLeftShort, formatExamDate, formatMinutes, formatNumericDate, formatPlanDay,
-	learnSession, mappingSession, mockExamSession, planItemSubject, practiceSession, sessionForPlanItem,
-	sortCoursesByExam, sortTopicsForBoard,
+	planItemSubject, sortCoursesByExam, sortTopicsForBoard,
 } from "../components/courses/course-format.ts";
+import { moveChatToCourse, newSubChatHref, openCourseChatId } from "../components/courses/course-chats.ts";
 import { courseApi, CourseApiError, courseErrorMessage } from "../components/courses/course-api.ts";
 import { minutesOptionFor } from "../components/courses/exam-plan.tsx";
 import { pathKindOrder, sourceDetail } from "../components/courses/course-sources.tsx";
@@ -94,59 +94,51 @@ describe("course ordering", () => {
 	});
 });
 
-describe("what a Start button creates", () => {
-	it("Lær: a teaching session on the topic, opened in the student's voice", () => {
-		assert.deepEqual(learnSession(course, course.topics[0]!), {
-			title: "Lær: Laplacetransformasjon",
-			course: { code: "TTK4100", topicId: "laplace", mode: "learn" },
-			openingText: "Lær meg Laplacetransformasjon i TTK4100 fram mot eksamen.",
-		});
-	});
-
-	it("Øv: a practice session (kind + mode) asking for exam problems", () => {
-		assert.deepEqual(practiceSession(course, course.topics[0]!), {
-			title: "Øv: Laplacetransformasjon",
-			kind: "practice",
-			course: { code: "TTK4100", topicId: "laplace", mode: "practice" },
-			openingText: "Gi meg eksamensoppgaver om Laplacetransformasjon i TTK4100.",
-		});
-	});
-
-	it("mock exam and mapping are course-wide; mapping is a teaching session", () => {
-		assert.deepEqual(mockExamSession(course), {
-			title: "Prøveeksamen TTK4100",
-			kind: "practice",
-			course: { code: "TTK4100", mode: "practice" },
-			openingText: "Gi meg et prøveeksamenssett i TTK4100.",
-		});
-		const mapping = mappingSession(course);
-		assert.equal(mapping.title, "Kartlegging TTK4100");
-		assert.equal(mapping.kind, undefined);
-		assert.deepEqual(mapping.course, { code: "TTK4100", mode: "mapping" });
-		assert.equal(mapping.openingText, "Kartlegg hva jeg kan i TTK4100 Kybernetikk introduksjon.");
-	});
-
-	it("plan items map by activity: learn/review teach, practice/mock drill", () => {
-		const item = (activity: "learn" | "practice" | "review" | "mock", topicId?: string) =>
-			sessionForPlanItem(course, { activity, topicId, title: activity === "mock" ? "Prøveeksamen: løs et tidligere eksamenssett på tid" : "Lær: Laplacetransformasjon" });
-		assert.equal(item("learn", "laplace").kind, undefined);
-		assert.equal(item("learn", "laplace").course.mode, "learn");
-		assert.equal(item("review", "laplace").kind, undefined);
-		assert.equal(item("review", "laplace").title, "Repeter: Laplacetransformasjon");
-		assert.equal(item("review", "laplace").course.topicId, "laplace");
-		assert.equal(item("practice", "laplace").kind, "practice");
-		assert.equal(item("mock").kind, "practice");
-		assert.equal(item("mock").openingText, "Gi meg et prøveeksamenssett i TTK4100.");
-	});
-
-	it("a plan item whose topic was deleted still starts, about the item's own subject", () => {
-		const start = sessionForPlanItem(course, { activity: "learn", topicId: "gone", title: "Lær: Bodediagram" });
+describe("plan items (fase 2: no Start buttons, the subject still reads right)", () => {
+	it("an item's subject is its topic, else its own title without the activity prefix", () => {
 		assert.equal(planItemSubject({ title: "Lær: Bodediagram" }), "Bodediagram");
-		assert.deepEqual(start.course, { code: "TTK4100", mode: "learn" });
-		assert.equal(start.openingText, "Lær meg Bodediagram i TTK4100 fram mot eksamen.");
+		assert.equal(planItemSubject({ title: "Øv: Bodediagram" }, course.topics[0]), "Laplacetransformasjon");
+	});
+});
+
+describe("the fag-chat client (fase 2: one chat per fag)", () => {
+	it("opening a fag POSTs to its fag-chat route and returns the id and whether it is empty", async () => {
+		const calls: { url: string; method: string }[] = [];
+		const f = (async (url: string, init?: RequestInit) => {
+			calls.push({ url: String(url), method: init?.method ?? "GET" });
+			return new Response(JSON.stringify({ id: "chat_fag", created: true, empty: true }), { status: 200 });
+		}) as unknown as typeof fetch;
+		assert.deepEqual(await openCourseChatId("ÆØ1", f), { id: "chat_fag", empty: true });
+		assert.deepEqual(calls, [{ url: "/api/courses/%C3%86%C3%981/chat", method: "POST" }]);
 	});
 
-	it("the starter posts the fag link and hands over the OPENING TEXT, not the short title", async () => {
+	it("a failed or malformed answer throws instead of navigating anywhere", async () => {
+		const fail = (async () => new Response("{}", { status: 404 })) as unknown as typeof fetch;
+		await assert.rejects(openCourseChatId("TTK4100", fail));
+		const bad = (async () => new Response(JSON.stringify({ id: "../x" }), { status: 200 })) as unknown as typeof fetch;
+		await assert.rejects(openCourseChatId("TTK4100", bad));
+	});
+
+	it("«Flytt til fag» PUTs the code; the server's own line comes back on a refusal", async () => {
+		let seen: { url: string; method?: string; body: unknown } | null = null;
+		const ok = (async (url: string, init?: RequestInit) => {
+			seen = { url: String(url), method: init?.method, body: JSON.parse(String(init?.body)) };
+			return new Response(JSON.stringify({ course: { code: "TTK4100", mode: "sub" } }), { status: 200 });
+		}) as unknown as typeof fetch;
+		assert.equal(await moveChatToCourse("chat_a", "TTK4100", ok), null);
+		assert.deepEqual(seen, { url: "/api/chats/chat_a/course", method: "PUT", body: { code: "TTK4100" } });
+		const busy = (async () => new Response(JSON.stringify({ error: "Økta arbeider akkurat nå." }), { status: 409 })) as unknown as typeof fetch;
+		assert.equal(await moveChatToCourse("chat_a", "TTK4100", busy), "Økta arbeider akkurat nå.");
+		const offline = (async () => { throw new TypeError("fetch failed"); }) as unknown as typeof fetch;
+		assert.equal(await moveChatToCourse("chat_a", "TTK4100", offline), "Kunne ikke flytte økta.");
+	});
+
+	it("«Ny underchat» is the draft view linked to the fag", () => {
+		assert.equal(newSubChatHref("TTK4100"), "/chat/new?fag=TTK4100");
+		assert.equal(newSubChatHref("ÆØ1"), "/chat/new?fag=%C3%86%C3%981");
+	});
+
+	it("the starter posts an underchat's link and hands over the opening text", async () => {
 		const data = new Map<string, string>();
 		const original = Object.getOwnPropertyDescriptor(globalThis, "sessionStorage");
 		Object.defineProperty(globalThis, "sessionStorage", { configurable: true, value: {
@@ -158,17 +150,12 @@ describe("what a Start button creates", () => {
 			let body: unknown;
 			const f = (async (_url: string, init?: RequestInit) => {
 				body = JSON.parse(String(init?.body));
-				return new Response(JSON.stringify({ id: "c_fag" }), { status: 200 });
+				return new Response(JSON.stringify({ id: "c_sub" }), { status: 200 });
 			}) as unknown as typeof fetch;
-			const { openingText, ...create } = practiceSession(course, course.topics[0]!);
-			const target = await new SessionStarter().start(create, f, undefined, openingText);
-			assert.equal(target, "/chat/c_fag");
-			assert.deepEqual(body, {
-				title: "Øv: Laplacetransformasjon",
-				kind: "practice",
-				course: { code: "TTK4100", topicId: "laplace", mode: "practice" },
-			});
-			assert.equal(readOpeningPrompt("c_fag"), "Gi meg eksamensoppgaver om Laplacetransformasjon i TTK4100.");
+			const target = await new SessionStarter().start({ title: "Laplace", course: { code: "TTK4100", mode: "sub" } }, f);
+			assert.equal(target, "/chat/c_sub");
+			assert.deepEqual(body, { title: "Laplace", course: { code: "TTK4100", mode: "sub" } });
+			assert.equal(readOpeningPrompt("c_sub"), "Laplace");
 		} finally {
 			if (original) Object.defineProperty(globalThis, "sessionStorage", original);
 			else Reflect.deleteProperty(globalThis, "sessionStorage");

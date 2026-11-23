@@ -2,18 +2,16 @@
 
 import { useState } from "react";
 import {
-	BookOpenIcon, CalendarClockIcon, CheckIcon, ChevronRightIcon, ClipboardCheckIcon, DumbbellIcon, PlayIcon, RotateCcwIcon, SparklesIcon,
+	BookOpenIcon, CalendarClockIcon, CheckIcon, ChevronRightIcon, ClipboardCheckIcon, DumbbellIcon, RotateCcwIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import {
-	ACTIVITY_LABEL, daysLeftLabel, formatExamDate, formatMinutes, formatPlanDay, MINUTES_PER_DAY_OPTIONS,
-	mappingSession, planItemSubject, sessionForPlanItem, type CourseSessionStart,
+	ACTIVITY_LABEL, daysLeftLabel, formatExamDate, formatMinutes, formatPlanDay, MINUTES_PER_DAY_OPTIONS, planItemSubject,
 } from "./course-format";
 import {
 	topicCounts, type Course, type ExamPlan, type ExamPlanDay, type ExamPlanItem, type PlanActivity,
 } from "./course-types";
-import { ExamSessionCard, type ExamSessionState } from "./exam-session";
 import { StatusDot, TopicStatusBar } from "./status-ui";
 
 const ACTIVITY_ICON: Record<PlanActivity, typeof BookOpenIcon> = {
@@ -28,17 +26,14 @@ const UPCOMING_PREVIEW = 6;
 
 export interface ExamPlanActions {
 	onToggleDone: (key: string, done: boolean) => void;
-	onStart: (session: CourseSessionStart) => void;
 	onMinutesPerDay: (minutes: number) => void;
 	/** Open the first-run wizard (no topics yet). */
 	onOpenWizard: () => void;
 	/** Go to the Temaer tab so the student can set the colours («Kartlegg
-	 *  nå»). Absent = the nudge offers only the AI mapping session. */
+	 *  nå»). Absent = the nudge has no button. */
 	onMapTopics?: () => void;
 	/** Put focus on the exam date field (no date, or the exam has passed). */
 	onEditExamDate: () => void;
-	/** A session is being created: every Start button waits. */
-	starting: boolean;
 }
 
 /** From this share of unmapped topics and up, the plan is mostly a guess
@@ -61,7 +56,8 @@ export function minutesOptionFor(minutes: number): number {
 
 const dayMinutes = (day: ExamPlanDay) => day.items.reduce((sum, item) => sum + item.minutes, 0);
 
-/** One plan item: tick it off, see what it is, start it. */
+/** One plan item: tick it off, see what it is. (Fase 2: the work itself
+ *  happens in the fag-chat; the Lær/Øv/Prøveeksamen starts are gone.) */
 function PlanItemRow({ course, item, actions }: { course: Course; item: ExamPlanItem; actions: ExamPlanActions }) {
 	const topic = item.topicId ? course.topics.find((t) => t.id === item.topicId) : undefined;
 	const Icon = ACTIVITY_ICON[item.activity];
@@ -92,17 +88,6 @@ function PlanItemRow({ course, item, actions }: { course: Course; item: ExamPlan
 					<span className="tabular-nums">{formatMinutes(item.minutes)}</span>
 				</p>
 			</div>
-			<Button
-				size="sm"
-				variant={item.done ? "outline" : "default"}
-				disabled={actions.starting}
-				onClick={() => actions.onStart(sessionForPlanItem(course, item))}
-				aria-label={`Start: ${ACTIVITY_LABEL[item.activity]}, ${subject}`}
-				data-testid="plan-item-start"
-			>
-				<PlayIcon aria-hidden="true" />
-				Start
-			</Button>
 		</li>
 	);
 }
@@ -149,15 +134,12 @@ function PlanMessage({ title, children, action }: { title: string; children: Rea
  * the plan itself always comes from the server (`plan`), so ticking an item
  * or changing a status re-plans there.
  */
-export function ExamPlanView({ course, plan, today, actions, examSession = null }: {
+export function ExamPlanView({ course, plan, today, actions }: {
 	course: Course;
 	plan: ExamPlan;
 	/** The student's local date, YYYY-MM-DD. */
 	today: string;
 	actions: ExamPlanActions;
-	/** The fag's eksamensøkt, if it has one (the card under the status
-	 *  line continues it instead of starting another). */
-	examSession?: ExamSessionState;
 }) {
 	const [showAll, setShowAll] = useState(false);
 	const counts = topicCounts(course.topics);
@@ -169,7 +151,7 @@ export function ExamPlanView({ course, plan, today, actions, examSession = null 
 	const examPassed = plan.daysLeft !== null && plan.daysLeft < 0;
 	const examToday = plan.daysLeft === 0;
 	// Nothing (or nearly nothing) mapped: the plan below treats every topic
-	// alike. Say so, with the two ways to fix it. Gone the moment enough
+	// alike. Say so, with the way to fix it. Gone the moment enough
 	// topics have a colour, and never on or after exam day.
 	const needsMapping = planNeedsMapping(course.topics) && !examPassed && !examToday;
 
@@ -185,21 +167,9 @@ export function ExamPlanView({ course, plan, today, actions, examSession = null 
 						<span className="font-semibold">Planen blir bedre når du har kartlagt temaene.</span>{" "}
 						<span className="text-muted-foreground">Det tar ett minutt.</span>
 					</p>
-					<div className="flex flex-wrap gap-2">
-						{actions.onMapTopics && (
-							<Button size="sm" onClick={actions.onMapTopics} data-testid="plan-map-now">Kartlegg nå</Button>
-						)}
-						<Button
-							variant="outline"
-							size="sm"
-							disabled={actions.starting}
-							onClick={() => actions.onStart(mappingSession(course))}
-							data-testid="plan-map-with-ai"
-						>
-							<SparklesIcon aria-hidden="true" />
-							La AI-en teste meg
-						</Button>
-					</div>
+					{actions.onMapTopics && (
+						<Button size="sm" onClick={actions.onMapTopics} data-testid="plan-map-now">Kartlegg nå</Button>
+					)}
 				</div>
 			)}
 
@@ -226,10 +196,6 @@ export function ExamPlanView({ course, plan, today, actions, examSession = null 
 					</select>
 				</label>
 			</div>
-
-			{/* The other way through the fag: one continuous eksamensøkt. Always
-			    here, in the same place, whatever state the plan below is in. */}
-			<ExamSessionCard course={course} session={examSession} onStart={actions.onStart} starting={actions.starting} />
 
 			{noTopics ? (
 				<PlanMessage

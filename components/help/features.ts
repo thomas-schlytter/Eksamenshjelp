@@ -45,7 +45,7 @@ export const FEATURES: readonly FeatureEntry[] = [
 	{
 		id: "ny-okt",
 		title: "Ny økt",
-		description: "Start en fri økt om noe du vil forstå.",
+		description: "Start en økt uten fag om noe du vil forstå.",
 		keywords: ["ny økt", "start økt", "læringsøkt", "øvingsøkt", "lær", "øv", "chat", "samtale", "new session"],
 		action: { kind: "route", href: "/chat/new" },
 		suggested: true,
@@ -194,12 +194,5 @@ export const FEATURES: readonly FeatureEntry[] = [
 		description: "Få mer plass, eller hent menyen tilbake.",
 		keywords: ["sidemeny", "meny", "sidebar", "skjul", "vis", "sidepanel", "fullskjerm"],
 		action: { kind: "shortcut", action: "toggle-sidebar" },
-	},
-	{
-		id: "sok-okter",
-		title: "Søk i øktene dine",
-		description: "Finn en tidligere økt på tittel.",
-		keywords: ["søk økt", "finn økt", "tidligere økter", "historikk", "search sessions"],
-		action: { kind: "shortcut", action: "sessions-search" },
 	},
 ];

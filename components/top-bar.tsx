@@ -41,8 +41,10 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { CourseLinkChip } from "@/components/courses/course-chip";
+import { CourseChatMenu } from "@/components/courses/course-chat-menu";
+import { useServerEvent } from "@/components/server-events";
 import { SidebarToggle } from "@/components/sidebar";
-import type { ChatListItem } from "@/src/core";
+import { isCourseMainChat, type ChatListItem } from "@/src/core";
 
 /** The session a path names, or undefined (the draft view is no session). */
 export function chatIdFromPath(pathname: string | null | undefined): string | undefined {
@@ -58,18 +60,30 @@ export function chatIdFromPath(pathname: string | null | undefined): string | un
  * Renders nothing until the answer is in, and nothing for a free session.
  */
 function SessionCourseChip({ chatId }: { chatId: string }) {
-	const [code, setCode] = useState<string | null>(null);
+	const [link, setLink] = useState<{ code: string; main: boolean } | null>(null);
+	const [revision, setRevision] = useState(0);
+	// «Flytt til fag» links a session after birth: the list-shape event
+	// brings the chip (and the menu) in without a reload.
+	useServerEvent("chats-changed", () => setRevision((r) => r + 1));
 	useEffect(() => {
 		let live = true;
 		fetch("/api/chats", { cache: "no-store" })
 			.then((res) => res.json() as Promise<{ chats?: ChatListItem[] }>)
 			.then((body) => {
-				if (live) setCode(body.chats?.find((chat) => chat.id === chatId)?.course?.code ?? null);
+				const chat = body.chats?.find((c) => c.id === chatId);
+				if (live) setLink(chat?.course ? { code: chat.course.code, main: isCourseMainChat(chat) } : null);
 			})
 			.catch(() => { /* no chip is the honest fallback */ });
 		return () => { live = false; };
-	}, [chatId]);
-	return code ? <CourseLinkChip code={code} /> : null;
+	}, [chatId, revision]);
+	if (!link) return null;
+	return (
+		<>
+			<CourseLinkChip code={link.code} />
+			{/* The fag-chat's own menu (fase 2: «Ny underchat»). */}
+			{link.main && <CourseChatMenu code={link.code} chatId={chatId} />}
+		</>
+	);
 }
 
 export function TopBar({

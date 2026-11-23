@@ -28,7 +28,7 @@ import { ChatSessionComposer } from "@/components/composer";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { blurAfterPointerClick } from "@/components/focus-hygiene";
 import { dockStateKey } from "@/components/dock-state-key";
-import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
+import { clearOpeningPrompt, readOpeningPromptEntry, stashOpeningPrompt, takeCarriedMessage, OPENING_PROMPT_FAILURE } from "@/components/opening-prompt";
 import { forwardDockWheel, useDockHeight } from "@/components/dock-height";
 import { QueuedSteersBody, type QueuedSteerLine } from "@/components/queued-steers";
 import { DictationBar, finishDictation, joinDictation, useDictation } from "@/components/dictation";
@@ -1410,6 +1410,22 @@ export function Chat({
 		}
 		doSend();
 	};
+
+	/* THE CARRIED MESSAGE (fase 2): the fag page's start box sent text into
+	 * this fag-chat. Taken once on mount: sent like Enter in the composer,
+	 * or left in the composer while a question waits for its answer. */
+	const doSteerOrSendRef = useRef(doSteerOrSend);
+	doSteerOrSendRef.current = doSteerOrSend;
+	const carriedTakenRef = useRef(false);
+	useEffect(() => {
+		if (carriedTakenRef.current) return;
+		carriedTakenRef.current = true;
+		if (openingDraftRef.current !== null) return;
+		const carried = takeCarriedMessage(chatId);
+		if (!carried) return;
+		applyText(carried);
+		if (!pending && !compacting) doSteerOrSendRef.current();
+	}, [chatId, applyText, pending, compacting]);
 
 	return (
 		<ChatActionsContext.Provider

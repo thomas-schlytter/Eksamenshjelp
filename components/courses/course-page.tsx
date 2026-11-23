@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -13,12 +13,14 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { ConfirmDialog } from "./confirm-dialog";
 import { courseApi, CourseApiError, courseErrorMessage, type CourseAndPlan } from "./course-api";
-import { daysLeftLabel, type CourseSessionStart, type SelfStatus } from "./course-format";
+import { groupChatsByCourse } from "@/src/core";
+import { CourseChatList } from "./course-chat-list";
+import { openCourseChatId, useChatList } from "./course-chats";
+import { daysLeftLabel, type SelfStatus } from "./course-format";
 import { SourcesPanel } from "./course-sources";
 import { localIsoDate, type Course } from "./course-types";
 import { CourseWizard } from "./course-wizard";
 import { ExamPlanView } from "./exam-plan";
-import { useExamSession } from "./exam-session";
 import { LauncherSetupDialog, usePageTabCycle, useSessionLauncher } from "./session-launcher";
 import { StartBox } from "./start-box";
 import { TopicBoard } from "./topic-board";
@@ -276,8 +278,9 @@ export function CourseTabs({ tab, onTab, panelId }: { tab: CourseTab; onTab: (ta
 
 /**
  * THE FAG PAGE (/fag/[code]): header, the three tabs (Eksamensplan is the
- * default), the first-run wizard while there are no topics, and a start
- * box for a free session linked to the fag.
+ * default), the first-run wizard while there are no topics, the fag's
+ * chats (fase 2: the fag-chat and its underchats), and a start box that
+ * sends into the fag-chat.
  *
  * STATE: the server's `{ course, plan }` is the truth. Quick edits (a
  * status, a ticked plan item, minutes per day, removing a source) apply
@@ -291,7 +294,11 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 	const root = useRef<HTMLDivElement>(null);
 	usePageTabCycle(root);
 	const launcher = useSessionLauncher(initialConfigured);
-	const examSession = useExamSession(code);
+	const chats = useChatList();
+	const chatGroup = useMemo(
+		() => (chats === null ? null : groupChatsByCourse(chats, [code]).byCourse.get(code) ?? { main: null, subs: [] }),
+		[chats, code],
+	);
 	const [data, setData] = useState(initial);
 	const [gone, setGone] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
@@ -427,12 +434,19 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		if (error) setNotice(`Kunne ikke lage temaliste. ${error}`);
 		return error ? null : how;
 	};
-	const start = (session: CourseSessionStart) => {
-		const { openingText, ...body } = session;
-		void launcher.launch(body, openingText).then((outcome) => {
-			if (outcome === "failed") setNotice("Kunne ikke starte økta. Prøv igjen.");
-		});
+	// The fag-chat (fase 2): opened from the chat list, created the first
+	// time; the start box sends its text into it.
+	const [openingChat, setOpeningChat] = useState(false);
+	const openMainChat = () => {
+		setOpeningChat(true);
+		openCourseChatId(code, fetch)
+			.then((chat) => router.push(`/chat/${chat.id}`))
+			.catch(() => {
+				setOpeningChat(false);
+				setNotice("Kunne ikke åpne fag-chatten. Prøv igjen.");
+			});
 	};
+	const sendToCourseChat = (text: string) => void launcher.sendToCourseChat(code, text);
 	const focusExamDate = () => {
 		dateRef.current?.scrollIntoView({ block: "center" });
 		dateRef.current?.focus();
@@ -478,7 +492,6 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 
 	if (gone) return <CourseNotFound code={code} />;
 
-	const starting = launcher.busy;
 	return (
 		<div ref={root} className="flex h-dvh flex-col">
 			<TopBar>
@@ -526,6 +539,8 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 						)}
 					</div>
 
+					<CourseChatList code={code} group={chatGroup} onOpenMain={openMainChat} opening={openingChat} />
+
 					<CourseTabs tab={tab} onTab={selectTab} panelId={panelId} />
 
 					<div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-tab-${tab}`} className="min-h-80">
@@ -533,17 +548,14 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 							<div className="flex flex-col items-center gap-3">
 								<CourseWizard
 									course={course}
-									examSession={examSession}
 									actions={{
 										onExamDate: setExamDate,
 										onAddSource: (source) => mutate(null, () => courseApi.addSource(code, source)),
 										onRemoveSource: removeSource,
 										onGenerate: generateTopics,
 										onStatus: setStatus,
-										onStart: start,
 										onOpenSetup: launcher.openSetup,
 										onDone: () => setWizard(false),
-										starting,
 									}}
 								/>
 								<Button variant="ghost" size="sm" onClick={() => setWizard(false)}>Lukk veiviseren</Button>
@@ -553,15 +565,12 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 								course={course}
 								plan={plan}
 								today={today}
-								examSession={examSession}
 								actions={{
 									onToggleDone: togglePlanItem,
-									onStart: start,
 									onMinutesPerDay: setMinutesPerDay,
 									onOpenWizard: () => setWizard(true),
 									onMapTopics: () => selectTab("topics"),
 									onEditExamDate: focusExamDate,
-									starting,
 								}}
 							/>
 						))}
@@ -574,10 +583,8 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 								}}
 								actions={{
 									onStatus: setStatus,
-									onStart: start,
 									onSaveTopics: saveTopics,
 									onRegenerate: () => setConfirm("regenerate"),
-									starting,
 									regenerating: generating,
 								}}
 							/>
@@ -593,14 +600,15 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 				</div>
 			</div>
 
-			{/* A free session about this fag: docked under the scroll area. */}
+			{/* Into the fag-chat (fase 2): docked under the scroll area. */}
 			<div className="shrink-0 border-t border-border/60 bg-background pb-4 pt-3">
 				<div className="mx-auto w-full max-w-[46rem] px-4">
 					<StartBox
 						launcher={launcher}
 						placeholder={`Spør om hva som helst i ${course.code}`}
 						ownsFieldCycle={false}
-						buildSession={(text) => ({ title: text, course: { code } })}
+						send={sendToCourseChat}
+						submitLabel="Send til fag-chatten"
 					/>
 				</div>
 			</div>

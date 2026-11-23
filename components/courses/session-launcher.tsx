@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { SetupDialog } from "@/components/setup-dialog";
 import { openModelPicker, selectedModelUnavailable, useModelSetup, ZeroKeysPill } from "@/components/setup-cta";
 import { SessionStarter, type SessionCreation } from "@/components/start-session";
+import { OPENING_PROMPT_FAILURE, stashCarriedMessage, stashOpeningPrompt } from "@/components/opening-prompt";
+import { openCourseChatId } from "./course-chats";
 
 /**
  * ONE way to start a session from the fag surfaces (home, the fag page,
@@ -31,17 +33,23 @@ export function useSessionLauncher(initialConfigured: boolean) {
 	const startingRef = useRef(false);
 	const starterRef = useRef(new SessionStarter());
 
-	const launch = useCallback(async (body: SessionCreation, openingText?: string): Promise<LaunchOutcome> => {
-		if (startingRef.current) return "blocked";
+	/** The pre-send guards: true when one took over. */
+	const guarded = useCallback((): boolean => {
 		if (!configured || zeroKeys) {
 			setSetupOpen(true);
-			return "blocked";
+			return true;
 		}
 		const strong = catalog?.slots.strong?.model;
 		if (selectedModelUnavailable(catalog, strong ? `${strong.provider}:${strong.id}` : undefined)) {
 			openModelPicker();
-			return "blocked";
+			return true;
 		}
+		return false;
+	}, [catalog, configured, zeroKeys]);
+
+	const launch = useCallback(async (body: SessionCreation, openingText?: string): Promise<LaunchOutcome> => {
+		if (startingRef.current) return "blocked";
+		if (guarded()) return "blocked";
 		startingRef.current = true;
 		setBusy(true);
 		setFailed(false);
@@ -55,10 +63,35 @@ export function useSessionLauncher(initialConfigured: boolean) {
 			setFailed(true);
 			return "failed";
 		}
-	}, [catalog, configured, zeroKeys, router]);
+	}, [catalog, guarded, router]);
+
+	/** Send `text` into the fag's fag-chat (fase 2): find or create it,
+	 *  hand the text over, open it. A chat with no conversation yet gets it
+	 *  as its opening message; otherwise it is carried into the composer
+	 *  and sent there. */
+	const sendToCourseChat = useCallback(async (code: string, text: string): Promise<LaunchOutcome> => {
+		if (startingRef.current) return "blocked";
+		if (guarded()) return "blocked";
+		startingRef.current = true;
+		setBusy(true);
+		setFailed(false);
+		try {
+			const id = await openCourseChatId(code, fetch);
+			const handed = id.empty ? stashOpeningPrompt(id.id, text) : stashCarriedMessage(id.id, text);
+			if (!handed) throw new Error(OPENING_PROMPT_FAILURE);
+			router.push(`/chat/${id.id}`);
+			return "started";
+		} catch {
+			startingRef.current = false;
+			setBusy(false);
+			setFailed(true);
+			return "failed";
+		}
+	}, [guarded, router]);
 
 	return {
 		launch,
+		sendToCourseChat,
 		busy,
 		failed,
 		configured,
