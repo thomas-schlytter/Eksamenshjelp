@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronLeftIcon, ChevronRightIcon, LightbulbIcon } from "lucide-react";
+import { ChevronLeftIcon, ChevronRightIcon, LightbulbIcon, LoaderCircleIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 
@@ -87,6 +87,69 @@ export function HintStepper({
 			<div data-testid="hint-text" className="mt-1">
 				<ToolContentResponse>{hints[shown]!}</ToolContentResponse>
 			</div>
+		</div>
+	);
+}
+
+/**
+ * The Hint button on a task that came without authored hints (owner,
+ * 2026-11-23: the button is always there). The first press asks the server
+ * for the task's ladder — made once, cached — and hands it to the stepper,
+ * which then opens hint 1. No chat turn, nothing in the transcript.
+ */
+export function HintRequestButton({
+	chatId,
+	toolCallId,
+	onHints,
+}: {
+	chatId: string;
+	toolCallId: string;
+	onHints: (hints: string[]) => void;
+}) {
+	const [state, setState] = useState<"idle" | "loading" | "error">("idle");
+	const [error, setError] = useState("");
+	const request = async () => {
+		setState("loading");
+		setError("");
+		try {
+			const res = await fetch(`/api/chats/${encodeURIComponent(chatId)}/hints`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ toolCallId }),
+			});
+			const body = (await res.json().catch(() => ({}))) as { hints?: unknown; error?: string };
+			const hints = Array.isArray(body.hints) ? body.hints.filter((h): h is string => typeof h === "string" && h.trim().length > 0) : [];
+			if (!res.ok || hints.length === 0) {
+				setState("error");
+				setError(body.error ?? "Klarte ikke å hente hint.");
+				return;
+			}
+			setState("idle");
+			onHints(hints);
+		} catch {
+			setState("error");
+			setError("Klarte ikke å hente hint. Prøv igjen.");
+		}
+	};
+	return (
+		<div className="flex items-center gap-2">
+			<Button
+				type="button"
+				variant="ghost"
+				size="xs"
+				data-testid="hint-request"
+				disabled={state === "loading"}
+				onClick={() => void request()}
+				className="text-muted-foreground"
+			>
+				{state === "loading" ? <LoaderCircleIcon className="animate-spin" aria-hidden /> : <LightbulbIcon aria-hidden />}
+				{state === "loading" ? "Lager hint …" : "Hint"}
+			</Button>
+			{state === "error" && (
+				<span role="alert" className="text-xs text-status-red-ink">
+					{error}
+				</span>
+			)}
 		</div>
 	);
 }

@@ -9,7 +9,8 @@ import { PathInput } from "@/components/path-input";
 import { AnswerUploadButton, withAnswerPaths } from "@/components/answer-upload";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { ToolContentResponse } from "@/components/ai-elements/message";
-import { HintStepper } from "@/components/hint-stepper";
+import { HintRequestButton, HintStepper } from "@/components/hint-stepper";
+import { useParams } from "next/navigation";
 import { SvgImage } from "@/components/artifacts/svg-image";
 import { cn } from "@/lib/utils";
 import {
@@ -411,8 +412,15 @@ function QuestionDockForm({
 	const kind = toolQuestionKind(toolName);
 	// The task's hidden hints (fase 4): authored with the call, opened only
 	// by the learner. The high-water mark rides the answer.
-	const hints = useMemo(() => normalizeHints((input as { hints?: unknown }).hints), [input]);
-	const [hintsRevealed, setHintsRevealed] = useState(() => Math.min(hints.length, initialDraft?.hintsRevealed ?? 0));
+	const authoredHints = useMemo(() => normalizeHints((input as { hints?: unknown }).hints), [input]);
+	// The Hint button is always on a task (owner, 2026-11-23): without
+	// authored hints, the first press asks the server for a ladder (made
+	// once, cached per chat — src/server/task-hints.ts).
+	const [requestedHints, setRequestedHints] = useState<string[]>([]);
+	const hints = authoredHints.length > 0 ? authoredHints : requestedHints;
+	const [hintsRevealed, setHintsRevealed] = useState(() => Math.min(authoredHints.length, initialDraft?.hintsRevealed ?? 0));
+	const chatId = useParams<{ id?: string }>()?.id;
+	const canRequestHints = kind === "explain" && phase !== "probe" && typeof chatId === "string" && chatId.length > 0;
 
 	// Canonical QuestionData, built once per question. Quiz options are
 	// deterministically shuffled (seeded by toolCallId) so position never leaks
@@ -791,10 +799,23 @@ function QuestionDockForm({
 						<ToolContentResponse>{qd.context}</ToolContentResponse>
 					</div>
 				)}
-				{hints.length > 0 && (
+				{hints.length > 0 ? (
 					<div className="mb-3">
 						<HintStepper hints={hints} revealed={hintsRevealed} onReveal={setHintsRevealed} />
 					</div>
+				) : (
+					canRequestHints && (
+						<div className="mb-3">
+							<HintRequestButton
+								chatId={chatId!}
+								toolCallId={toolCallId}
+								onHints={(got) => {
+									setRequestedHints(got);
+									setHintsRevealed(1);
+								}}
+							/>
+						</div>
+					)
 				)}
 
 				{qd.mode !== "text" && (

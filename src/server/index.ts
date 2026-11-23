@@ -62,6 +62,8 @@ export * from "./course-chats.ts";
 // recall quiz) and the course-topic update that follows it.
 export * from "./session-wrap.ts";
 export * from "./session-topics.ts";
+// Hints on request for tasks without authored hints (the Hint button).
+export * from "./task-hints.ts";
 // «Legg inn besvarelse»: the /api/attachments service (pasted images → files).
 export * from "./attachments.ts";
 // Prøveeksamen (fase 6): the /api/mock-exams service and the results read API.
