@@ -27,6 +27,8 @@ import {
 	WRAP_QUESTION_COUNT,
 	WRAP_SUMMARY_MAX,
 	WRAP_SUMMARY_MIN,
+	WRAP_TEXT_MAX,
+	WRAP_TITLE_MAX,
 	type ChatRecord,
 	type SessionWrapDraft,
 	type WrapSubmission,
@@ -61,10 +63,19 @@ const WRAP_TIMEOUT_MS = 180_000;
 const WRAP_TRANSCRIPT_CHARS = 160_000;
 
 const wrapSchema = Type.Object({
-	summary: Type.Array(Type.String({ description: "One bullet point in Norwegian bokmål: something the learner worked on, understood or got wrong in this økt. Concrete, in the course's own terminology. Math in $...$." }), {
-		minItems: WRAP_SUMMARY_MIN,
-		maxItems: WRAP_SUMMARY_MAX,
-	}),
+	summary: Type.Array(
+		Type.Object({
+			title: Type.String({
+				maxLength: WRAP_TITLE_MAX,
+				description: "The card's title in Norwegian bokmål: 2-6 words naming the topic, in the course's own terminology (e.g. \"RC-krets med terskel\"). No math, no trailing period.",
+			}),
+			text: Type.String({
+				maxLength: WRAP_TEXT_MAX,
+				description: "The card's body in Norwegian bokmål: 1-3 SHORT sentences on what the student did, understood or got wrong on this topic, and the one thing to remember. Inline math in $...$. At most ONE key formula, as display math: a line with only $$, the formula on the next line, then a line with only $$. No lists, no long derivations, no exam point tallies.",
+			}),
+		}),
+		{ minItems: WRAP_SUMMARY_MIN, maxItems: WRAP_SUMMARY_MAX },
+	),
 	questions: Type.Array(
 		Type.Object({
 			question: Type.String({ description: "The question in Norwegian bokmål. Markdown; math in $...$ (inline) or $$...$$." }),
@@ -84,7 +95,7 @@ const WRAP_SYSTEM_PROMPT = [
 	"You receive the transcript of ONE økt between the student and their AI tutor. Write a short summary and a recall quiz that gets the student's memory going.",
 	"",
 	"Rules:",
-	`- summary: ${WRAP_SUMMARY_MIN} to ${WRAP_SUMMARY_MAX} bullet points on what the student actually did in this økt: the concepts, methods and results covered, and the mistakes they made and fixed. Only what is in the transcript.`,
+	`- summary: ${WRAP_SUMMARY_MIN} to ${WRAP_SUMMARY_MAX} cards, one topic per card, in the order the økt took them. The student flips through them one at a time on a small card, so each must be readable at a glance: a title of 2-6 words, and a text of 1-3 short sentences (at most ${WRAP_TEXT_MAX} characters) on what the student did, understood or got wrong, ending in the one thing to remember. At most one key formula per card, as display math with $$ alone on the line above and the line below the formula. No lists, no derivations, no long chains of numbers. Only what is in the transcript.`,
 	`- questions: exactly ${WRAP_QUESTION_COUNT} multiple-choice questions on the MOST IMPORTANT things from this økt, ordered from the økt's start to its end. Weight the points the student struggled with.`,
 	"- Every question must be answerable from what happened in the økt. Test understanding and use, not trivia about the conversation itself (never \"what did the tutor say first\").",
 	`- ${WRAP_OPTION_COUNT} options per question, exactly one correct. The wrong options are plausible: the mistakes a student really makes (sign errors, mixed-up definitions, the misconception the student showed). Similar length and form; no \"all of the above\".`,
@@ -145,10 +156,10 @@ async function submitWrap(prompt: string, engine: PiEngine): Promise<{ submissio
 		role: "extractor",
 		engine,
 		toolName: "submit_session_wrap",
-		toolDescription: `Submit the økt's summary (${WRAP_SUMMARY_MIN}-${WRAP_SUMMARY_MAX} bullet points) and exactly ${WRAP_QUESTION_COUNT} multiple-choice questions.`,
+		toolDescription: `Submit the økt's summary (${WRAP_SUMMARY_MIN}-${WRAP_SUMMARY_MAX} cards, each a short title and 1-3 short sentences) and exactly ${WRAP_QUESTION_COUNT} multiple-choice questions.`,
 		parameters: wrapSchema,
 		fill: (input: WrapSubmission) => ({
-			summary: input.summary.map((s) => s.trim()).filter(Boolean),
+			summary: input.summary.map((p) => ({ title: p.title.trim(), text: p.text.trim() })),
 			questions: input.questions.map((q) => ({
 				question: q.question,
 				options: q.options,

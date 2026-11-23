@@ -10,7 +10,7 @@ import React from "react";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it } from "node:test";
-import { SessionWrapChip, SessionWrapDivider } from "../components/session-wrap.tsx";
+import { SessionWrapChip, SessionWrapDivider, SummaryCards } from "../components/session-wrap.tsx";
 
 const wrap = {
 	id: "w",
@@ -43,5 +43,34 @@ describe("the Økt avsluttet divider", () => {
 	});
 	it("renders nothing for an unreadable payload", () => {
 		assert.equal(renderToStaticMarkup(<SessionWrapDivider data={{ nope: true }} onOpen={() => {}} />), "");
+	});
+});
+
+describe("the summary cards", () => {
+	const items = [
+		{ title: "RC-krets med terskel", text: "Sjekk $t = 0$ først." },
+		{ title: "Formotstand for LED", text: "Ohm på spenningen over motstanden." },
+		"Et gammelt punkt uten tittel",
+	];
+	it("shows one counter per card, the titles and a dot per card", () => {
+		const html = renderToStaticMarkup(<SummaryCards items={items} index={0} onIndex={() => {}} />);
+		assert.match(html, /1 \/ 3/);
+		assert.match(html, /2 \/ 3/);
+		assert.match(html, /3 \/ 3/);
+		assert.match(html, /RC-krets med terskel/);
+		assert.equal((html.match(/data-testid="session-wrap-dot"/g) ?? []).length, 3);
+		assert.match(html, /aria-selected="true" aria-label="Kort 1"/);
+	});
+	it("renders a legacy string as a card with text only", () => {
+		const html = renderToStaticMarkup(<SummaryCards items={items} index={2} onIndex={() => {}} />);
+		const legacyCard = html.split('data-testid="session-wrap-card"')[3] ?? "";
+		assert.match(legacyCard, /Et gammelt punkt uten tittel/);
+		assert.doesNotMatch(legacyCard, /<h3/);
+	});
+	it("hides the back arrow on the first card and the forward arrow on the last", () => {
+		const first = renderToStaticMarkup(<SummaryCards items={items} index={0} onIndex={() => {}} />);
+		assert.match(first, /aria-label="Forrige kort"[^>]*disabled=""/);
+		const last = renderToStaticMarkup(<SummaryCards items={items} index={2} onIndex={() => {}} />);
+		assert.match(last, /aria-label="Neste kort"[^>]*disabled=""/);
 	});
 });

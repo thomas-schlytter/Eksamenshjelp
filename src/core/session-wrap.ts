@@ -22,6 +22,45 @@ export const WRAP_QUESTION_COUNT = 10;
 export const WRAP_OPTION_COUNT = 4;
 export const WRAP_SUMMARY_MIN = 3;
 export const WRAP_SUMMARY_MAX = 8;
+/** Card limits: a glanceable title and a short body (owner, 2026-11-23:
+ *  the long bullets were hard on the eyes). */
+export const WRAP_TITLE_MAX = 60;
+export const WRAP_TEXT_MAX = 400;
+
+/** One summary card (2026-11-23): a short title and one to three short
+ *  sentences. Drafts from before carry a plain string per point. */
+export interface WrapPoint {
+	title: string;
+	/** Markdown + LaTeX, Norwegian; at most one display formula. */
+	text: string;
+}
+
+/** A stored summary point: the card shape, or a legacy plain string. */
+export type WrapSummaryItem = WrapPoint | string;
+
+/** Read any stored point as a card; a legacy string has no title. */
+export function wrapPointOf(item: unknown): { title: string | null; text: string } {
+	if (typeof item === "string") return { title: null, text: item };
+	if (typeof item === "object" && item !== null) {
+		const p = item as Partial<WrapPoint>;
+		return { title: typeof p.title === "string" && p.title.trim() ? p.title.trim() : null, text: typeof p.text === "string" ? p.text : "" };
+	}
+	return { title: null, text: "" };
+}
+
+/** A card's text for display: a line that holds only `$$…$$` becomes a
+ *  display block (`$$` on lines of their own). In this markdown pipeline a
+ *  single-line `$$…$$` renders inline and small. Presentation only. */
+export function wrapCardMarkdown(text: string): string {
+	return text.replace(/^[ \t]*\$\$([^\n]+?)\$\$[ \t]*$/gm, (_m, body: string) => `\n$$\n${body.trim()}\n$$\n`).replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** One line for the teacher's note: "title: text", newlines folded. */
+export function wrapPointLine(item: unknown): string {
+	const { title, text } = wrapPointOf(item);
+	const flat = text.replace(/\s*\n+\s*/g, " ").trim();
+	return title ? `${title}: ${flat}` : flat;
+}
 
 export interface WrapQuestion {
 	/** Markdown + LaTeX ($…$), Norwegian. */
@@ -53,8 +92,8 @@ export interface SessionWrapDraft {
 	/** The last record message the wrap covers: the next økt starts after it,
 	 *  so messages written while the quiz ran belong to the next økt. */
 	coversThroughId: string;
-	/** Bullet points, Norwegian. */
-	summary: string[];
+	/** Summary cards, Norwegian (legacy drafts: plain strings). */
+	summary: WrapSummaryItem[];
 	questions: WrapQuestion[];
 	/** The learner's chosen option per question; null = not answered. */
 	answers: (number | null)[];
@@ -137,16 +176,21 @@ export function wrapScore(wrap: Pick<SessionWrapDraft, "questions" | "answers">)
 
 /** The model's raw submission, before checks and shuffling. */
 export interface WrapSubmission {
-	summary: string[];
+	summary: WrapPoint[];
 	questions: WrapQuestion[];
 }
 
 /** A schema-valid submission can still break the wrap's rules; the
  *  problem string goes back to the model for a retry. null = accept. */
 export function wrapSubmissionProblem(value: WrapSubmission): string | null {
-	const summary = value.summary.filter((s) => s.trim());
-	if (summary.length < WRAP_SUMMARY_MIN || summary.length > WRAP_SUMMARY_MAX) {
-		return `summary must have ${WRAP_SUMMARY_MIN} to ${WRAP_SUMMARY_MAX} non-empty bullet points`;
+	if (value.summary.length < WRAP_SUMMARY_MIN || value.summary.length > WRAP_SUMMARY_MAX) {
+		return `summary must have ${WRAP_SUMMARY_MIN} to ${WRAP_SUMMARY_MAX} cards`;
+	}
+	for (const [i, p] of value.summary.entries()) {
+		if (!p.title.trim()) return `summary card ${i + 1} needs a title`;
+		if (!p.text.trim()) return `summary card ${i + 1} needs a text`;
+		if (p.title.trim().length > WRAP_TITLE_MAX) return `summary card ${i + 1}: the title must be at most ${WRAP_TITLE_MAX} characters`;
+		if (p.text.trim().length > WRAP_TEXT_MAX) return `summary card ${i + 1}: the text must be at most ${WRAP_TEXT_MAX} characters — shorten it to one to three short sentences`;
 	}
 	if (value.questions.length !== WRAP_QUESTION_COUNT) {
 		return `exactly ${WRAP_QUESTION_COUNT} questions are required, got ${value.questions.length}`;
@@ -198,7 +242,7 @@ export function wrapMarkerContent(wrap: Pick<SessionWrapDraft, "summary" | "ques
 		`${SESSION_WRAP_HEADER} The learner pressed «Oppsummering» and ended this økt (study session). The chat continues: the learner's next message starts a new økt in the same chat.`,
 		"",
 		"Summary of the økt that just ended:",
-		...wrap.summary.map((s) => `- ${s}`),
+		...wrap.summary.map((s) => `- ${wrapPointLine(s)}`),
 		"",
 		`Recall quiz on that økt: ${score.correct}/${score.total} correct${score.answered < score.total ? ` (${score.total - score.answered} not answered)` : ""}.`,
 		...(missed.length > 0 ? ["", "Missed questions — weak points to revisit early in the next økt:", ...missed] : []),

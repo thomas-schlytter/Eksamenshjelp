@@ -12,16 +12,17 @@
  * the window only pauses: the draft lives on the record, so the chip says
  * «Fortsett quizen» until the økt is ended.
  */
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { CheckIcon, ClipboardCheckIcon, XIcon } from "lucide-react";
+import useEmblaCarousel from "embla-carousel-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardCheckIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { BrailleSpinner } from "@/components/braille-spinner";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
 import { cn } from "@/lib/utils";
-import { readWrap, wrapScore, type SessionWrapDetails, type SessionWrapDraft } from "@/src/core";
+import { readWrap, wrapCardMarkdown, wrapPointOf, wrapScore, type SessionWrapDetails, type SessionWrapDraft } from "@/src/core";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 
@@ -136,6 +137,8 @@ export function SessionWrapDialog({
 	const [error, setError] = useState<string | null>(null);
 	const [finishing, setFinishing] = useState(false);
 	const [confirmEnd, setConfirmEnd] = useState(false);
+	// The summary card on screen (owner, 2026-11-23: one card at a time).
+	const [card, setCard] = useState(0);
 
 	const generate = useCallback(async () => {
 		setLoading(true);
@@ -159,7 +162,9 @@ export function SessionWrapDialog({
 
 	// Opening the live window: resume the record's draft, or generate one.
 	useEffect(() => {
-		if (!open || review) return;
+		if (!open) return;
+		setCard(0);
+		if (review) return;
 		setConfirmEnd(false);
 		setError(null);
 		if (initialDraft) {
@@ -264,9 +269,9 @@ export function SessionWrapDialog({
 							</div>
 						)
 					) : review ? (
-						<ReviewBody wrap={review} />
+						<ReviewBody wrap={review} card={card} onCard={setCard} />
 					) : step === "summary" ? (
-						<SummaryBody wrap={wrap} />
+						<SummaryCards items={wrap.summary} index={card} onIndex={setCard} />
 					) : typeof step === "number" ? (
 						<QuestionBody
 							key={step}
@@ -295,9 +300,26 @@ export function SessionWrapDialog({
 							</div>
 						) : step === "summary" ? (
 							<div className="flex items-center justify-end gap-2">
-								<Button data-testid="session-wrap-start" size="sm" onClick={() => setStep(0)}>
-									Start quizen
-								</Button>
+								{card < wrap.summary.length - 1 ? (
+									<>
+										<Button
+											data-testid="session-wrap-skip"
+											variant="ghost"
+											size="sm"
+											className="mr-auto text-muted-foreground"
+											onClick={() => setStep(0)}
+										>
+											Hopp til quizen
+										</Button>
+										<Button data-testid="session-wrap-next-card" size="sm" onClick={() => setCard(card + 1)}>
+											Neste
+										</Button>
+									</>
+								) : (
+									<Button data-testid="session-wrap-start" size="sm" autoFocus onClick={() => setStep(0)}>
+										Start quizen
+									</Button>
+								)}
 							</div>
 						) : step === "result" ? (
 							<div className="flex items-center justify-end gap-2">
@@ -320,22 +342,158 @@ export function SessionWrapDialog({
 	);
 }
 
-function SummaryBody({ wrap, review = false }: { wrap: SessionWrapDraft | SessionWrapDetails; review?: boolean }) {
+/**
+ * The summary as cards, one at a time (owner, 2026-11-23: the bullet list
+ * was hard on the eyes). Controlled: the window owns the index, so its
+ * footer («Neste» / «Start quizen») and the cards move together.
+ *
+ * Moving: drag or touch-swipe (Embla), a horizontal trackpad swipe (one
+ * card per gesture), ←/→, the side arrows and the dots.
+ */
+export function SummaryCards({
+	items,
+	index,
+	onIndex,
+}: {
+	items: readonly unknown[];
+	index: number;
+	onIndex: (next: number) => void;
+}) {
+	const count = items.length;
+	const [viewportRef, embla] = useEmblaCarousel({ align: "center", duration: 22 });
+	const at = Math.min(Math.max(index, 0), Math.max(count - 1, 0));
+	const go = useCallback((next: number) => onIndex(Math.min(Math.max(next, 0), count - 1)), [count, onIndex]);
+
+	// Embla → index (drag/touch), index → Embla (buttons, keys, dots).
+	useEffect(() => {
+		if (!embla) return;
+		const onSelect = () => onIndex(embla.selectedScrollSnap());
+		embla.on("select", onSelect);
+		return () => {
+			embla.off("select", onSelect);
+		};
+	}, [embla, onIndex]);
+	useEffect(() => {
+		if (embla && embla.selectedScrollSnap() !== at) embla.scrollTo(at);
+	}, [embla, at]);
+
+	// A horizontal trackpad swipe moves one card per gesture: the gesture's
+	// wheel events are summed, and the lock holds until they stop.
+	const wheel = useRef({ sum: 0, locked: false, timer: 0 as unknown as ReturnType<typeof setTimeout> });
+	useEffect(() => {
+		const node = embla?.rootNode();
+		if (!node) return;
+		const onWheel = (e: WheelEvent) => {
+			if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+			e.preventDefault();
+			const w = wheel.current;
+			clearTimeout(w.timer);
+			w.timer = setTimeout(() => {
+				w.sum = 0;
+				w.locked = false;
+			}, 180);
+			if (w.locked) return;
+			w.sum += e.deltaX;
+			if (Math.abs(w.sum) < 40) return;
+			w.locked = true;
+			if (w.sum > 0) embla?.scrollNext();
+			else embla?.scrollPrev();
+		};
+		node.addEventListener("wheel", onWheel, { passive: false });
+		return () => node.removeEventListener("wheel", onWheel);
+	}, [embla]);
+
+	// ←/→ while the cards are on screen.
+	useEffect(() => {
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.metaKey || e.ctrlKey || e.altKey) return;
+			const target = e.target as HTMLElement | null;
+			if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
+			if (e.key === "ArrowRight") {
+				e.preventDefault();
+				go(at + 1);
+			} else if (e.key === "ArrowLeft") {
+				e.preventDefault();
+				go(at - 1);
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [at, go]);
+
+	if (count === 0) return null;
+
 	return (
-		<div className="flex flex-col gap-3">
-			<p className="text-sm text-muted-foreground">Dette jobbet du med i denne økta:</p>
-			<ul className="flex list-disc flex-col gap-1.5 pl-5 text-sm">
-				{wrap.summary.map((point, i) => (
-					<li key={i}>
-						<ToolContentResponse className="lh-prose">{point}</ToolContentResponse>
-					</li>
+		<div data-testid="session-wrap-cards" className="flex flex-col gap-4">
+			<div className="relative">
+				<div ref={viewportRef} className="overflow-hidden" aria-roledescription="karusell" aria-label="Oppsummering, kort for kort">
+					<div className="flex touch-pan-y">
+						{items.map((item, i) => {
+							const { title, text } = wrapPointOf(item);
+							return (
+								<div
+									key={i}
+									role="group"
+									aria-roledescription="kort"
+									aria-label={`Kort ${i + 1} av ${count}`}
+									aria-hidden={i !== at}
+									className="min-w-0 shrink-0 grow-0 basis-full px-9"
+								>
+									<div
+										data-testid="session-wrap-card"
+										className="flex h-full min-h-[18rem] select-none flex-col gap-4 rounded-2xl border bg-background/60 px-7 py-6"
+									>
+										<span data-testid="session-wrap-card-count" className="text-xs font-medium tracking-wide text-muted-foreground tabular-nums">
+											{i + 1} / {count}
+										</span>
+										{title && <h3 className="font-title text-2xl leading-tight tracking-tight">{title}</h3>}
+										<ToolContentResponse className="lh-prose text-base leading-relaxed [&_.katex-display]:my-4">
+											{wrapCardMarkdown(text)}
+										</ToolContentResponse>
+									</div>
+								</div>
+							);
+						})}
+					</div>
+				</div>
+				<button
+					type="button"
+					aria-label="Forrige kort"
+					data-testid="session-wrap-prev-arrow"
+					onClick={() => go(at - 1)}
+					disabled={at === 0}
+					className="absolute left-0 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-0"
+				>
+					<ChevronLeftIcon className="size-4" />
+				</button>
+				<button
+					type="button"
+					aria-label="Neste kort"
+					data-testid="session-wrap-next-arrow"
+					onClick={() => go(at + 1)}
+					disabled={at === count - 1}
+					className="absolute right-0 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-0"
+				>
+					<ChevronRightIcon className="size-4" />
+				</button>
+			</div>
+			<div className="flex items-center justify-center gap-1.5" role="tablist" aria-label="Velg kort">
+				{items.map((_, i) => (
+					<button
+						key={i}
+						type="button"
+						role="tab"
+						aria-selected={i === at}
+						aria-label={`Kort ${i + 1}`}
+						data-testid="session-wrap-dot"
+						onClick={() => go(i)}
+						className={cn(
+							"h-2 cursor-pointer rounded-full transition-all",
+							i === at ? "w-5 bg-primary" : "w-2 bg-border hover:bg-muted-foreground/50",
+						)}
+					/>
 				))}
-			</ul>
-			{!review && (
-				<p className="text-sm text-muted-foreground">
-					Så kommer {wrap.questions.length} flervalgsspørsmål på det viktigste, for å få minnet i gang.
-				</p>
-			)}
+			</div>
 		</div>
 	);
 }
@@ -495,11 +653,11 @@ function ResultBody({ wrap }: { wrap: SessionWrapDraft | SessionWrapDetails }) {
 	);
 }
 
-function ReviewBody({ wrap }: { wrap: SessionWrapDetails }) {
+function ReviewBody({ wrap, card, onCard }: { wrap: SessionWrapDetails; card: number; onCard: (next: number) => void }) {
 	const score = wrapScore(wrap);
 	return (
-		<div className="flex flex-col gap-5">
-			<SummaryBody wrap={wrap} review />
+		<div className="flex flex-col gap-6">
+			<SummaryCards items={wrap.summary} index={card} onIndex={onCard} />
 			<div className="flex flex-col gap-3">
 				<h3 className="text-sm font-semibold">
 					Quiz: {score.correct}/{score.total} riktige

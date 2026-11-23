@@ -37,7 +37,11 @@ function question(n: number): import("../src/core/session-wrap.ts").WrapQuestion
 	};
 }
 const SUBMISSION = {
-	summary: ["Laplace-transformen", "Poler og nullpunkter", "Stabilitet"],
+	summary: [
+		{ title: "Laplace-transformen", text: "Du brukte $\\mathcal{L}$ til å gjøre ODE-er om til algebra." },
+		{ title: "Poler og nullpunkter", text: "Polene er røttene i nevneren til $H(s)$." },
+		{ title: "Stabilitet", text: "Alle poler i venstre halvplan:\n\n$$\\operatorname{Re}(p) < 0$$" },
+	],
 	questions: Array.from({ length: 10 }, (_, i) => question(i + 1)),
 };
 
@@ -117,6 +121,32 @@ describe("the quiz checks", () => {
 		bad.questions[0]!.correctIndex = 4;
 		assert.match(core.wrapSubmissionProblem(bad) ?? "", /correctIndex/);
 	});
+	it("refuses cards without a title, without a text, or too long", () => {
+		const noTitle = structuredClone(SUBMISSION);
+		noTitle.summary[0]!.title = "  ";
+		assert.match(core.wrapSubmissionProblem(noTitle) ?? "", /card 1 needs a title/);
+		const noText = structuredClone(SUBMISSION);
+		noText.summary[1]!.text = "";
+		assert.match(core.wrapSubmissionProblem(noText) ?? "", /card 2 needs a text/);
+		const long = structuredClone(SUBMISSION);
+		long.summary[2]!.text = "x".repeat(core.WRAP_TEXT_MAX + 1);
+		assert.match(core.wrapSubmissionProblem(long) ?? "", /card 3: the text must be at most/);
+		const longTitle = structuredClone(SUBMISSION);
+		longTitle.summary[0]!.title = "y".repeat(core.WRAP_TITLE_MAX + 1);
+		assert.match(core.wrapSubmissionProblem(longTitle) ?? "", /card 1: the title/);
+	});
+	it("turns a lone $$…$$ line into a display block for the card", () => {
+		assert.equal(core.wrapCardMarkdown("Ved lading:\n\n$$t = \\tau$$"), "Ved lading:\n\n$$\nt = \\tau\n$$");
+		assert.equal(core.wrapCardMarkdown("Inline $$x$$ i tekst"), "Inline $$x$$ i tekst");
+		assert.equal(core.wrapCardMarkdown("A\n$$\nx\n$$"), "A\n$$\nx\n$$");
+	});
+	it("reads cards and legacy strings alike", () => {
+		assert.deepEqual(core.wrapPointOf({ title: " RC ", text: "tekst" }), { title: "RC", text: "tekst" });
+		assert.deepEqual(core.wrapPointOf("gammelt punkt"), { title: null, text: "gammelt punkt" });
+		assert.deepEqual(core.wrapPointOf(42), { title: null, text: "" });
+		assert.equal(core.wrapPointLine({ title: "Stabilitet", text: "Alle poler\n\n$$p<0$$" }), "Stabilitet: Alle poler $$p<0$$");
+		assert.equal(core.wrapPointLine("gammelt punkt"), "gammelt punkt");
+	});
 	it("shuffles options and moves the correct index with them", () => {
 		let i = 0;
 		const seq = [0, 0, 0];
@@ -133,10 +163,16 @@ describe("the teacher's note", () => {
 		draft.answers[9] = null;
 		const text = core.wrapMarkerContent(draft);
 		assert.match(text, /\[SESSION WRAPPED\]/);
-		assert.match(text, /- Poler og nullpunkter/);
+		assert.match(text, /- Poler og nullpunkter: Polene er røttene i nevneren til \$H\(s\)\$\./);
+		assert.match(text, /- Stabilitet: Alle poler i venstre halvplan: \$\$/);
 		assert.match(text, /8\/10 correct \(1 not answered\)/);
 		assert.match(text, /Q2: .*\n {2}Learner chose: feil a 2\n {2}Correct: riktig 2/);
 		assert.match(text, /Not answered:\n- Q10/);
+	});
+
+	it("still reads a legacy draft with plain-string points", () => {
+		const legacy = { summary: ["Hva en pol er"], questions: [question(1)], answers: [0] };
+		assert.match(core.wrapMarkerContent(legacy), /- Hva en pol er\n/);
 	});
 
 	it("reaches the model as user text and the view as a divider", () => {
