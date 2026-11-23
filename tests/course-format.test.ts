@@ -6,7 +6,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-	countsSummary, daysBetween, daysLeftLabel, daysLeftShort, formatExamDate, formatMinutes, formatPlanDay,
+	countsSummary, daysBetween, daysLeftLabel, daysLeftShort, formatExamDate, formatMinutes, formatNumericDate, formatPlanDay,
 	learnSession, mappingSession, mockExamSession, planItemSubject, practiceSession, sessionForPlanItem,
 	sortCoursesByExam, sortTopicsForBoard,
 } from "../components/courses/course-format.ts";
@@ -36,6 +36,10 @@ describe("course labels and dates", () => {
 		assert.equal(formatExamDate("2026-05-17T10:00:00.000Z"), "17. mai 2026");
 		assert.equal(formatExamDate(undefined), "");
 		assert.equal(formatExamDate("2026-13-40"), "");
+		assert.equal(formatNumericDate("2026-12-01"), "01/12/2026");
+		assert.equal(formatNumericDate("2026-05-17T10:00:00.000Z"), "17/05/2026");
+		assert.equal(formatNumericDate(undefined), "");
+		assert.equal(formatNumericDate("2026-13-40"), "");
 	});
 
 	it("plan days: I dag, I morgen, then weekday and date", () => {

@@ -95,6 +95,13 @@ export function formatExamDate(iso: string | undefined): string {
 	return date ? `${date.d}. ${MONTHS[date.m - 1]} ${date.y}` : "";
 }
 
+/** "07/12/2026" (dd/mm/åååå), or "" for a missing/invalid date. */
+export function formatNumericDate(iso: string | undefined): string {
+	const date = parseIsoDate(iso);
+	const pad = (n: number) => String(n).padStart(2, "0");
+	return date ? `${pad(date.d)}/${pad(date.m)}/${date.y}` : "";
+}
+
 /** The countdown on cards and headers. Null means no date is set. */
 export function daysLeftLabel(daysLeft: number | null): string {
 	if (daysLeft === null) return "Sett eksamensdato";

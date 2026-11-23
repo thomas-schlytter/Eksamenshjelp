@@ -3,10 +3,15 @@
 	"version": "0.4.1",
 	"license": "AGPL-3.0-only",
 	"author": {
-		"name": "Amos Blomqvist",
-		"email": "255718537+amosblomqvist@users.noreply.github.com"
+		"name": "Thomas Schlytter-Henrichsen"
 	},
-	"homepage": "https://github.com/amosblomqvist/learnharness",
+	"contributors": [
+		{
+			"name": "Amos Blomqvist",
+			"url": "https://github.com/amosblomqvist"
+		}
+	],
+	"homepage": "https://github.com/thomas030505/Eksamenshjelp",
 	"desktopName": "learnharness.desktop",
 	"description": "Eksamensrettet AI-hjelp for NTNU-studenter: adaptiv læring, øving og et varig kunnskapskart.",
 	"type": "module",

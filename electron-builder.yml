@@ -167,6 +167,9 @@ nsis:
   perMachine: false
 linux:
   icon: build/icon.png
+  # deb needs a maintainer; without this it is derived from package.json
+  # author "Name <email>", and the author no longer lists an email.
+  maintainer: Thomas Schlytter-Henrichsen
   target:
     - target: AppImage
       arch:
@@ -181,14 +184,16 @@ linux:
   # Both targets update via electron-updater 6.8.9. AppImage replaces its
   # own file; deb uses dpkg/apt and may request administrator permission.
 publish:
-  # Update feed = GitHub Releases (decided 2026-10-08): latest-mac.yml +
-  # zip/blockmap live on releases; electron-updater reads them anonymously.
-  # REQUIRES THE REPO TO BE PUBLIC before 0.3.0 ships — anonymous downloads
-  # from a private repo are impossible, and a token baked into the app
-  # would be a leak. desktop:dist passes no --publish flag, so builds never
-  # upload; publishing happens at release time (GH_TOKEN + --publish).
+  # Releases live on Thomas' fork (owner 2026-11-23). The app no longer
+  # self-updates (ad-hoc signed, no Developer ID): electron/main.cjs reads
+  # GitHub's public /releases/latest for this repo and links to the
+  # release page (electron/release-check.cjs — keep owner/repo in sync).
+  # REQUIRES THE REPO TO BE PUBLIC — the anonymous API cannot see a
+  # private repo, and a token baked into the app would be a leak.
+  # desktop:dist passes no --publish flag, so builds never upload;
+  # publishing happens at release time (GH_TOKEN + --publish).
   - provider: github
-    owner: amosblomqvist
-    repo: learnharness
+    owner: thomas030505
+    repo: Eksamenshjelp
     # All three CI jobs contribute assets; only the owner publishes it.
     releaseType: draft

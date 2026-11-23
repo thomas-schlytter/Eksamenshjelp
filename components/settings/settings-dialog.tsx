@@ -43,7 +43,7 @@ import { useAppearance } from "./appearance.tsx";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./controls.tsx";
 import { Button } from "@/components/ui/button";
 import { openLegacyImport } from "@/components/import/legacy-import-event";
-import { UpdateSettings } from "./update-settings.tsx";
+import { AboutSettings, UpdateSettings } from "./update-settings.tsx";
 import { AgentSection } from "./agent-section.tsx";
 import type { ModelsSettings } from "@/src/core";
 import { MENU_CLOSE_EVENT, MENU_OPEN_EVENT } from "@/components/menu-shell";
@@ -362,12 +362,15 @@ export function SettingsDialogBody({
 									title="Generelt"
 									testid="section-general"
 								>
-									<UpdateSettings
-										autoUpdate={record.general?.autoUpdate ?? true}
-										onAutoUpdateChange={(on) =>
-											void write("general", { ...record.general, autoUpdate: on })
-										}
-									/>
+									<SettingsGroup label="Om" testid="settings-about-group">
+										<AboutSettings />
+										<UpdateSettings
+											autoUpdate={record.general?.autoUpdate ?? true}
+											onAutoUpdateChange={(on) =>
+												void write("general", { ...record.general, autoUpdate: on })
+											}
+										/>
+									</SettingsGroup>
 									<SettingsGroup label="Data" testid="settings-data">
 										<SettingsRow
 											label="Importer fra LearnHarness"

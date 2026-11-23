@@ -1,11 +1,11 @@
 /**
- * Update-banner render tests (Wave C, 2026-10-10): the banner is a pure
- * function of the shell's observational status — hidden without a bridge
- * or snapshot/event, visible with the downloaded
- * status, Restart wired to the bridge. The subscribe effect only runs
- * client-side, so the SSR pass pins the hidden state; the pushed state is
- * exercised by mounting with the bridge stubbed (classic-JSX shim as in
- * render-sidebar.test.tsx).
+ * Update-banner render tests: the banner is a pure function of the
+ * shell's observational status — hidden without a bridge or a found
+ * release, visible with "available", its link pointing at the release
+ * page (opened in the system browser by the shell's window-open handler).
+ * The subscribe effect only runs client-side, so the SSR pass pins the
+ * hidden state; the pushed state is exercised by mounting with the bridge
+ * stubbed (classic-JSX shim as in render-sidebar.test.tsx).
  */
 import React from "react";
 (globalThis as Record<string, unknown>).React = React;
@@ -19,14 +19,12 @@ import { parseHTML } from "linkedom";
 import UpdateBanner from "../components/update-banner.tsx";
 import type { UpdateState } from "../components/settings/update-settings.tsx";
 
-// linkedom as the DOM for the interactive pass (first createRoot test in
-// the repo — the banner's push→render→click flow needs real effects).
 // The window.lh bridge type is declared globally by components/sidebar.tsx.
 const dom = parseHTML("<html><body></body></html>");
 (globalThis as Record<string, unknown>).window = dom.window;
 (globalThis as Record<string, unknown>).document = dom.document;
 
-describe("update banner (Wave C)", () => {
+describe("update banner", () => {
 	afterEach(() => {
 		delete (window as { lh?: unknown }).lh;
 	});
@@ -37,29 +35,19 @@ describe("update banner (Wave C)", () => {
 	});
 
 	it("renders nothing when the bridge exists but no status has arrived", () => {
-		const listeners: Array<(s: UpdateState) => void> = [];
 		(window as { lh?: unknown }).lh = {
-			onUpdateStatus: (cb: (s: UpdateState) => void) => {
-				listeners.push(cb);
-				return () => {};
-			},
-			installUpdate: () => {},
+			onUpdateStatus: () => () => {},
 		};
 		const html = renderToStaticMarkup(<UpdateBanner />);
 		assert.equal(html, "");
-		void listeners;
 	});
 
-	it("shows the version + Restart once the downloaded push arrives, and Restart installs", async () => {
+	it("shows the version and a download link once a newer release is pushed", async () => {
 		let pushed: ((s: UpdateState) => void) | null = null;
-		let installed = 0;
 		(window as { lh?: unknown }).lh = {
 			onUpdateStatus: (cb: (s: UpdateState) => void) => {
 				pushed = cb;
 				return () => {};
-			},
-			installUpdate: () => {
-				installed += 1;
 			},
 		};
 		const host = document.createElement("div");
@@ -69,14 +57,18 @@ describe("update banner (Wave C)", () => {
 		assert.equal(host.innerHTML, "", "hidden before the push");
 
 		await new Promise((r) => setTimeout(r, 0));
-		flushSync(() => pushed?.({ status: "downloaded", version: "0.3.1", revision: 1 }));
-		assert.ok(host.innerHTML.includes("0.3.1"), "the version renders");
-		assert.ok(host.innerHTML.includes("Start på nytt"), "the restart affordance renders");
+		flushSync(() => pushed?.({ status: "up-to-date", version: null, url: null, revision: 1 }));
+		assert.equal(host.innerHTML, "", "no banner without a newer release");
 
-		const button = host.querySelector<HTMLButtonElement>("[data-testid='update-banner'] button");
-		assert.ok(button, "restart button exists");
-		button!.click();
-		assert.equal(installed, 1, "Restart asks the shell to quit-and-install");
+		const url = "https://github.com/thomas030505/Eksamenshjelp/releases/tag/v0.5.0";
+		flushSync(() => pushed?.({ status: "available", version: "0.5.0", url, revision: 2 }));
+		assert.ok(host.textContent!.includes("Ny versjon 0.5.0"), "the version renders");
+		const link = host.querySelector<HTMLAnchorElement>("[data-testid='update-banner-download']");
+		assert.ok(link, "download link exists");
+		assert.equal(link!.textContent, "Last ned");
+		assert.equal(link!.getAttribute("href"), url);
+		assert.equal(link!.getAttribute("target"), "_blank");
+		assert.ok(!host.innerHTML.includes("Start på nytt"), "no restart affordance remains");
 		root.unmount();
 		host.remove();
 	});

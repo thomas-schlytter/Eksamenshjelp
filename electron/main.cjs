@@ -31,6 +31,7 @@ const { createSubscriptions, loadSubscriptionSDK } = require("./subscriptions.cj
 const { attachSubscriptionChild, subscriptionControl } = require("./subscription-ipc.cjs");
 const { desktopAPIHeaders } = require("./desktop-api.cjs");
 const { openWebSubscriptionBrowser } = require("./web-subscription-browser.cjs");
+const { LATEST_RELEASE_API, readLatestRelease } = require("./release-check.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
@@ -418,44 +419,45 @@ function createWindow(url) {
  * lights, is impossible without rebuilding the window). */
 const ZOOM_LADDER = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
 
-/* ── Auto-update (Wave C, owner 2026-10-10: silent download + restart ─────
- * banner; checks at startup + every 24h) ─────────────────────────────────
+/* ── Release check (owner 2026-11-23: «Varsel med nedlastingslenke») ─────
+ * checks at startup + every 24h when «Automatiske oppdateringer» is on;
+ * «Se etter oppdateringer» (Settings, app menu) always checks.
  *
- * Feed: GitHub Releases (electron-builder.yml publish → app-update.yml,
- * baked + signed into the bundle). macOS needs the app signed (it is —
- * Developer ID) and updates ride the zip target (Squirrel.Mac); blockmaps
- * give differential downloads for free. Windows uses NSIS; Linux uses
- * AppImage or DebUpdater (6.8.9 supports deb; installation can request
- * administrator permission via the package manager — owner 2026-10-11).
+ * The installed app is ad-hoc signed (no Apple Developer ID), so
+ * Squirrel.Mac cannot install updates and electron-updater is no longer
+ * used. Instead the shell reads GitHub's public API for the latest
+ * release (electron/release-check.cjs). When its tag is newer than
+ * app.getVersion(), the status carries the version and the release page;
+ * the renderer offers «Ny versjon X – last ned», which opens that page in
+ * the system browser (setWindowOpenHandler → shell.openExternal). Nothing
+ * is downloaded or installed by the app.
  *
  * Hard rules:
- *  - DEV NEVER UPDATES: !app.isPackaged skips the updater entirely — the
- *    dev world runs `next dev` and has no signed bundle.
- *  - THE UPDATER CAN NEVER TAKE THE APP DOWN: every event and check is
- *    caught and logged (feed down, disk full, bad signature — all just
- *    log lines; the app keeps working, update or no update).
- *  - LH_UPDATE_FEED (env): overrides the baked GitHub feed with a generic
- *    local server — the pre-release verification drill (serve
- *    latest-mac.yml + zip + blockmap from any localhost HTTP dir and
- *    watch a real installed copy find/download/restart). Test-only seam.
- *
- * Install path: the downloaded update applies on quit (autoInstallOnAppQuit
- * — Squirrel.Mac stages natively and swaps on relaunch). The renderer
- * banner asks for an immediate restart via "lh:update-install"; we kill
- * the child server FIRST — deterministic ordering: the server lives
- * inside the .app bundle Squirrel is about to replace (extraResources),
- * and before-quit alone would race the swap. */
+ *  - DEV NEVER CHECKS: !app.isPackaged reports "disabled".
+ *  - THE CHECK CAN NEVER TAKE THE APP DOWN: every failure (offline, rate
+ *    limit, bad JSON) is a log line and a generic "error" status.
+ *  - LH_UPDATE_FEED (env): replaces the GitHub API URL with any URL that
+ *    answers like /releases/latest — the local verification drill.
+ *    Test-only seam. */
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
-let autoUpdater = null; // electron-updater's, packaged builds only
-// Observational only: this snapshot NEVER gates a check, download or install.
+const UPDATE_CHECK_TIMEOUT_MS = 15 * 1000;
+let releaseCheckEnabled = false; // packaged builds only
+let releaseCheckInFlight = null;
+// Observational only: this snapshot NEVER gates a check.
 // The revision lets late subscribers reject an older in-flight IPC snapshot.
-let updateState = { status: "idle", version: null, revision: 0 };
+let updateState = { status: "idle", version: null, url: null, revision: 0 };
 
-function reportUpdateStatus(status, version = null) {
+function reportUpdateStatus(status, version = null, url = null) {
 	try {
-		// A later check/error must not hide an update already staged for quit.
-		if (updateState.status === "downloaded" && status !== "downloaded") return;
-		updateState = { status, version: typeof version === "string" ? version : null, revision: updateState.revision + 1 };
+		// A failed or repeated check must not hide a newer version already
+		// found; only a new "available" answer replaces it.
+		if (updateState.status === "available" && status !== "available") return;
+		updateState = {
+			status,
+			version: typeof version === "string" ? version : null,
+			url: typeof url === "string" ? url : null,
+			revision: updateState.revision + 1,
+		};
 		for (const win of BrowserWindow.getAllWindows()) {
 			try {
 				win.webContents.send("lh:update-status", updateState);
@@ -464,12 +466,12 @@ function reportUpdateStatus(status, version = null) {
 			}
 		}
 	} catch {
-		/* Status reporting must never interrupt the updater. */
+		/* Status reporting must never interrupt the check. */
 	}
 }
 
 /** Read the SAME data directory passed to the packaged server. Only an
- * explicit false opts out; absent/corrupt/unreadable settings keep updates ON.
+ * explicit false opts out; absent/corrupt/unreadable settings keep checks ON.
  * Re-read for each automatic check so saving the toggle needs no restart. */
 function automaticUpdatesEnabled() {
 	try {
@@ -480,76 +482,54 @@ function automaticUpdatesEnabled() {
 	}
 }
 
-function checkForUpdates({ manual = false } = {}) {
-	if (!autoUpdater) return;
-	if (!manual && !automaticUpdatesEnabled()) {
-		log("auto-update: automatic check skipped (turned off in Settings)");
-		return;
-	}
-	// Do not gate on display state: a stale spinner/error must never disable
-	// future background checks. electron-updater owns its in-flight work.
-	autoUpdater
-		.checkForUpdates()
-		.then((result) => {
-			// A declined check (e.g. an unsupported package) establishes no
-			// latest-version claim. Real results arrive through updater events.
-			if (!result) reportUpdateStatus("idle");
-		})
-		.catch((err) => {
-			log(`update check failed: ${err?.message ?? err}`);
-			reportUpdateStatus("error");
+async function runReleaseCheck() {
+	try {
+		reportUpdateStatus("checking");
+		const response = await fetch(process.env.LH_UPDATE_FEED || LATEST_RELEASE_API, {
+			headers: { Accept: "application/vnd.github+json", "User-Agent": `${PRODUCT_NAME}/${app.getVersion()}` },
+			signal: AbortSignal.timeout(UPDATE_CHECK_TIMEOUT_MS),
 		});
-}
-
-function installUpdateNow() {
-	// Kill the server BEFORE the quit-and-install (see block comment).
-	try {
-		killServer();
-	} catch {
-		/* already dead */
-	}
-	autoUpdater?.quitAndInstall();
-}
-
-function setupAutoUpdater() {
-	if (!app.isPackaged) {
-		log("auto-update: dev build — updater disabled");
-		reportUpdateStatus("disabled");
-		return;
-	}
-	try {
-		autoUpdater = require("electron-updater").autoUpdater;
+		const result = await readLatestRelease(response, app.getVersion());
+		if (result.newer) {
+			log(`release check: ${result.version} available`);
+			reportUpdateStatus("available", result.version, result.url);
+		} else {
+			reportUpdateStatus("up-to-date");
+		}
 	} catch (err) {
-		log(`auto-update: electron-updater unavailable (${err?.message ?? err}) — updates disabled`);
+		log(`release check failed: ${err?.message ?? err}`);
+		reportUpdateStatus("error");
+	}
+}
+
+/** Returns a promise that never rejects. Overlapping requests share the
+ * one in flight; a stale display state never blocks a later check. */
+function checkForUpdates({ manual = false } = {}) {
+	try {
+		if (!releaseCheckEnabled) return Promise.resolve();
+		if (!manual && !automaticUpdatesEnabled()) {
+			log("release check: automatic check skipped (turned off in Settings)");
+			return Promise.resolve();
+		}
+		if (!releaseCheckInFlight) {
+			releaseCheckInFlight = runReleaseCheck().finally(() => {
+				releaseCheckInFlight = null;
+			});
+		}
+		return releaseCheckInFlight;
+	} catch (err) {
+		log(`release check failed: ${err?.message ?? err}`);
+		return Promise.resolve();
+	}
+}
+
+function setupReleaseCheck() {
+	if (!app.isPackaged) {
+		log("release check: dev build — disabled");
 		reportUpdateStatus("disabled");
 		return;
 	}
-	const feed = process.env.LH_UPDATE_FEED;
-	if (feed) {
-		autoUpdater.setFeedURL({ provider: "generic", url: feed });
-		log(`auto-update: LH_UPDATE_FEED override → ${feed}`);
-	}
-	autoUpdater.autoDownload = true;
-	autoUpdater.autoInstallOnAppQuit = true;
-	// Route every updater log line through the shell's own log (userData/
-	// logs/main.log) — feed failures must be diagnosable after the fact.
-	autoUpdater.logger = {
-		info: (m) => log(`updater: ${m}`),
-		warn: (m) => log(`updater warn: ${m}`),
-		debug: (m) => {}, // too chatty for the persistent log
-		error: (m) => log(`updater error: ${m}`),
-	};
-	autoUpdater.on("checking-for-update", () => reportUpdateStatus("checking"));
-	autoUpdater.on("update-available", (info) => reportUpdateStatus("downloading", info?.version));
-	autoUpdater.on("update-not-available", () => reportUpdateStatus("up-to-date"));
-	autoUpdater.on("update-downloaded", (info) => {
-		log(`update downloaded: ${info?.version} — banner shown`);
-		reportUpdateStatus("downloaded", info?.version);
-	});
-	autoUpdater.on("error", (err) => {
-		log(`updater error: ${err?.message ?? err}`);
-		reportUpdateStatus("error");
-	});
+	releaseCheckEnabled = true;
 }
 
 /** One result surface for manual checks. Preload buffers the navigation
@@ -731,19 +711,17 @@ async function main() {
 
 	installMenu();
 
-	// Auto-update (Wave C): wire the updater before the window so the
-	// banner channel is live from first paint; the first check and the 24h
-	// interval fire after it below. setupAutoUpdater's contract: failures
-	// are log lines — this can never block boot.
-	setupAutoUpdater();
-	ipcMain.on("lh:update-install", () => installUpdateNow());
+	// Release check: wire it before the window so the banner channel is
+	// live from first paint; the first check and the 24h interval fire
+	// after it below. Failures are log lines — this can never block boot.
+	setupReleaseCheck();
 	ipcMain.handle("lh:update:get", (event) => {
 		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
 		return updateState;
 	});
 	ipcMain.handle("lh:update:check", (event) => {
 		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
-		checkForUpdates({ manual: true });
+		return checkForUpdates({ manual: true });
 	});
 
 	// Sidebar-at-narrow-window (owner, 2026-09-17): the renderer auto-closes
@@ -769,8 +747,8 @@ async function main() {
 	log(`window open: ${url}`);
 	// Startup + 24h checks stay main-owned and read the current preference.
 	// No renderer subscription is required; late loads retrieve the snapshot.
-	if (autoUpdater) {
-		checkForUpdates();
+	if (releaseCheckEnabled) {
+		void checkForUpdates();
 		setInterval(() => checkForUpdates(), UPDATE_CHECK_INTERVAL_MS);
 	}
 }

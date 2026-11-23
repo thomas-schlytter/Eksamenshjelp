@@ -96,7 +96,7 @@ describe("desktop window chrome", () => {
 		runInNewContext(readFileSync(new URL("../electron/preload.cjs", import.meta.url), "utf8"), context);
 		assert.equal(bridge.platform, "win32");
 		assert.deepEqual(Object.keys(bridge).sort(), [
-			"chatgpt", "checkForUpdates", "expandWindow", "getPathForFile", "getUpdateState", "getZoom", "installUpdate", "onOpenSettings", "onUpdateStatus", "onZoom", "platform", "subscriptions",
+			"chatgpt", "checkForUpdates", "expandWindow", "getPathForFile", "getUpdateState", "getZoom", "onOpenSettings", "onUpdateStatus", "onZoom", "platform", "subscriptions",
 		]);
 		assert.deepEqual(Object.keys(bridge.subscriptions as object).sort(), ["cancel", "consent", "disconnect", "login", "onChange", "open", "respond", "retry", "status"]);
 	});
@@ -161,9 +161,12 @@ describe("desktop packaging policy", () => {
 
 	it("deb has public maintainer metadata and a matching desktop identity", () => {
 		const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
-		assert.equal(pkg.author.name, "Amos Blomqvist");
-		assert.equal(pkg.author.email, "255718537+amosblomqvist@users.noreply.github.com");
-		assert.equal(pkg.homepage, "https://github.com/amosblomqvist/learnharness");
+		assert.equal(pkg.author.name, "Thomas Schlytter-Henrichsen");
+		// The author lists no email, so deb's maintainer is set explicitly
+		// (electron-builder otherwise demands author.email for deb).
+		assert.equal(config.linux.maintainer, "Thomas Schlytter-Henrichsen");
+		assert.equal(pkg.homepage, "https://github.com/thomas030505/Eksamenshjelp");
+		assert.deepEqual([config.publish[0].owner, config.publish[0].repo], ["thomas030505", "Eksamenshjelp"]);
 		assert.equal(pkg.desktopName, "learnharness.desktop");
 	});
 });

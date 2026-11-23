@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { MenuShell } from "@/components/menu-shell";
@@ -19,6 +19,7 @@ import { Hint } from "@/components/ui/hint";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { AUTHOR_NAME, AUTHOR_URL, UPSTREAM_NAME, UPSTREAM_URL } from "@/lib/credits";
 import { fuzzyScore } from "@/src/core";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import type { ChatListItem } from "@/src/core";
@@ -82,9 +83,8 @@ declare global {
 			/** Observational update events and a snapshot for late subscribers. */
 			onUpdateStatus?: (cb: (status: UpdateState) => void) => () => void;
 			getUpdateState?: () => Promise<UpdateState>;
-			/** Explicit manual check also downloads and stages available updates. */
+			/** Explicit manual release check (GitHub), even with automatic checks off. */
 			checkForUpdates?: () => Promise<void>;
-			installUpdate?: () => void;
 			onOpenSettings?: (cb: (section: string) => void) => () => void;
 		};
 	}
@@ -184,10 +184,23 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 		return () => window.removeEventListener(event, onToggle);
 	}, [toggle]);
 
+	// A stable value: consumers (every SidebarToggle, the help layer) only
+	// re-render when open/toggle actually change.
+	const shown = open && !narrow;
+	const value = useMemo(() => ({ open: shown, toggle }), [shown, toggle]);
+
 	return (
-		<SidebarContext.Provider value={{ open: open && !narrow, toggle }}>
-			{/* transitions gated on mount: no slide-in flash on page load */}
-			<div className={cn("flex h-dvh", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity]")}>{children}</div>
+		<SidebarContext.Provider value={value}>
+			{/* transitions gated on mount: no slide-in flash on page load.
+			    overflow-clip: the shell is exactly one viewport and never
+			    scrolls itself — every page owns its own scroller. Without it,
+			    anything that escapes a page's scroller (an absolutely
+			    positioned sr-only label whose containing block is <main>)
+			    made the document scrollable: a second scrollbar. clip, not
+			    hidden: a clip box is not a scroll container, so
+			    scrollIntoView (tours, keyboard selection) cannot shift the
+			    whole app sideways or up. */}
+			<div className={cn("flex h-dvh overflow-clip", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity] [&_.sidebar-slide]:transition-[translate,visibility]")}>{children}</div>
 		</SidebarContext.Provider>
 	);
 }
@@ -353,6 +366,32 @@ export function SessionRow({
 	);
 }
 
+/** SessionRow for the live list: memoized, with id-keyed callbacks, so a
+ *  sidebar toggle or a sibling's state change does not re-render every row. */
+const SessionListRow = memo(function SessionListRow({
+	chat,
+	active,
+	kbdSelected,
+	onOpenChat,
+	onChatContextMenu,
+}: {
+	chat: ChatListItem;
+	active: boolean;
+	kbdSelected: boolean;
+	onOpenChat: (id: string) => void;
+	onChatContextMenu: (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => void;
+}) {
+	return (
+		<SessionRow
+			chat={chat}
+			active={active}
+			kbdSelected={kbdSelected}
+			onOpen={() => onOpenChat(chat.id)}
+			onContextMenu={(e) => onChatContextMenu(e, chat)}
+		/>
+	);
+});
+
 /** The inline-rename row (wave 6): same geometry as SessionRow, but the
  *  title line becomes a text input — select-all on entry (the click means
  *  "replace", the header rename's rule), Enter/blur commits, Esc discards.
@@ -420,6 +459,10 @@ export function matchesKindFilter(kind: ChatListItem["kind"] | undefined, filter
 /** The window event that opens «Legg til fag» on the home screen. */
 export const ADD_COURSE_EVENT = "lh:add-course";
 
+const CREDIT_LINK = "rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50";
+/** The panel's slide (duration-200 on .sidebar-slide); the list refetch
+ *  on open waits this long so it never lands mid-animation. */
+const SIDEBAR_SLIDE_MS = 200;
 const NAV_ROW = "flex w-full items-center gap-2 rounded-md px-2 py-1.5 font-ui text-sm text-muted-foreground outline-none transition-colors hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50";
 
 /**
@@ -515,6 +558,7 @@ function SessionsSidebar() {
 	}, [chats, query, kindFilter]);
 
 	const refreshInFlightRef = useRef(false);
+	const loadedRef = useRef(false);
 	const refresh = useCallback(async () => {
 		// In-flight coalesce (S6): event bursts may land several refresh
 		// calls at once — one fetch serves them all; anything newer arrives
@@ -525,6 +569,7 @@ function SessionsSidebar() {
 			const res = await fetch("/api/chats", { cache: "no-store" });
 			const d = (await res.json()) as { chats: ChatListItem[] };
 			setChats(d.chats);
+			loadedRef.current = true;
 		} catch {
 			// a transient failure keeps the last snapshot
 			setChats((prev) => prev ?? []);
@@ -633,11 +678,11 @@ function SessionsSidebar() {
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<ChatListItem | null>(null);
 
-	const openContext = (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
+	const openContext = useCallback((e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
 		e.preventDefault(); // suppress the native menu
 		ctxAnchorRef.current = e.currentTarget;
 		setCtxChatId(chat.id);
-	};
+	}, []);
 
 	// The menu contract (agent-section's): any pointerdown outside the menu
 	// or its row closes it; Esc is CLAIMED so it never also aborts a turn
@@ -720,19 +765,53 @@ function SessionsSidebar() {
 		listRef.current?.querySelectorAll("button")[kbdIndex]?.scrollIntoView({ block: "nearest" });
 	}, [kbdIndex]);
 
+	// Opening + navigation refetch; while open, the events channel owns
+	// freshness (S6) — no interval, nothing standing. On OPEN the fetch
+	// (and the list re-render it causes) waits for the slide to finish so
+	// the animation gets the main thread; navigation while open, and the
+	// very first load (nothing to show yet), refetch at once.
+	const wasOpenRef = useRef(false);
 	useEffect(() => {
-		if (!open) return;
-		void refresh();
-		// Opening + navigation refetch; while open, the events channel owns
-		// freshness (S6) — no interval, nothing standing.
+		if (!open) {
+			wasOpenRef.current = false;
+			return;
+		}
+		if (wasOpenRef.current || !loadedRef.current) {
+			wasOpenRef.current = true;
+			void refresh();
+			return;
+		}
+		wasOpenRef.current = true;
+		const timer = window.setTimeout(() => void refresh(), SIDEBAR_SLIDE_MS);
+		return () => window.clearTimeout(timer);
 	}, [open, pathname, refresh]);
 
+	// Stable row callbacks so memoized rows skip re-rendering on a toggle.
+	const openChat = useCallback((id: string) => {
+		setKbdIndex(null);
+		router.push(`/chat/${id}`);
+	}, [router]);
+
 	return (
+		// SMOOTH TOGGLE (owner 2026-11-23): the aside's WIDTH SNAPS, so the
+		// main column (chat with KaTeX, tables, the graph canvas) is laid out
+		// once per toggle instead of on every frame of a width transition.
+		// Only the panel moves: a translate on its own layer (compositor
+		// only). Closing: main takes the full width at once and the panel
+		// slides out over it; opening: main makes room at once and the panel
+		// slides in. visibility flips at the END of a close (and at the start
+		// of an open), so the parked panel is neither focusable nor a drag
+		// region. SidebarToggle's slot keeps its own lockstep animation.
 		<aside
-			className={cn("sidebar-motion shrink-0 overflow-hidden duration-200", open ? "w-72" : "w-0")}
+			className={cn("relative z-40 shrink-0", open ? "w-72" : "w-0")}
 			aria-hidden={!open}
 		>
-			<div className="flex h-full w-72 flex-col border-r bg-background">
+			<div
+				className={cn(
+					"sidebar-slide absolute inset-y-0 left-0 flex w-72 flex-col border-r bg-background duration-200 will-change-transform",
+					open ? "visible translate-x-0" : "invisible -translate-x-full",
+				)}
+			>
 				{/* LH wordmark — the owner's header; close toggle sits at the edge.
 				    Merged chrome (2026-09-17): in Electron this band is the
 				    window's drag surface and starts after the traffic lights
@@ -914,16 +993,13 @@ function SessionsSidebar() {
 									onCancel={() => setRenamingId(null)}
 								/>
 							) : (
-								<SessionRow
+								<SessionListRow
 									key={c.id}
 									chat={c}
 									active={pathname === `/chat/${c.id}`}
 									kbdSelected={i === kbdIndex}
-									onOpen={() => {
-										setKbdIndex(null);
-										router.push(`/chat/${c.id}`);
-									}}
-									onContextMenu={(e) => openContext(e, c)}
+									onOpenChat={openChat}
+									onChatContextMenu={openContext}
 								/>
 							),
 						)
@@ -940,7 +1016,7 @@ function SessionsSidebar() {
 					{/* Help + settings (settings-app wave; help in the NTNU round):
 					    quiet, bottom-pinned, side by side. Hjelp opens the help
 					    center; Innstillinger the centered dialog (also mod+,). */}
-					<div className="flex items-center gap-1 px-3 pb-3 pt-1">
+					<div className="flex items-center gap-1 px-3 pt-1">
 						<Hint label="Hjelpesenter" action="open-help" side="top">
 							<Link href="/hjelp" data-tour="sidebar-help" data-testid="help-entry" className={cn(NAV_ROW, "w-auto flex-1")}>
 								<CircleHelpIcon className="size-3.5 shrink-0" aria-hidden="true" />
@@ -960,6 +1036,16 @@ function SessionsSidebar() {
 							</button>
 						</Hint>
 					</div>
+					{/* Credits (owner 2026-11-23): small and quiet, under the two
+					    bottom rows. External links open in the system browser
+					    (the shell routes target=_blank to shell.openExternal). */}
+					<p data-testid="sidebar-credits" className="px-5 pt-1 pb-3 font-ui text-xs leading-relaxed text-muted-foreground/70">
+						Laget av{" "}
+						<a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{AUTHOR_NAME}</a>
+						<br />
+						Basert på{" "}
+						<a href={UPSTREAM_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{UPSTREAM_NAME}</a>
+					</p>
 				</div>
 
 				{/* The context menu (wave 6 + the extraction-UX redesign): the
