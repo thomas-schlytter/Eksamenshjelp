@@ -467,9 +467,10 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		question: "Hva er kunnskapskartet?",
 		answer: [
 			"Kunnskapskartet samler det du har lært i øktene: enkeltpåstander og resonnementskjedene som knytter dem sammen, med lenke tilbake til økta de kom fra.",
+			"Fargene viser fag, og hver klynge er et tema i faget. En strek betyr at det ene følger av det andre. Under Kilder ser du alt ordnet etter kilden det kom fra.",
 			"Kartet lagrer ideene og sammenhengene, ikke karakterer på deg. Nye økter kan bygge videre på det i stedet for å starte fra null.",
 		],
-		keywords: ["kunnskapskart", "kart", "graf", "påstander", "kjeder", "resonnementskjede", "noder", "knowledge graph"],
+		keywords: ["kunnskapskart", "kart", "graf", "påstander", "kilder", "resonnementskjede", "noder", "fag", "tema", "knowledge graph"],
 		actions: [{ label: "Åpne kunnskapskartet", action: { kind: "route", href: "/kart" } }],
 	},
 	{

@@ -333,7 +333,7 @@ describe("ChainTableBody — the fuzzy search (grouped + auto-expand)", () => {
 	it("no matches: the honest empty line", () => {
 		const html = render({ query: "qqqq" });
 		assert.ok(html.includes('data-testid="chain-table-nomatch"'));
-		assert.ok(html.includes("Ingen kjeder passer."));
+		assert.ok(html.includes("Ingen treff."));
 	});
 });
 

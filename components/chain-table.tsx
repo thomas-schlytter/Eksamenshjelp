@@ -283,6 +283,18 @@ export function ChainTableBody({
 		return list;
 	}, [visibleChains, byId, sessions, fileSources, sort, directory, sourceRecords, searching, matchesSource]);
 
+	// The top bar's count (fase 8: the table is «Kilder»): every source the
+	// inventory lists, else every source a chain was born in.
+	const sourceCount = useMemo(() => {
+		if (directory) return directory.sources.length;
+		const births = new Set<string>();
+		for (const chain of chains) {
+			const birth = byId.get(chain.conclusion)?.provenance[0]?.chatId;
+			if (birth) births.add(birth);
+		}
+		return births.size;
+	}, [directory, chains, byId]);
+
 	// The derived shape under the floating bar (the agents' ACTUAL input).
 	const derived = useMemo(() => {
 		const selectedNodes = [...selection].map((id) => byId.get(id)).filter((n): n is GraphNode => n !== undefined);
@@ -306,7 +318,7 @@ export function ChainTableBody({
 			    law: later in the DOM). */}
 			<TopBar>
 				<span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-					{chains.length} {chains.length === 1 ? "kjede" : "kjeder"} · {nodes.length} {nodes.length === 1 ? "node" : "noder"}
+					{sourceCount} {sourceCount === 1 ? "kilde" : "kilder"} · {nodes.length} {nodes.length === 1 ? "node" : "noder"}
 				</span>
 				{onOrganizationChange && <button type="button" aria-label="Legg til mappe" data-testid="add-source-folder"
 					onClick={() => setCreatingFolder(true)} className="lh-no-drag rounded-lg p-2 text-muted-foreground hover:bg-accent"><FolderPlusIcon className="size-4" /></button>}
@@ -327,7 +339,7 @@ export function ChainTableBody({
 					type="button"
 					data-testid="chain-table-close"
 					onClick={onClose}
-					aria-label="Lukk kjeder"
+					aria-label="Lukk kilder"
 					className="lh-no-drag flex size-8 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card/80 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 				>
 					<XIcon className="size-4" />
@@ -382,7 +394,7 @@ export function ChainTableBody({
 				</div>}
 				{groups.length === 0 && (directory?.organization.folders.length ?? 0) === 0 && (
 					<div data-testid="chain-table-nomatch" className="px-4 pt-3 text-xs text-muted-foreground">
-						Ingen kjeder passer.
+						Ingen treff.
 					</div>
 				)}
 

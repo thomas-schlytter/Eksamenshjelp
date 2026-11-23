@@ -200,6 +200,19 @@ export interface SimOptions {
 		clusters: ReadonlyArray<{ members: ReadonlyArray<string> }>;
 		strength: number;
 	};
+	/** Course pull (the knowledge map's «fagkraft», fase 8): the same
+	 *  centroid mechanics one level up — every member of a course drifts
+	 *  toward the course's centroid, so its topic clusters sit together.
+	 *  Strength 0 or absent = off. */
+	coursePull?: {
+		groups: ReadonlyArray<{ members: ReadonlyArray<string> }>;
+		strength: number;
+	};
+	/** Spring stiffness multiplier for links whose endpoints sit in
+	 *  DIFFERENT clusterPull clusters (1 = no damping). Below 1 the
+	 *  cross-topic arrows stop dragging tight topic clusters into one
+	 *  hairball; the arrows still draw. */
+	interClusterLinkScale?: number;
 }
 
 /** Link input: edges are undirected for layout purposes. */
@@ -248,6 +261,27 @@ export const INCREMENTAL_GRAVITY = 0.12;
  *  compact enough to read as blobs, weak enough that cluster shape is
  *  still the edge network's). */
 export const CLUSTER_PULL_STRENGTH = 0.15;
+/** The knowledge map's course pull (fase 8): weaker than the topic pull,
+ *  so a course reads as a neighborhood of tight topic clusters. */
+export const COURSE_PULL_STRENGTH = 0.04;
+/** The knowledge map's cross-topic link damping (fase 8). */
+export const INTER_CLUSTER_LINK_SCALE = 0.2;
+
+/** Index every node into its group (-1 = none). Later groups win a tie. */
+function groupIndex(
+	nodes: ReadonlyArray<LayoutNode>,
+	groups: ReadonlyArray<{ members: ReadonlyArray<string> }>,
+): Int32Array {
+	const byId = new Map<string, number>();
+	groups.forEach((g, i) => {
+		for (const id of g.members) byId.set(id, i);
+	});
+	const out = new Int32Array(nodes.length);
+	nodes.forEach((n, i) => {
+		out[i] = byId.get(n.id) ?? -1;
+	});
+	return out;
+}
 
 /**
  * The one force set. Returns a STOPPED simulation — callers drive it
@@ -269,6 +303,21 @@ export function createGraphSimulation(
 	}
 	const linkStrength = options.linkStrength ?? 1;
 	const linkDistance = options.linkDistance ?? LINK_DISTANCE;
+	// Cross-cluster damping (fase 8): resolved by id, before d3 swaps the
+	// link endpoints for node refs.
+	const interScale = options.interClusterLinkScale ?? 1;
+	const linkClusterOf = new Map<string, number>();
+	if (interScale !== 1 && options.clusterPull) {
+		options.clusterPull.clusters.forEach((c, i) => {
+			for (const id of c.members) linkClusterOf.set(id, i);
+		});
+	}
+	const crossScale = (a: string, b: string): number => {
+		if (interScale === 1) return 1;
+		const ca = linkClusterOf.get(a);
+		const cb = linkClusterOf.get(b);
+		return ca !== undefined && ca === cb ? 1 : interScale;
+	};
 
 	const sim = forceSimulation<LayoutNode, SimLink>(nodes)
 		.force(
@@ -289,7 +338,7 @@ export function createGraphSimulation(
 				)
 				.strength(
 					(l) =>
-						(linkStrength * 1) /
+						(linkStrength * crossScale((l.source as LayoutNode).id, (l.target as LayoutNode).id)) /
 						Math.min(degree.get((l.source as LayoutNode).id) ?? 1, degree.get((l.target as LayoutNode).id) ?? 1),
 				),
 		)
@@ -397,18 +446,12 @@ export function createGraphSimulation(
 	// Cluster centroid pull: the membership index is resolved ONCE (nodes
 	// don't change clusters mid-sim); each tick is two allocation-free
 	// O(n) passes (sum, then pull). Singletons (<2 members) skip themselves.
-	const cp = options.clusterPull;
-	if (cp && cp.strength > 0 && cp.clusters.length > 0) {
-		const clusterIdx = new Map<string, number>();
-		cp.clusters.forEach((c, i) => {
-			for (const id of c.members) clusterIdx.set(id, i);
-		});
-		const nodeCluster = nodes.map((n) => clusterIdx.get(n.id) ?? -1);
-		const k = cp.clusters.length;
+	const centroidPull = (name: string, groups: ReadonlyArray<{ members: ReadonlyArray<string> }>, strength: number): void => {
+		const nodeCluster = groupIndex(nodes, groups);
+		const k = groups.length;
 		const sumX = new Float64Array(k);
 		const sumY = new Float64Array(k);
 		const cnt = new Float64Array(k);
-		const strength = cp.strength;
 		// The cluster centroid pull also respects the depth mode: vertical
 		// → x-only (the depth force owns y); radial → tangential only
 		// (the radial component would drag members off their rings; the
@@ -416,7 +459,7 @@ export function createGraphSimulation(
 		// spread, which is all clustering needs to do there).
 		const ringCx = options.depthAnchor?.center?.x ?? 0;
 		const ringCy = options.depthAnchor?.center?.y ?? 0;
-		sim.force("clusterPull", (alpha: number) => {
+		sim.force(name, (alpha: number) => {
 			sumX.fill(0);
 			sumY.fill(0);
 			cnt.fill(0);
@@ -458,7 +501,12 @@ export function createGraphSimulation(
 				}
 			}
 		});
-	}
+	};
+	const cp = options.clusterPull;
+	if (cp && cp.strength > 0 && cp.clusters.length > 0) centroidPull("clusterPull", cp.clusters, cp.strength);
+	const coursePull = options.coursePull;
+	if (coursePull && coursePull.strength > 0 && coursePull.groups.length > 0)
+		centroidPull("coursePull", coursePull.groups, coursePull.strength);
 
 	// ── Inference-depth anchoring ────────────────────────────────────────
 	// The rank is COMPUTED (not simulated): per-node target scalar derived
@@ -531,6 +579,16 @@ export interface IncrementalLayoutOptions {
 	logicalEdges?: ReadonlyArray<LayoutEdge>;
 	/** The imp chain linkage for the midpoint anchor (see SimOptions). */
 	impLinks?: ReadonlyArray<ImpLink>;
+	/** Starting points for UNANCHORED nodes (the knowledge map's grouped
+	 *  seeding, core/knowledge-map.ts): used before the neighbor/rim rule.
+	 *  A seeded node is not anchored — the sim relaxes it freely. */
+	seeds?: ReadonlyMap<string, Position>;
+	/** Course groups for the course pull (see SimOptions.coursePull). */
+	courseGroups?: ReadonlyArray<{ members: ReadonlyArray<string> }>;
+	/** Course pull strength (default COURSE_PULL_STRENGTH). */
+	coursePullStrength?: number;
+	/** Cross-cluster link damping (see SimOptions). */
+	interClusterLinkScale?: number;
 }
 
 /**
@@ -612,10 +670,15 @@ export function incrementalLayout(
 		const anchor = anchors.get(node.id);
 		let x: number;
 		let y: number;
+		const seed = anchor ? undefined : options.seeds?.get(node.id);
 		if (anchor) {
 			// Warm start: resume from the previous rest position.
 			x = anchor.x;
 			y = anchor.y;
+		} else if (seed) {
+			// Grouped seed (the knowledge map): inside its own cluster.
+			x = seed.x + (rand() - 0.5) * 2;
+			y = seed.y + (rand() - 0.5) * 2;
 		} else {
 			// New node: seed near its positioned neighbors (the cluster it
 			// arrived with), else on the rim outside the core, else scatter.
@@ -665,6 +728,10 @@ export function incrementalLayout(
 		clusterPull: options.clusters
 			? { clusters: options.clusters, strength: options.clusterPullStrength ?? CLUSTER_PULL_STRENGTH }
 			: undefined,
+		coursePull: options.courseGroups
+			? { groups: options.courseGroups, strength: options.coursePullStrength ?? COURSE_PULL_STRENGTH }
+			: undefined,
+		interClusterLinkScale: options.interClusterLinkScale,
 		depthAnchor:
 			options.depthAnchor && options.depthAnchor.mode !== "off"
 				? { ...options.depthAnchor, center: options.depthAnchor.center ?? { x: cx, y: cy } }

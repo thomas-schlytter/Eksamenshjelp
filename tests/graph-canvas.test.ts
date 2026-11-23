@@ -12,13 +12,14 @@
 import assert from "node:assert/strict";
 import { describe, it, it as test } from "node:test";
 import {
-	applyClusterLabels,
 	arrowGeometry,
 	isImpNodeId,
 	boxBlurRound,
 	fitTransform,
 	labelAlpha,
+	nodeRadiusFactor,
 	pickNearest,
+	placeLabels,
 	wrapRegionLabel,
 	zoomRatioOf,
 	LABELS_FADE_RATIO,
@@ -337,80 +338,44 @@ describe("wrapRegionLabel (wave 7: session names / file paths)", () => {
 	});
 });
 
-
-describe("applyClusterLabels (the label-only rename channel)", () => {
-	const measure = (s: string) => s.length * 5;
-	const W = 220;
-	const MAXL = 3;
-
-	const fixture = () => ({
-		clusters: [
-			{ id: "chat_a", label: "Old title" },
-			{ id: "chat_b", label: null },
-			{ id: "seedplan", label: "Orbital mechanics" },
-		],
-		regionMeta: [
-			{ id: "chat_a", label: "Old title", lines: ["Old title"], cx: 0, cy: 0, hue: 10 },
-			{ id: "chat_b", label: null, lines: null, cx: 1, cy: 1, hue: 20 },
-			{ id: "seedplan", label: "Orbital mechanics", lines: ["Orbital mechanics"], cx: 2, cy: 2, hue: 30 },
-		],
-	});
-
-	it("patches the matching cluster and re-wraps its region meta", () => {
-		const f = fixture();
-		// 5px/char and W=220: a 45-char title just overflows one line
-		// ("...for the" is 40 chars, appending " graph" reads 46).
-		const longTitle = "A much longer new session title for the graph";
-		const changed = applyClusterLabels(
-			f.clusters, f.regionMeta, new Map([["chat_a", longTitle]]),
-			W, MAXL, measure,
-		);
-		assert.equal(changed, true);
-		assert.equal(f.clusters[0]!.label, longTitle);
-		assert.deepEqual(f.regionMeta[0]!.lines, ["A much longer new session title for the", "graph"]);
-		// untouched entries stay byte-identical
-		assert.equal(f.clusters[1]!.label, null);
-		assert.equal(f.clusters[2]!.label, "Orbital mechanics");
-		assert.deepEqual(f.regionMeta[2]!.lines, ["Orbital mechanics"]);
-	});
-
-	it("hull silence: a null-label cluster never gains a label", () => {
-		const f = fixture();
-		const changed = applyClusterLabels(
-			f.clusters, f.regionMeta, new Map([["chat_b", "Resurrected?"]]),
-			W, MAXL, measure,
-		);
-		assert.equal(changed, false);
-		assert.equal(f.clusters[1]!.label, null);
-		assert.equal(f.regionMeta[1]!.lines, null);
-	});
-
-	it("a label already matching is a no-op (no redraw)", () => {
-		const f = fixture();
-		const changed = applyClusterLabels(
-			f.clusters, f.regionMeta, new Map([["seedplan", "Orbital mechanics"]]),
-			W, MAXL, measure,
-		);
-		assert.equal(changed, false);
-	});
-
-	it("an explicit null clears a labeled cluster's lines", () => {
-		const f = fixture();
-		const changed = applyClusterLabels(
-			f.clusters, f.regionMeta, new Map([["chat_a", null]]),
-			W, MAXL, measure,
-		);
-		assert.equal(changed, true);
-		assert.equal(f.clusters[0]!.label, null);
-		assert.equal(f.regionMeta[0]!.lines, null);
-	});
-
-	it("unknown ids in the map change nothing", () => {
-		const f = fixture();
-		const changed = applyClusterLabels(
-			f.clusters, f.regionMeta, new Map([["chat_ghost", "Nope"]]),
-			W, MAXL, measure,
-		);
-		assert.equal(changed, false);
+describe("nodeRadiusFactor (fase 8: size by degree)", () => {
+	it("a leaf is a clear dot, hubs grow, and the cap holds", () => {
+		assert.ok(nodeRadiusFactor(0) >= 1.4, "a leaf is never smaller than 1.4× nodeSize");
+		assert.ok(nodeRadiusFactor(4) > nodeRadiusFactor(1), "more arrows, bigger disc");
+		assert.equal(nodeRadiusFactor(10_000), 4.5, "capped");
+		assert.equal(nodeRadiusFactor(-3), nodeRadiusFactor(0), "negative degree reads as none");
 	});
 });
+
+describe("placeLabels (greedy collision control)", () => {
+	const box = (x: number, y: number, w = 10, h = 4) => ({ x0: x, y0: y, x1: x + w, y1: y + h });
+
+	it("keeps candidates in order and skips any that overlap a kept one", () => {
+		const kept = placeLabels([box(0, 0), box(5, 2), box(20, 0), box(21, 1), box(0, 10)]);
+		assert.deepEqual(kept, [0, 2, 4]);
+	});
+
+	it("touching edges do not collide; boxes across grid cells still do", () => {
+		assert.deepEqual(placeLabels([box(0, 0), box(10, 0)]), [0, 1]);
+		assert.deepEqual(placeLabels([box(90, 90, 20, 20), box(100, 100, 20, 20)], 96), [0]);
+	});
+
+	it("an empty candidate list places nothing", () => {
+		assert.deepEqual(placeLabels([]), []);
+	});
+});
+
+describe("pickNearest with a per-node reach (fase 8: discs sized by degree)", () => {
+	it("a node counts only inside its own reach; the nearest such node wins", () => {
+		const nodes = [
+			{ id: "hub", x: 0, y: 0, r: 20 },
+			{ id: "leaf", x: 30, y: 0, r: 4 },
+		];
+		// 15px from the hub (inside 20), 15px from the leaf (outside 4).
+		assert.equal(pickNearest(nodes, 15, 0, (n) => n.r)?.id, "hub");
+		// 2px from the leaf, 28px from the hub (outside 20).
+		assert.equal(pickNearest(nodes, 28, 0, (n) => n.r)?.id, "leaf");
+		assert.equal(pickNearest(nodes, 0, 50, (n) => n.r), null);
+	});
+});
+

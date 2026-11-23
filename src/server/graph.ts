@@ -11,6 +11,7 @@ import {
 } from "../core/graph-deletion.ts";
 import { extractionStatuses } from "../agent/subagents/extraction.ts";
 import { stores } from "./stores.ts";
+import { prepareKnowledgeMap, snapshotMap } from "./knowledge-map.ts";
 import { callCost } from "./pricing.ts";
 
 /**
@@ -22,7 +23,10 @@ import { callCost } from "./pricing.ts";
 export function graphView(): GraphSnapshot {
 	const organization = stores.sourceOrganizationStore.read();
 	const names = Object.fromEntries(Object.entries(organization.placements).flatMap(([id, p]) => p.name === undefined ? [] : [[id, p.name]]));
-	return graphSnapshot(stores, names);
+	// THE KNOWLEDGE MAP (fase 8): clusters are (fag, tema), not birth
+	// sessions. The layout check runs first, so the snapshot's positions
+	// already reflect the grouping it serves.
+	return graphSnapshot(stores, names, snapshotMap(prepareKnowledgeMap()));
 }
 
 /** The graph view's cost surface (GET /api/graph/costs — the 2026-09 cost

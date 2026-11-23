@@ -10,9 +10,9 @@
  *   - renameSessionsPatch changes display state IN PLACE (no identity
  *     change → the data feed cannot re-fire);
  *   - seedMissingNodePositions gives ledger-unknown nodes a seeded ring
- *     instead of the old ?? 0 origin dump;
- *   - applyClusterLabels (the renderer's label-only channel) has its own
- *     suite in graph-canvas.test.ts.
+ *     instead of the old ?? 0 origin dump.
+ * (The renderer's label-only rename channel retired with fase 8: cluster
+ * labels are topic names, so a session rename never reaches them.)
  */
 
 import assert from "node:assert/strict";

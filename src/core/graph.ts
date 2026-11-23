@@ -507,7 +507,15 @@ export function deriveView(graph: DerivedGraph): {
 // ─── the /api/graph payload ──────────────────────────────────────────────────
 
 /** Everything the home graph view needs, in one fetch (shape: contracts). */
-export function graphSnapshot(deps: GraphDeps, sourceNames: Readonly<Record<string, string>> = {}): GraphSnapshot {
+export function graphSnapshot(
+	deps: GraphDeps,
+	sourceNames: Readonly<Record<string, string>> = {},
+	/** The knowledge map's (fag, tema) grouping (fase 8, computed by
+	 *  src/server/knowledge-map.ts). When given, it REPLACES the
+	 *  birth-session clusters, and every group is served (the renderer
+	 *  colors every node and applies MIN_CLUSTER_SIZE to labels itself). */
+	map?: { clusters: Cluster[]; courses: Array<{ code: string; name: string }> },
+): GraphSnapshot {
 	const graph = getGraph(deps.graphStore);
 	// The canvas-facing lossy image: propositions + derived implication
 	// nodes, untyped arrows. `chains` (the stored truth) ride along for
@@ -563,8 +571,8 @@ export function graphSnapshot(deps: GraphDeps, sourceNames: Readonly<Record<stri
 	// but renders unlabeled — honest, never guessed.
 	// PROPOSITIONS ONLY (owner, 2026-09-30): derived implication nodes
 	// never partition — the stored world clusters, its image follows.
-	const communities = birthSessionPartition(graph.nodes);
-	const clusters: Cluster[] = communities
+	const communities = map ? [] : birthSessionPartition(graph.nodes);
+	const clusters: Cluster[] = map ? map.clusters : communities
 		.filter((community) => community.members.length >= MIN_CLUSTER_SIZE)
 		.map((community) => {
 			// Display names never replace the original provenance path.
@@ -581,7 +589,8 @@ export function graphSnapshot(deps: GraphDeps, sourceNames: Readonly<Record<stri
 	// never resurrects a hull (the filter counts propositions). Both
 	// cluster-membership consumers — the sim's centroid pull and the
 	// canvas's region rasterization — read it through this one list.
-	attachImpToCommunities(clusters, graph.nodes, graph.chains);
+	// (The map grouping attaches its imp nodes itself — buildMapClusters.)
+	if (!map) attachImpToCommunities(clusters, graph.nodes, graph.chains);
 
 	// Resting layout (Option A): the positions ledger, when the settle has
 	// ever run. Absent on a fresh graph — the view falls back to its own
@@ -599,6 +608,7 @@ export function graphSnapshot(deps: GraphDeps, sourceNames: Readonly<Record<stri
 		fileSources,
 		nodeSessions,
 		clusters,
+		...(map ? { courses: map.courses } : {}),
 		...(Object.keys(positions).length > 0 ? { positions } : {}),
 	};
 }

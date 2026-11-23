@@ -15,7 +15,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { GraphChromeRow } from "../components/graph-view.tsx";
+import { GraphChromeRow, MapLegend, UNCOURSED, courseColorVar, isInCourse } from "../components/graph-view.tsx";
 import type { GraphRenderSettings } from "../components/graph-canvas.ts";
 
 /** Ref doubles — the SSR harness never attaches them. */
@@ -65,5 +65,55 @@ describe("GraphChromeRow — the empty-graph ruling (owner, 2026-09-25)", () => 
 			createElement(GraphChromeRow, { ...PROPS, isEmpty: false, query: "zzz", noMatch: false }),
 		);
 		assert.ok(!quiet.includes("No matching nodes."));
+	});
+
+	it("the source table's entry is named «Kilder» (fase 8)", () => {
+		const html = renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: false }));
+		assert.ok(html.includes("Kilder"));
+		assert.ok(!html.includes("Kjeder"));
+	});
+});
+
+describe("the knowledge map's course chrome (fase 8)", () => {
+	const courses = [
+		{ code: "TMA4400", name: "Matematikk 1" },
+		{ code: "TTK4100", name: "Kybernetikk, introduksjon" },
+	];
+
+	it("the course filter lists every course, plus «Uten fag» only when it has nodes", () => {
+		const html = renderToStaticMarkup(
+			createElement(GraphChromeRow, { ...PROPS, isEmpty: false, courses, hasUncoursed: true, courseFilter: "TTK4100" }),
+		);
+		assert.ok(html.includes('data-testid="map-course-filter"'));
+		for (const label of ["Alle fag", "TMA4400", "TTK4100", "Uten fag"]) assert.ok(html.includes(`>${label}</option>`), label);
+		assert.ok(html.includes('value="TTK4100" selected=""'), "the current choice is selected");
+		const without = renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: false, courses, hasUncoursed: false }));
+		assert.ok(!without.includes(">Uten fag</option>"));
+	});
+
+	it("no courses, or an empty graph: no filter", () => {
+		assert.ok(!renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: false })).includes("map-course-filter"));
+		assert.ok(!renderToStaticMarkup(createElement(GraphChromeRow, { ...PROPS, isEmpty: true, courses })).includes("map-course-filter"));
+	});
+
+	it("the legend: one swatch per course in the canvas's own token, «Uten fag», and the arrow line", () => {
+		const html = renderToStaticMarkup(createElement(MapLegend, { courses, hasUncoursed: true }));
+		assert.ok(html.includes("var(--lh-map-1)") && html.includes("var(--lh-map-2)") && html.includes("var(--lh-map-none)"));
+		assert.ok(html.includes("TMA4400") && html.includes("Matematikk 1") && html.includes("Uten fag"));
+		assert.ok(html.includes("En strek betyr: dette følger av det"));
+	});
+
+	it("courseColorVar cycles the eight tokens; isInCourse reads the filter", () => {
+		const many = Array.from({ length: 9 }, (_, i) => ({ code: `C${i}` }));
+		assert.equal(courseColorVar("C0", many), "--lh-map-1");
+		assert.equal(courseColorVar("C8", many), "--lh-map-1", "the ninth course wraps around");
+		assert.equal(courseColorVar(null, many), "--lh-map-none");
+		assert.equal(isInCourse("TTK4100", ""), true);
+		assert.equal(isInCourse(undefined, ""), true, "no filter shows nodes outside every cluster");
+		assert.equal(isInCourse(undefined, "TTK4100"), false);
+		assert.equal(isInCourse("TTK4100", "TTK4100"), true);
+		assert.equal(isInCourse("TMA4400", "TTK4100"), false);
+		assert.equal(isInCourse(null, UNCOURSED), true);
+		assert.equal(isInCourse("TTK4100", UNCOURSED), false);
 	});
 });

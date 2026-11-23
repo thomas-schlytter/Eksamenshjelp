@@ -70,6 +70,7 @@ import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, Wayp
 import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
+import { mapClusterColors } from "./cluster-geometry.ts";
 import { usePopoverDismiss } from "@/components/popover-dismiss";
 import { useActivity } from "@/components/activity-dock";
 import { useServerEvent, useServerResync } from "@/components/server-events";
@@ -83,9 +84,6 @@ import {
 	CHARGE_RANGE,
 	CLUSTER_LABEL_SIZE_LADDER,
 	CLUSTER_PULL_RANGE,
-	DEPTH_BASE_RADIUS_RANGE,
-	DEPTH_SPACING_RANGE,
-	DEPTH_STRENGTH_RANGE,
 	DEFAULT_RENDER_SETTINGS,
 	EDGE_WIDTH_LADDER,
 	GRAVITY_RANGE,
@@ -118,6 +116,76 @@ const NODE_COLOR_TOKEN = "--primary";
  *  key: the stored shape is the renderer's d3 transform {k, x, y}. */
 const CAMERA_STORAGE_KEY = "lh.graph.camera.v1";
 
+// ---- The knowledge map's courses (fase 8) ---------------------------------
+
+/** The course filter's value for «Uten fag» (course codes never start
+ *  with a hyphen: COURSE_CODE_PATTERN allows one only after a letter). */
+export const UNCOURSED = "-";
+
+/** How many course color tokens the theme defines (--lh-map-1 … 8). */
+const MAP_COLOR_TOKENS = 8;
+
+/** The CSS variable a course's color family comes from: the course's
+ *  place in the map's course list, cycling the tokens; «Uten fag» has
+ *  its own neutral token. Shared by the canvas (resolved to hex) and the
+ *  legend (used as-is), so the two always agree. */
+export function courseColorVar(code: string | null, courses: ReadonlyArray<{ code: string }>): string {
+	if (code === null) return "--lh-map-none";
+	const i = courses.findIndex((c) => c.code === code);
+	return `--lh-map-${(Math.max(i, 0) % MAP_COLOR_TOKENS) + 1}`;
+}
+
+/** Is a node in the chosen course? "" = every course; UNCOURSED = the
+ *  nodes without one. Nodes outside every cluster only show under "". */
+export function isInCourse(course: string | null | undefined, filter: string): boolean {
+	if (filter === "") return true;
+	if (course === undefined) return false;
+	return filter === UNCOURSED ? course === null : course === filter;
+}
+
+/** The map's legend (fase 8): what the colors and the arrows mean, kept
+ *  short. Exported for the SSR pin. */
+export function MapLegend({
+	courses,
+	hasUncoursed,
+}: {
+	courses: ReadonlyArray<{ code: string; name: string }>;
+	hasUncoursed: boolean;
+}) {
+	const rows: Array<{ key: string; color: string; code: string; name: string }> = courses.map((c) => ({
+		key: c.code,
+		color: courseColorVar(c.code, courses),
+		code: c.code,
+		name: c.name,
+	}));
+	if (hasUncoursed) rows.push({ key: UNCOURSED, color: courseColorVar(null, courses), code: "Uten fag", name: "" });
+	return (
+		<div
+			data-testid="map-legend"
+			className="lh-no-drag w-56 max-w-[calc(100vw-1.5rem)] rounded-xl border bg-card/85 px-3 py-2 text-[11px] text-muted-foreground shadow-lg backdrop-blur"
+		>
+			{rows.length > 0 && (
+				<ul className="mb-2 flex flex-col gap-1 border-b pb-2">
+					{rows.map((row) => (
+						<li key={row.key} className="flex min-w-0 items-center gap-2">
+							<span className="size-2.5 shrink-0 rounded-full" style={{ background: `var(${row.color})` }} aria-hidden="true" />
+							<span className="shrink-0 text-foreground">{row.code}</span>
+							{row.name && <span className="min-w-0 truncate">{row.name}</span>}
+						</li>
+					))}
+				</ul>
+			)}
+			<div className="flex items-center gap-2">
+				<svg width="22" height="8" viewBox="0 0 22 8" aria-hidden="true" className="shrink-0 text-muted-foreground">
+					<line x1="1" y1="4" x2="16" y2="4" stroke="currentColor" strokeWidth="1.25" strokeLinecap="round" />
+					<path d="M15 1 L21 4 L15 7 Z" fill="currentColor" />
+				</svg>
+				<span>En strek betyr: dette følger av det</span>
+			</div>
+		</div>
+	);
+}
+
 // ---- Render settings (the settings-panel controls) ------------------------
 //
 // The shape, defaults, sanitizer, and slider mappings live in
@@ -143,10 +211,10 @@ export function isNodeVisible(node: Pick<GraphNode, "name" | "statement">, query
  *  commit cancelled → the graph visibly rewound whenever display had
  *  drifted. This seam NEVER changes object identity: same snapshot
  *  reference, same clusters array — so the data feed cannot re-fire.
- *  The display refresh rides a separate tick state, and the cluster
- *  label itself goes through the renderer's label-only channel
- *  (setClusterLabels). Exported for tests; pure display state only —
- *  the server derives the same join on its next read. */
+ *  The display refresh rides a separate tick state (cluster labels are
+ *  topic names since fase 8 — a session rename never touches them).
+ *  Exported for tests; pure display state only — the server derives the
+ *  same join on its next read. */
 export function renameSessionsPatch(snapshot: Pick<GraphSnapshot, "sessions">, id: string, title: string): void {
 	snapshot.sessions[id] = title;
 }
@@ -759,69 +827,10 @@ function GraphSettingsControl({
 										physics: { ...cur.physics, velocityDecay: fromSliderPosition(p, VELOCITY_DECAY_RANGE.min, VELOCITY_DECAY_RANGE.max) },
 									}))}
 							/>
-							{/* Depth anchor LAST (user 2026-09-17): general
-							    forces first, then the mode + its conditional
-							    controls at the very bottom — the grayed group reads
-							    as a self-contained sub-section. */}
-							<label className="flex items-center justify-between gap-2 text-xs">
-								Dybdeanker
-								<select
-									className="rounded border bg-background px-1 py-0.5 text-xs"
-									value={physicsTuning.depthMode}
-									onChange={(e) =>
-										changeSettings((cur) => ({
-											...cur,
-											physics: { ...cur.physics, depthMode: e.target.value as GraphRenderSettings["physics"]["depthMode"] },
-										}))
-									}
-								>
-									<option value="off">Av</option>
-									<option value="vertical">Vertikal (opp)</option>
-									<option value="radial">Radial (utover)</option>
-								</select>
-							</label>
-							<SettingSlider
-								label="Dybdestyrke"
-								disabled={physicsTuning.depthMode === "off"}
-								min={0}
-								max={100}
-								step={5}
-								value={toSliderPosition(physicsTuning.depthStrength, DEPTH_STRENGTH_RANGE.min, DEPTH_STRENGTH_RANGE.max)}
-								display={sizeDisplay(physicsTuning.depthStrength)}
-								onChange={(p) =>
-									changeSettings((cur) => ({
-										...cur,
-										physics: { ...cur.physics, depthStrength: fromSliderPosition(p, DEPTH_STRENGTH_RANGE.min, DEPTH_STRENGTH_RANGE.max) },
-									}))}
-							/>
-							<SettingSlider
-								label="Dybdeavstand"
-								disabled={physicsTuning.depthMode === "off"}
-								min={0}
-								max={100}
-								step={5}
-								value={toSliderPosition(physicsTuning.depthSpacing, DEPTH_SPACING_RANGE.min, DEPTH_SPACING_RANGE.max)}
-								display={sizeDisplay(physicsTuning.depthSpacing)}
-								onChange={(p) =>
-									changeSettings((cur) => ({
-										...cur,
-										physics: { ...cur.physics, depthSpacing: fromSliderPosition(p, DEPTH_SPACING_RANGE.min, DEPTH_SPACING_RANGE.max) },
-									}))}
-							/>
-							<SettingSlider
-								label="Radius på innerste ring"
-								disabled={physicsTuning.depthMode !== "radial"}
-								min={0}
-								max={100}
-								step={5}
-								value={toSliderPosition(physicsTuning.depthBaseRadius, DEPTH_BASE_RADIUS_RANGE.min, DEPTH_BASE_RADIUS_RANGE.max)}
-								display={sizeDisplay(physicsTuning.depthBaseRadius)}
-								onChange={(p) =>
-									changeSettings((cur) => ({
-										...cur,
-										physics: { ...cur.physics, depthBaseRadius: fromSliderPosition(p, DEPTH_BASE_RADIUS_RANGE.min, DEPTH_BASE_RADIUS_RANGE.max) },
-									}))}
-							/>
+							{/* The depth anchor (Dybdeanker + its three sliders) is
+							    gone since fase 8: it re-formed the map into inference
+							    rows, against the fag/tema grouping the layout is
+							    built on. */}
 						</div>
 					</div>
 				</div>
@@ -849,10 +858,21 @@ export function GraphChromeRow({
 	settings,
 	changeSettings,
 	onOpenChains,
+	courses = [],
+	hasUncoursed = false,
+	courseFilter = "",
+	onCourseFilter,
 }: {
 	isEmpty: boolean;
 	query: string;
 	onQuery: (v: string) => void;
+	/** The course filter (fase 8): the map's courses, whether «Uten fag»
+	 *  has nodes, the current choice ("" = all, UNCOURSED = «Uten fag»,
+	 *  else a course code), and its setter. No courses → no filter. */
+	courses?: ReadonlyArray<{ code: string; name: string }>;
+	hasUncoursed?: boolean;
+	courseFilter?: string;
+	onCourseFilter?: (value: string) => void;
 	/** The search panel's "No matching nodes." note (computed by the
 	 *  wrapper — it owns visibleIds + the snapshot). */
 	noMatch: boolean;
@@ -893,10 +913,32 @@ export function GraphChromeRow({
 					)}
 				</div>
 			)}
-			{/* The chain table (chains overlay, owner plan 2026-09-29). Own
-			    container (36px band), between the search and Import. */}
+			{!isEmpty && courses.length > 0 && (
+				// The course filter (fase 8): one course at a time, or all. A
+				// native select — the choice is a short fixed list.
+				<div className="graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
+					<select
+						value={courseFilter}
+						onChange={(e) => onCourseFilter?.(e.target.value)}
+						aria-label="Vis fag"
+						data-testid="map-course-filter"
+						className="h-7 rounded-lg bg-transparent px-1.5 text-xs text-muted-foreground outline-none transition-colors hover:bg-accent"
+					>
+						<option value="">Alle fag</option>
+						{courses.map((c) => (
+							<option key={c.code} value={c.code}>
+								{c.code}
+							</option>
+						))}
+						{hasUncoursed && <option value={UNCOURSED}>Uten fag</option>}
+					</select>
+				</div>
+			)}
+			{/* The source table (the chain-table overlay, organized by source
+			    and folder — «Kilder» since fase 8). Own container (36px band),
+			    between the search and Import. */}
 			<div className="graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
-					<Hint label="Alle resonnementskjeder" side="bottom">
+					<Hint label="Kilder og resonnementskjeder" side="bottom">
 						<button
 							type="button"
 							onClick={onOpenChains}
@@ -904,7 +946,7 @@ export function GraphChromeRow({
 							className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
 						>
 							<ListTreeIcon className="size-3" />
-							Kjeder
+							Kilder
 						</button>
 					</Hint>
 				</div>
@@ -1022,16 +1064,39 @@ export function GraphView({
 	const rendererRef = useRef<GraphCanvasRenderer | null>(null);
 	const posRef = useRef<Map<string, { x: number; y: number }> | null>(null);
 
-	// The id set that survives the current search — consumed by the
-	// visibility feed and the "no matches" hint.
+	// The course filter (fase 8): "" = all, UNCOURSED, or a course code.
+	// View state for this visit only — a filter that outlives the visit
+	// would hide nodes the next time without saying so.
+	const [courseFilter, setCourseFilter] = useState("");
+	// Node id → its course (null = «Uten fag»), from the map clusters.
+	const nodeCourse = useMemo(() => {
+		const map = new Map<string, string | null>();
+		for (const cluster of snapshot?.clusters ?? []) {
+			if (cluster.course === undefined) continue;
+			for (const id of cluster.members) map.set(id, cluster.course);
+		}
+		return map;
+	}, [snapshot]);
+	const mapCourses = useMemo(() => snapshot?.courses ?? [], [snapshot]);
+	const hasUncoursed = useMemo(() => (snapshot?.clusters ?? []).some((c) => c.course === null), [snapshot]);
+	// A filter pointing at a course that left the map falls back to all.
+	const activeCourseFilter =
+		courseFilter === "" ||
+		(courseFilter === UNCOURSED ? hasUncoursed : mapCourses.some((c) => c.code === courseFilter))
+			? courseFilter
+			: "";
+
+	// The id set that survives the search AND the course filter — consumed
+	// by the visibility feed and the "no matches" hint.
 	const visibleIds = useMemo(() => {
 		const set = new Set<string>();
 		if (snapshot)
 			for (const node of snapshot.nodes) {
-				if (isNodeVisible(node, query)) set.add(node.id);
+				if (isNodeVisible(node, query) && isInCourse(nodeCourse.get(node.id), activeCourseFilter)) set.add(node.id);
 			}
 		return set;
-	}, [snapshot, query]);
+	}, [snapshot, query, nodeCourse, activeCourseFilter]);
+	const filtering = query.trim() !== "" || activeCourseFilter !== "";
 
 	// Fetch the derived graph. Re-runs when a background pipeline run
 	// finishes (refreshTick) — its merges just landed in the ledger.
@@ -1173,18 +1238,33 @@ export function GraphView({
 		return () => window.removeEventListener("lh:graph-revision", onRevision);
 	}, [refreshCosts]);
 
-	/* Live rename labels (rename-shuffle fix, 2026-09-23): a session
+	/* The map's grouping moved without a graph write (fase 8): the topic
+	   classification finished a round (map-changed), or a course changed
+	   its topics or sources (courses-changed). Refetch the snapshot — the
+	   server re-seeds the regrouped nodes on that read. Debounced: a topic
+	   regeneration announces itself more than once. */
+	const mapDebounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const refetchMap = () => {
+		if (mapDebounceRef.current) clearTimeout(mapDebounceRef.current);
+		mapDebounceRef.current = setTimeout(() => {
+			mapDebounceRef.current = undefined;
+			setRefreshTick((t) => t + 1);
+		}, 400);
+	};
+	useServerEvent("map-changed", refetchMap);
+	useServerEvent("courses-changed", refetchMap);
+	useEffect(() => () => {
+		if (mapDebounceRef.current) clearTimeout(mapDebounceRef.current);
+	}, []);
+
+	/* Live session renames (rename-shuffle fix, 2026-09-23): a session
 	   rename anywhere (sidebar inline row, chat header) announces itself
-	   as lh:chat-renamed {id, title} — and the birth-session partition
-	   means that title IS the cluster label. The label update goes
-	   through the renderer's label-only channel (setClusterLabels): NO
-	   new snapshot object, NO setData, NO geometry rebuild — so the
-	   position ledger can't assert itself and a pending drag commit
-	   survives. The sessions map (the detail card's provenance line)
-	   patches in place; a tick bump re-renders the view so an open
-	   detail card reads the fresh title. Unlabeled clusters keep their
-	   hull-only silence — the null-label guard lives in the channel
-	   (applyClusterLabels): a rename can't reach a gone record. */
+	   as lh:chat-renamed {id, title}. The sessions map (the detail card's
+	   provenance line) patches in place — NO new snapshot object, NO
+	   setData, so the position ledger can't assert itself and a pending
+	   drag commit survives — and a tick bump re-renders the view so an
+	   open detail card reads the fresh title. (Cluster labels are topic
+	   names since fase 8; a rename no longer touches them.) */
 	const [, setLabelTick] = useState(0);
 	useEffect(() => {
 		const onRenamed = (e: Event) => {
@@ -1192,18 +1272,10 @@ export function GraphView({
 			if (typeof id !== "string" || typeof title !== "string" || id === "" || title === "") return;
 			const snap = snapshotRef.current;
 			if (snap != null) renameSessionsPatch(snap, id, title);
-			rendererRef.current?.setClusterLabels(new Map([[id, title]]));
 			setLabelTick((t) => t + 1);
 		};
-		const onSourceRenamed = (event: Event) => {
-			const { id, title } = (event as CustomEvent<{ id?: string; title?: string }>).detail ?? {};
-			if (typeof id !== "string" || typeof title !== "string") return;
-			// Label-only channel: never rebuild geometry or rewrite fileSources.
-			rendererRef.current?.setClusterLabels(new Map([[id, title]]));
-		};
 		window.addEventListener("lh:chat-renamed", onRenamed);
-		window.addEventListener("lh:source-renamed", onSourceRenamed);
-		return () => { window.removeEventListener("lh:chat-renamed", onRenamed); window.removeEventListener("lh:source-renamed", onSourceRenamed); };
+		return () => window.removeEventListener("lh:chat-renamed", onRenamed);
 	}, []);
 
 	// The node context menu (node interlude): right-click a node → Delete.
@@ -1399,12 +1471,34 @@ export function GraphView({
 			edges: snapshot.edges.map((e) => ({ from: e.from, to: e.to })),
 			logicalEdges: snapshot.logicalEdges.map((e) => ({ from: e.from, to: e.to })),
 			impLinks: snapshot.impLinks,
-			clusters: snapshot.clusters.map((c) => ({ id: c.id, label: c.label, members: c.members })),
+			// Fase 8: each course's color family comes from its theme token,
+			// topics shade within it (components/cluster-geometry.ts).
+			clusters: (() => {
+				const base = new Map<string | null, string>();
+				const baseOf = (course: string | null) => {
+					let hex = base.get(course);
+					if (hex === undefined) {
+						hex = tokenHex(courseColorVar(course, snapshot.courses ?? []));
+						base.set(course, hex);
+					}
+					return hex;
+				};
+				const colors = mapClusterColors(snapshot.clusters, baseOf);
+				return snapshot.clusters.map((c) => ({
+					id: c.id,
+					label: c.label,
+					members: c.members,
+					course: c.course ?? null,
+					color: colors.get(c.id) ?? baseOf(c.course ?? null),
+				}));
+			})(),
 			colors: {
 				node: tokenHex(NODE_COLOR_TOKEN),
-				edge: tokenHex("--ring"),
+				edge: tokenHex("--muted-foreground"),
 				label: tokenHex("--muted-foreground"),
 				hoverText: tokenHex("--foreground"),
+				halo: tokenHex("--background"),
+				dark: resolvedMode === "dark",
 			},
 			// Match the app typography (Inter via the body's stack).
 			fontFamily: getComputedStyle(document.body).fontFamily,
@@ -1422,10 +1516,17 @@ export function GraphView({
 	// Feed #3 — visibility: hidden nodes drop out of rendering, picking,
 	// hover, AND labels; edges drop when either endpoint is hidden.
 	useEffect(() => {
-		rendererRef.current?.setVisible(query.trim() ? visibleIds : null);
+		rendererRef.current?.setVisible(filtering ? visibleIds : null);
 		// The open detail card cannot outlive its node's visibility.
 		setSelected((sel) => (sel && visibleIds.has(sel.node.id) ? sel : null));
-	}, [visibleIds, query]);
+	}, [visibleIds, filtering, isEmpty]);
+
+	// Feed #3b — focus (fase 8): the selected node keeps its arrows and
+	// neighbors lifted while its detail card is open.
+	const selectedId = selected?.node.id ?? null;
+	useEffect(() => {
+		rendererRef.current?.setFocus(selectedId);
+	}, [selectedId, isEmpty]);
 
 	// Feed #4 — region tuning. `isEmpty` in the deps (same as Feed #2):
 	// the settings fetch resolves BEFORE the snapshot creates the renderer,
@@ -1540,7 +1641,15 @@ export function GraphView({
 
 
 
-			{/* Legend + filters: search box and per-state toggle rows. */}
+			{/* The legend (fase 8): top left, under the sidebar toggle's band
+			    — clear of the start box at the bottom and the controls at the
+			    top right. Only a map with a course grouping has one. */}
+			{!isEmpty && snapshot?.courses !== undefined && (
+				<div className="absolute left-3 top-14 z-10">
+					<MapLegend courses={mapCourses} hasUncoursed={hasUncoursed} />
+				</div>
+			)}
+
 			{/* Top-right controls — separate floating containers (owner,
 			    graph-view round 2). Row order (2026-09-17): search,
 			    coverage, import, gear — coverage sits between search and
@@ -1587,6 +1696,10 @@ export function GraphView({
 					settings={settings}
 					changeSettings={changeSettings}
 					onOpenChains={() => setChainsOpen(true)}
+					courses={mapCourses}
+					hasUncoursed={hasUncoursed}
+					courseFilter={activeCourseFilter}
+					onCourseFilter={setCourseFilter}
 				/>
 			</div>
 
