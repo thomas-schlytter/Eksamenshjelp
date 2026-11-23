@@ -37,7 +37,7 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 				<span className="min-w-0 font-medium">
 					<ToolContentResponse>{answer.questionText}</ToolContentResponse>
 				</span>
-				<span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide">
+				<span className="shrink-0 rounded-sm bg-muted px-1.5 py-0.5 text-xs font-medium uppercase tracking-wide">
 					{how === "skipped" ? "Hoppet over" : how === "on-hold" ? "Satt på vent" : "Lukket uten svar"}
 				</span>
 			</div>
@@ -97,17 +97,17 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 							: "Spørsmål"}
 				{isQuiz &&
 					(answer.dontKnow ? (
-						<span className="rounded bg-muted px-1.5 py-0.5">visste ikke</span>
+						<span className="rounded-sm bg-muted px-1.5 py-0.5">visste ikke</span>
 					) : answer.correct ? (
-						<span data-testid="verdict-chip" className="rounded bg-green-500/15 px-1.5 py-0.5 text-green-500">
+						<span data-testid="verdict-chip" className="rounded-sm bg-status-green-soft px-1.5 py-0.5 text-status-green-ink">
 							{awaitingExplanationReview ? "riktig valg" : "riktig"}
 						</span>
 					) : (
-						<span data-testid="verdict-chip" className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">feil</span>
+						<span data-testid="verdict-chip" className="rounded-sm bg-status-red-soft px-1.5 py-0.5 text-status-red-ink">feil</span>
 					))}
 				{/* Hints opened before answering (fase 4): a fact, not a verdict. */}
 				{typeof answer.hintsUsed === "number" && answer.hintsUsed > 0 && (
-					<span data-testid="hints-used-chip" className="rounded bg-muted px-1.5 py-0.5">
+					<span data-testid="hints-used-chip" className="rounded-sm bg-muted px-1.5 py-0.5">
 						hint {answer.hintsUsed}{answer.hintsTotal ? ` av ${answer.hintsTotal}` : ""}
 					</span>
 				)}
@@ -133,10 +133,10 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 								key={opt.index}
 								className={cn(
 									"flex items-center gap-2 rounded-lg border px-3 py-1.5",
-									sel && key && "border-green-500/60 bg-green-500/10",
-									sel && !key && isQuiz && "border-red-500/60 bg-red-500/10",
+									sel && key && "border-status-green/60 bg-status-green-soft",
+									sel && !key && isQuiz && "border-status-red/60 bg-status-red-soft",
 									sel && !isQuiz && "border-primary bg-accent",
-									!sel && key && "border-green-500/40",
+									!sel && key && "border-status-green/40",
 								)}
 							>
 								{isQuiz && (
@@ -147,9 +147,9 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 										data-mark={sel && key ? "check" : sel && !key ? "x" : !sel && key ? "check" : undefined}
 										className={cn(
 											"flex shrink-0 items-center",
-											sel && key && "text-green-500",
-											sel && !key && "text-red-500",
-											!sel && key && "text-green-500",
+											sel && key && "text-status-green-ink",
+											sel && !key && "text-status-red-ink",
+											!sel && key && "text-status-green-ink",
 										)}
 									>
 										{/* Owner round 8: a touch smaller than the text (size-4→size-3.5,

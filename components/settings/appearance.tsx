@@ -76,8 +76,9 @@ function raise(hex: string, add: number): string {
 
 /** The derived palette a chosen background implies (dark curve): background
  *  itself, the raised surfaces (card/popover/secondary/muted, +8), the
- *  accent (+22), the edges (border/input, +47), and primary-foreground
- *  (the inverted text on primary = the background's own color, as today). */
+ *  accent (+22) and the edges (border/input, +47). primary-foreground is
+ *  NOT derived: on the marine primary (profile D) the stylesheet's white
+ *  text is the readable one, the background color was not. */
 export function derivedPalette(background: string): Record<string, string> {
 	const card = raise(background, 8);
 	const accent = raise(background, 22);
@@ -91,9 +92,11 @@ export function derivedPalette(background: string): Record<string, string> {
 		"--accent": accent,
 		"--border": border,
 		"--input": border,
-		"--primary-foreground": background,
 	};
 }
+
+/** The opt-in serif title stack (the bundled CMU face in globals.css). */
+export const SERIF_TITLE_FONT = `"lh-cmu", serif`;
 
 /** THE mapping: resolved appearance → the CSS variables to set on <html>.
  *  Absent entries = leave the factory stylesheet value in place. Pure —
@@ -112,10 +115,10 @@ export function appearanceVars(
 	// The ONE documented reading-size variable (typography round 4): prose,
 	// inputs, and session titles all read it, so one setProperty moves them.
 	vars["--lh-prose-size"] = `${a.proseFontSize}px`;
-	// Session names: CMU Serif by default; the toggle swaps the title font
-	// to the prose family — covers chat.tsx + new-session.tsx titles with
-	// zero component edits (they use the .font-title utility).
-	if (!a.sessionNameSerif) vars["--font-title"] = "var(--font-prose)";
+	// Session names: Sora by default (the stylesheet's --font-title); the
+	// opt-in toggle swaps the title font to CMU Serif — covers every
+	// .font-title consumer with zero component edits.
+	if (a.sessionNameSerif) vars["--font-title"] = SERIF_TITLE_FONT;
 	// Markdown rendering: heading weight + the emphasis inks (the vars
 	// were built "ready for the settings UI").
 	vars["--lh-heading-weight"] = String(a.mdRendering.headingWeight);

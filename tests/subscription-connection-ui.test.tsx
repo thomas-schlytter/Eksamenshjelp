@@ -89,7 +89,7 @@ test("healthy management has only controls, quiet Manage, destructive action lef
 	assert.equal(dialog().querySelector("h2")?.textContent, "Grok");
 	assert(!dialog().querySelector("select")); assert(!dialog().textContent?.includes("Legg til kontoer"));
 	assert(!dialog().querySelector('[data-testid="subscription-privacy-notice"]')); assert(!maybeButton("Reconnect", dialog())); assert(!maybeButton("Logg inn på nytt", dialog()));
-	assert.equal(footer().firstElementChild, button("Koble fra", dialog())); assert.match(button("Koble fra", dialog()).className, /text-red/);
+	assert.equal(footer().firstElementChild, button("Koble fra", dialog())); assert.match(button("Koble fra", dialog()).className, /text-destructive/);
 	assert.equal(footer().lastElementChild?.lastElementChild, button("Lukk", dialog()));
 	await click(toggle()); assert.deepEqual(f.calls.consent, [["xai", false]]); assert.equal(f.statuses.find((s) => s.providerId === "github-copilot")!.allowBackgroundUse, true);
 	await click(button("Koble fra", dialog())); assert.equal(f.calls.disconnect.length, 0);

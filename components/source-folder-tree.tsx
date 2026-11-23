@@ -90,7 +90,7 @@ export function EditableSourceName({ name, onSave, onCancel, initiallyEditing = 
 			}} onDragStart={(e) => { e.preventDefault(); e.stopPropagation(); }} />
 			: <button type="button" className="block max-w-full truncate rounded-sm text-left text-sm font-medium leading-5 transition-colors hover:bg-accent" title="Gi nytt navn"
 				onClick={() => { cancelled.current = false; setDraft(name); setEditing(true); }}>{name}</button>}
-		{failure && <span role="alert" className="block text-xs text-red-400">{failure}</span>}
+		{failure && <span role="alert" className="block text-xs text-status-red-ink">{failure}</span>}
 	</span>;
 }
 
@@ -190,7 +190,7 @@ export function SourceFolderTree<T extends TreeSource>({ groups, directory, quer
 						<ChevronRightIcon className={`size-3.5 ${open ? "rotate-90" : ""}`} />
 					</button>
 					<button type="button" data-source-icon data-testid={`folder-icon-${folder.id}`} aria-expanded={open} aria-label={`Utvid mappen ${folder.name}`}
-						onClick={() => onToggleExpanded(folder.id)} className="flex h-5 w-3.5 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
+						onClick={() => onToggleExpanded(folder.id)} className="flex h-5 w-3.5 shrink-0 items-center justify-center rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground">
 						{open ? <FolderOpenIcon className="size-3.5 shrink-0" /> : <FolderIcon className="size-3.5 shrink-0" />}
 					</button>
 					{onAction ? <EditableSourceName name={folder.name} onSave={(name) => onAction({ action: "rename-folder", id: folder.id, name })} />

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Sora } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
 import { AppShell, SidebarProvider } from "@/components/sidebar";
@@ -9,10 +9,12 @@ import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
 import { HelpProvider } from "@/components/help/help-provider";
 
-// LettBestilt-tema: Inter for both chrome and teaching prose; JetBrains Mono
-// stays only for code (font-mono). Titles follow the prose font unless the
-// "session names in serif" toggle brings back CMU Serif.
+// Profile D: Inter for chrome and teaching prose, Sora for titles, headings
+// and big numbers (--font-heading in globals.css), JetBrains Mono only for
+// code (font-mono). next/font downloads the files at BUILD time and serves
+// them from the app itself, so the offline Electron app never fetches a font.
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
+const sora = Sora({ subsets: ["latin"], variable: "--font-sora" });
 const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
 
 // Runs before first paint: applies the cached mode (system/light/dark) so the
@@ -26,7 +28,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
 	return (
-		<html lang="nb" className={`${inter.variable} ${mono.variable}`} suppressHydrationWarning>
+		<html lang="nb" className={`${inter.variable} ${sora.variable} ${mono.variable}`} suppressHydrationWarning>
 			<head>
 				<script dangerouslySetInnerHTML={{ __html: themeBootstrap }} />
 			</head>

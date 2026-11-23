@@ -80,7 +80,7 @@ export function HelpCenter() {
 	return (
 		<div data-testid="help-center" className="min-h-0 flex-1 overflow-y-auto font-ui">
 			<div className="mx-auto w-full max-w-[46rem] px-5 pt-10 pb-20">
-				<h1 className="text-2xl font-semibold tracking-tight">Hjelpesenter</h1>
+				<h1 className="font-title text-2xl tracking-tight">Hjelpesenter</h1>
 				<p className="mt-1 text-base text-muted-foreground">Finn svar, eller la en veiviser vise deg rundt.</p>
 
 				<div className="relative mt-6">
@@ -152,7 +152,7 @@ export function HelpCenter() {
 								<a
 									key={category.id}
 									href={`#kategori-${category.id}`}
-									className={`rounded-full border border-border px-3 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${FOCUS_RING}`}
+									className={`rounded-sm border border-border px-3 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground ${FOCUS_RING}`}
 								>
 									{category.title}
 								</a>

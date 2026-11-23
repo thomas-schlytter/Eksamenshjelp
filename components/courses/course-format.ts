@@ -16,29 +16,31 @@ export const STATUS_BOARD_ORDER: readonly TopicStatus[] = ["red", "yellow", "unk
 export const SELF_STATUSES = ["red", "yellow", "green"] as const;
 export type SelfStatus = (typeof SELF_STATUSES)[number];
 
-/** Tailwind classes per status. Status is never colour alone: every use
- *  pairs these with the label or an icon. */
+/** Tailwind classes per status, on the profile's status tokens
+ *  (--status-green/yellow/red in app/globals.css; each mode carries its own
+ *  shade). Status is never colour alone: every use pairs these with the
+ *  label or an icon. */
 export const STATUS_STYLE: Record<TopicStatus, { dot: string; bar: string; text: string; active: string; idle: string }> = {
 	green: {
-		dot: "bg-emerald-600 dark:bg-emerald-400",
-		bar: "bg-emerald-600 dark:bg-emerald-400",
-		text: "text-emerald-700 dark:text-emerald-300",
-		active: "border-emerald-600 bg-emerald-600 text-white dark:border-emerald-400 dark:bg-emerald-400 dark:text-emerald-950",
-		idle: "border-emerald-600/40 text-emerald-800 hover:bg-emerald-600/10 dark:border-emerald-400/40 dark:text-emerald-200 dark:hover:bg-emerald-400/10",
+		dot: "bg-status-green",
+		bar: "bg-status-green",
+		text: "text-status-green-ink",
+		active: "border-status-green bg-status-green text-status-green-foreground",
+		idle: "border-status-green/40 text-status-green-ink hover:bg-status-green-soft",
 	},
 	yellow: {
-		dot: "bg-amber-500 dark:bg-amber-400",
-		bar: "bg-amber-500 dark:bg-amber-400",
-		text: "text-amber-700 dark:text-amber-300",
-		active: "border-amber-500 bg-amber-500 text-amber-950 dark:border-amber-400 dark:bg-amber-400",
-		idle: "border-amber-500/50 text-amber-800 hover:bg-amber-500/10 dark:border-amber-400/40 dark:text-amber-200 dark:hover:bg-amber-400/10",
+		dot: "bg-status-yellow",
+		bar: "bg-status-yellow",
+		text: "text-status-yellow-ink",
+		active: "border-status-yellow bg-status-yellow text-status-yellow-foreground",
+		idle: "border-status-yellow/50 text-status-yellow-ink hover:bg-status-yellow-soft",
 	},
 	red: {
-		dot: "bg-red-600 dark:bg-red-400",
-		bar: "bg-red-600 dark:bg-red-400",
-		text: "text-red-700 dark:text-red-300",
-		active: "border-red-600 bg-red-600 text-white dark:border-red-400 dark:bg-red-400 dark:text-red-950",
-		idle: "border-red-600/40 text-red-800 hover:bg-red-600/10 dark:border-red-400/40 dark:text-red-200 dark:hover:bg-red-400/10",
+		dot: "bg-status-red",
+		bar: "bg-status-red",
+		text: "text-status-red-ink",
+		active: "border-status-red bg-status-red text-status-red-foreground",
+		idle: "border-status-red/40 text-status-red-ink hover:bg-status-red-soft",
 	},
 	unknown: {
 		dot: "bg-muted-foreground/40",

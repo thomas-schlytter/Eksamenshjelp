@@ -584,13 +584,13 @@ const MONO_TEXT = "fill-foreground text-xs";
 
 // Exam mastery colors (2026-11-12): red = can't, yellow = unsure, green =
 // can do it, gray = not mapped. Tinted fills keep the title readable; the
-// stroke carries the hue. Same hues as the course page's topic colors
-// (courses/course-format.ts STATUS_STYLE): the 600 step on light, the 400
-// step on dark, so a red node and a red topic read as the same red.
+// stroke carries the hue. Same status tokens as the course page's topic
+// colors (courses/course-format.ts STATUS_STYLE), so a red node and a red
+// topic read as the same red in both modes.
 export const MASTERY_BOX: Record<NodeMastery, string> = {
-	red: "fill-red-600/15 stroke-red-600 dark:fill-red-400/25 dark:stroke-red-400",
-	yellow: "fill-amber-500/20 stroke-amber-500 dark:fill-amber-400/25 dark:stroke-amber-400",
-	green: "fill-emerald-600/15 stroke-emerald-600 dark:fill-emerald-400/25 dark:stroke-emerald-400",
+	red: "fill-status-red/15 stroke-status-red dark:fill-status-red/25",
+	yellow: "fill-status-yellow/20 stroke-status-yellow dark:fill-status-yellow/25",
+	green: "fill-status-green/15 stroke-status-green dark:fill-status-green/25",
 	unassessed: "fill-card stroke-border",
 };
 const MASTERY_TEXT: Record<NodeMastery, string> = {
@@ -872,7 +872,7 @@ export function PlanDiagram({
 							/>
 						)}
 						{glow && (
-							// The current node's highlight: faint yellow, blurred so it
+							// The current node's highlight: faint gold, blurred so it
 							// bleeds over the edges — static, no pulse (owner, round 6).
 							// Paints ABOVE the box fill (owner, round 10): the round-9
 							// background fill no longer dims the glow inside the box,
@@ -882,7 +882,7 @@ export function PlanDiagram({
 								y={-GLOW_MARGIN}
 								width={w + 2 * GLOW_MARGIN}
 								height={h + 2 * GLOW_MARGIN}
-								className="fill-yellow-400/25"
+								className="fill-gold/25"
 								filter={`url(#${markerId}-glow)`}
 							/>
 						)}

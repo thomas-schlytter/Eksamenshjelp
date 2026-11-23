@@ -114,7 +114,7 @@ export function DemoOutputCard({
 			<div className="rounded-xl border bg-card p-4 text-card-foreground" data-testid="demo-card-failed">
 				<div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					Interaktiv demo
-					<span className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">mislyktes</span>
+					<span className="rounded-sm bg-status-red-soft px-1.5 py-0.5 text-status-red-ink">mislyktes</span>
 				</div>
 				<p className="mt-2 text-sm text-muted-foreground">{result.notes ?? "Demoen kunne ikke lages."}</p>
 			</div>
@@ -248,7 +248,7 @@ export function DemoErrorChip({
 }) {
 	return (
 		<div
-			className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-sm text-red-500"
+			className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-status-red-soft px-3 py-2 text-sm text-status-red-ink"
 			data-testid="demo-error-chip"
 		>
 			<span className="font-medium">Demoen ga en feil</span>
@@ -259,7 +259,7 @@ export function DemoErrorChip({
 				<button
 					type="button"
 					onClick={onSend}
-					className="rounded-md border border-red-500/40 px-2 py-1 text-xs font-medium hover:bg-red-500/15"
+					className="rounded-md border border-status-red/40 px-2 py-1 text-xs font-medium hover:bg-status-red/15"
 					data-testid="demo-error-send"
 				>
 					Send til læreren

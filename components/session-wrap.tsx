@@ -186,7 +186,7 @@ export function SessionWrapDivider({ data, onOpen }: { data: unknown; onOpen: (w
 		<div data-testid="session-wrap-divider" className="my-6 flex w-full flex-col items-center gap-2">
 			<div className="flex w-full items-center gap-3">
 				<span className="h-0 flex-1 border-t-2 border-dotted border-border/60" aria-hidden />
-				<span className="rounded-full border border-border/80 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+				<span className="rounded-sm border border-border/80 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 					{bare ? "Økt avsluttet" : `Økt avsluttet · ${score.correct}/${score.total} riktige`}
 				</span>
 				<span className="h-0 flex-1 border-t-2 border-dotted border-border/60" aria-hidden />
@@ -594,7 +594,7 @@ export function SummaryCards({
 					data-testid="session-wrap-prev-arrow"
 					onClick={() => go(at - 1)}
 					disabled={at === 0}
-					className="absolute left-0 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-0"
+					className="absolute left-0 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-0"
 				>
 					<ChevronLeftIcon className="size-4" />
 				</button>
@@ -604,7 +604,7 @@ export function SummaryCards({
 					data-testid="session-wrap-next-arrow"
 					onClick={() => go(at + 1)}
 					disabled={at === count - 1}
-					className="absolute right-0 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-0"
+					className="absolute right-0 top-1/2 flex size-8 -translate-y-1/2 cursor-pointer items-center justify-center rounded-md border bg-card text-muted-foreground transition-colors hover:text-foreground disabled:cursor-default disabled:opacity-0"
 				>
 					<ChevronRightIcon className="size-4" />
 				</button>
@@ -636,8 +636,8 @@ function optionTone(i: number, correct: number, chosen: number | null, selected:
 			? "border-primary bg-primary/5 ring-1 ring-primary cursor-pointer"
 			: "border-border hover:border-primary/60 hover:bg-accent cursor-pointer";
 	}
-	if (i === correct) return "border-emerald-600 bg-emerald-600/10 dark:border-emerald-400 dark:bg-emerald-400/10";
-	if (i === chosen) return "border-destructive bg-destructive/10";
+	if (i === correct) return "border-status-green bg-status-green-soft";
+	if (i === chosen) return "border-status-red bg-status-red-soft";
 	return "border-border/50 opacity-60";
 }
 
@@ -702,7 +702,7 @@ export function QuestionBody({
 							key={i}
 							className={cn(
 								"h-1 flex-1 rounded-full",
-								i === index ? "bg-primary" : !done ? "bg-border" : a === qq.correctIndex ? "bg-emerald-600 dark:bg-emerald-400" : "bg-destructive",
+								i === index ? "bg-primary" : !done ? "bg-border" : a === qq.correctIndex ? "bg-status-green" : "bg-status-red",
 							)}
 						/>
 					);
@@ -742,7 +742,7 @@ export function QuestionBody({
 			)}
 			{chosen !== null && (
 				<div data-testid="session-wrap-feedback" className="flex flex-col gap-3">
-					<div className={cn("rounded-lg px-3 py-2.5 text-sm", chosen === q.correctIndex ? "bg-emerald-600/10 dark:bg-emerald-400/10" : "bg-destructive/10")}>
+					<div className={cn("rounded-lg px-3 py-2.5 text-sm", chosen === q.correctIndex ? "bg-status-green-soft" : "bg-status-red-soft")}>
 						<p className="mb-1 font-semibold">{chosen === q.correctIndex ? "Riktig!" : `Ikke helt. Riktig svar er ${LETTERS[q.correctIndex]}.`}</p>
 						<ToolContentResponse className="lh-prose">{q.explanation}</ToolContentResponse>
 					</div>
@@ -777,13 +777,13 @@ function MissedList({ wrap }: { wrap: SessionWrapDraft | SessionWrapDetails }) {
 						<ToolContentResponse className="lh-prose min-w-0 flex-1">{q.question}</ToolContentResponse>
 					</div>
 					{a !== null && (
-						<div className="flex gap-2 text-destructive">
+						<div className="flex gap-2 text-status-red-ink">
 							<span className="shrink-0">Ditt svar:</span>
 							<ToolContentResponse className="lh-prose min-w-0 flex-1">{q.options[a] ?? ""}</ToolContentResponse>
 						</div>
 					)}
 					{a === null && <span className="text-muted-foreground">Ikke besvart.</span>}
-					<div className="flex gap-2 text-emerald-700 dark:text-emerald-300">
+					<div className="flex gap-2 text-status-green-ink">
 						<span className="shrink-0">Riktig:</span>
 						<ToolContentResponse className="lh-prose min-w-0 flex-1">{q.options[q.correctIndex] ?? ""}</ToolContentResponse>
 					</div>

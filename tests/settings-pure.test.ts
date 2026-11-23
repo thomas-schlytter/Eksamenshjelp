@@ -7,7 +7,7 @@
 
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { appearanceVars, derivedPalette, resolveAppearance, staleVarNames } from "../components/settings/appearance.tsx";
+import { appearanceVars, derivedPalette, resolveAppearance, SERIF_TITLE_FONT, staleVarNames } from "../components/settings/appearance.tsx";
 import {
 	PROMPT_IN_USE_HINT,
 	composePromptSwitch,
@@ -52,7 +52,6 @@ describe("derivedPalette — the dark curve keeps today's relationships", () => 
 			"--accent": "#2a2a2a",
 			"--border": "#434343",
 			"--input": "#434343",
-			"--primary-foreground": "#141414",
 		});
 	});
 
@@ -74,7 +73,7 @@ describe("appearanceVars — the mapping the provider applies", () => {
 		assert.equal(vars["--lh-prose-size"], "16px");
 		assert.equal(vars["--lh-heading-weight"], "700");
 		assert.equal(vars["--font-prose"], undefined, "no font override at factory");
-		assert.equal(vars["--font-title"], "var(--font-prose)", "factory titles follow the prose font (Inter)");
+		assert.equal(vars["--font-title"], undefined, "factory titles keep the stylesheet's Sora");
 		assert.equal(vars["--background"], undefined, "factory palette untouched");
 		assert.equal(vars["--lh-ink-strong"], undefined, "default ink");
 	});
@@ -93,16 +92,22 @@ describe("appearanceVars — the mapping the provider applies", () => {
 		assert.equal(vars["--card"], "#182028", "raised +8 per channel: 10→18, 18→20, 20→28");
 		assert.equal(vars["--font-prose"], `"Georgia", var(--font-inter), ui-sans-serif, system-ui, sans-serif`);
 		assert.equal(vars["--lh-prose-size"], "18px");
-		assert.equal(vars["--font-title"], "var(--font-prose)", "serif off → titles follow the prose font");
+		assert.equal(vars["--font-title"], undefined, "serif off → titles keep Sora, even with a custom prose font");
 		assert.equal(vars["--lh-heading-weight"], "700");
 		assert.equal(vars["--lh-ink-strong"], "#ff0000");
 		assert.equal(vars["--lh-ink-italic"], "#00ff00");
 	});
 
-	it("sessionNameSerif false alone: titles move, nothing else does", () => {
-		const vars = appearanceVars(resolveAppearance({ sessionNameSerif: false }));
-		assert.equal(vars["--font-title"], "var(--font-prose)");
+	it("sessionNameSerif true alone: titles move to the serif, nothing else does", () => {
+		const vars = appearanceVars(resolveAppearance({ sessionNameSerif: true }));
+		assert.equal(vars["--font-title"], SERIF_TITLE_FONT);
 		assert.equal(Object.keys(vars).length, 3, "prose-size, heading-weight, font-title only");
+	});
+
+	it("sessionNameSerif false: no title override at all", () => {
+		const vars = appearanceVars(resolveAppearance({ sessionNameSerif: false }));
+		assert.equal(vars["--font-title"], undefined);
+		assert.equal(Object.keys(vars).length, 2, "prose-size and heading-weight only");
 	});
 });
 
@@ -121,7 +126,7 @@ describe("staleVarNames — the removal half of application (owner repro: resets
 		const stale = staleVarNames(applied, factory);
 		assert.ok(stale.includes("--background"));
 		assert.ok(stale.includes("--font-prose"));
-		assert.ok(!stale.includes("--font-title"), "factory titles already follow the prose font");
+		assert.ok(!stale.includes("--font-title"), "neither set overrides the title font");
 		assert.ok(stale.includes("--lh-ink-strong"));
 		assert.ok(stale.includes("--lh-ink-italic"));
 		assert.ok(!stale.includes("--lh-prose-size"), "always-applied tokens never go stale");

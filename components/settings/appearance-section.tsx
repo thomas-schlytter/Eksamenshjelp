@@ -39,7 +39,7 @@ import {
 } from "@/src/core";
 import { MenuShell } from "@/components/menu-shell";
 import { Hint } from "@/components/ui/hint";
-import { useAppearance } from "./appearance.tsx";
+import { resolveAppearance, useAppearance } from "./appearance.tsx";
 import { FontMenuList } from "./model-menu";
 import { CommitInput, SettingsMenuTrigger, SettingsRow, ThinSelect, Toggle } from "./controls.tsx";
 
@@ -200,12 +200,12 @@ export function AppearanceSection({
 			</SettingsRow>
 			<SettingsRow
 				label="Bakgrunn"
-				hint={`Bare i mørk modus. Tomt = ${resolved.background ?? "#1f2428"}`}
+				hint={`Bare i mørk modus. Tomt = ${resolved.background ?? "#14171c"}`}
 				testid="row-background"
 			>
 				<CommitInput
 					value={appearance?.background ?? ""}
-					placeholder="#1f2428"
+					placeholder="#14171c"
 					ariaLabel="bakgrunnsfarge (hex)"
 					testid="input-background"
 					onCommit={(v) => onSectionChange({ ...appearance, background: v === "" ? null : v })}
@@ -290,7 +290,7 @@ export function AppearanceSection({
 			</SettingsRow>
 			<SettingsRow label="Øktnavn med seriffer" testid="row-session-serif">
 				<Toggle
-					checked={appearance?.sessionNameSerif ?? true}
+					checked={resolveAppearance(appearance).sessionNameSerif}
 					label="øktnavn med seriffer"
 					testid="toggle-session-names-serif"
 					onChange={(on) => onSectionChange({ ...appearance, sessionNameSerif: on })}

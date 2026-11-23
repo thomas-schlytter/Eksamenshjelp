@@ -559,7 +559,7 @@ export function AgentSection({
 								<button
 									type="button"
 									onClick={() => void deleteSegment(info.path)}
-									className="text-xs text-muted-foreground/70 underline-offset-2 hover:text-red-500 hover:underline"
+									className="text-xs text-muted-foreground/70 underline-offset-2 hover:text-destructive hover:underline"
 								>
 									Slett
 								</button>
@@ -601,7 +601,7 @@ export function AgentSection({
 					onClick={() => { setAdvancedModels(!advancedModels); setOpenMenu(null); }}
 					className="mb-1 self-start text-xs text-muted-foreground hover:text-foreground"
 				>{advancedModels ? "Skjul avanserte innstillinger" : "Vis avanserte innstillinger"}</button>
-				{catalogFailed && <p role="alert" className="text-xs text-red-400">Kunne ikke laste modellkatalogen. Sjekk tilkoblingen og prøv igjen. <button type="button" className="underline" onClick={refreshCatalog}>Prøv igjen</button></p>}
+				{catalogFailed && <p role="alert" className="text-xs text-status-red-ink">Kunne ikke laste modellkatalogen. Sjekk tilkoblingen og prøv igjen. <button type="button" className="underline" onClick={refreshCatalog}>Prøv igjen</button></p>}
 				{MODEL_SLOTS.map((slot) => {
 					const override = models?.[slot];
 					const modelId = override?.model?.id ?? "";

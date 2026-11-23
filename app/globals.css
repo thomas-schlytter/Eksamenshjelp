@@ -27,43 +27,68 @@
 	outline: none;
 }
 
-/* LettBestilt-tema. Light = the platform's warm canvas + deep-blue action
-   (platform/lettbestilt globals.css :root); dark = its .dark block. Mode is
-   the <html class="dark"> toggle owned by AppearanceProvider (system/light/
-   dark). Fonts: Inter everywhere, JetBrains Mono only for code. */
+/* Eksamenshjelp-profilen (retning D, fase 7a). Light = a near-white, cool
+   canvas with white cards, marine action and gold reward; dark = the same
+   roles on a blue-black canvas. Mode is the <html class="dark"> toggle owned
+   by AppearanceProvider (system/light/dark). Fonts: Sora for titles,
+   headings and big numbers, Inter for body and UI, JetBrains Mono only for
+   code. No serif anywhere by default.
+
+   Contrast (WCAG, checked 2026-11-23): foreground 15.4:1 on the canvas;
+   muted-foreground #6F6A5E 5.0:1 on the canvas, 5.4:1 on cards, 4.6:1 on
+   accent; primary-foreground on primary 12.5:1; every *-ink ≥ 4.6:1 on
+   both canvas and card. Dark: foreground 14.9:1, muted-foreground 6.6:1
+   (5.1:1 on accent), white on primary 5.5:1, primary 3.3:1 against the
+   canvas (UI-component floor). */
 :root {
 	color-scheme: light;
-	--radius: 12px;
-	--lb-canvas: oklch(0.972 0.006 78);
-	--lb-surface: oklch(0.991 0.003 78);
-	--lb-surface-muted: oklch(0.948 0.01 78);
-	--lb-line: oklch(0.895 0.01 75);
-	--lb-ink: oklch(0.245 0.018 215);
-	--lb-ink-muted: oklch(0.535 0.018 70);
-	--lb-action: #1f3a4a;
-	--lb-info: oklch(0.505 0.06 225);
-	--lb-danger: oklch(0.5 0.15 25);
-	--lb-on-dark: oklch(0.974 0.006 78);
-	--background: var(--lb-canvas);
-	--foreground: var(--lb-ink);
-	--card: var(--lb-surface);
-	--card-foreground: var(--lb-ink);
-	--popover: var(--lb-surface);
-	--popover-foreground: var(--lb-ink);
-	--primary: var(--lb-action);
-	--primary-foreground: var(--lb-on-dark);
-	--secondary: var(--lb-surface-muted);
-	--secondary-foreground: var(--lb-ink);
-	--muted: var(--lb-surface-muted);
-	--muted-foreground: var(--lb-ink-muted);
-	--accent: var(--lb-surface-muted);
-	--accent-foreground: var(--lb-ink);
-	--destructive: var(--lb-danger);
-	--border: var(--lb-line);
-	--input: var(--lb-line);
-	--ring: var(--lb-info);
+	--background: #f7f7f4;
+	--foreground: #1a1f2b;
+	--card: #ffffff;
+	--card-foreground: #1a1f2b;
+	--popover: #ffffff;
+	--popover-foreground: #1a1f2b;
+	--primary: #1c2b4a;
+	--primary-foreground: #f5f1e8;
+	--secondary: #f4f4f1;
+	--secondary-foreground: #1a1f2b;
+	--muted: #f4f4f1;
+	--muted-foreground: #6f6a5e;
+	/* Hover and the active row: the stronger muted surface. */
+	--accent: #ecece8;
+	--accent-foreground: #1a1f2b;
+	/* Delete/disconnect keep their own token, apart from the status red. */
+	--destructive: oklch(0.5 0.15 25);
+	--border: #e5e5e0;
+	--input: #d6d6d0;
+	/* Focus rings (used at /50): a softened marine. */
+	--ring: #5b6b8c;
+	/* Reward / accent: gold. -soft = light fill, -ink = text on canvas/card. */
+	--gold: #c9a24a;
+	--gold-soft: #eadbb4;
+	--gold-ink: #8c6a1f;
+	/* Status: fill (dots, bars, solid chips), -foreground = text ON the fill,
+	   -soft = tinted background, -ink = text on canvas/card. */
+	--status-green: #2f7a57;
+	--status-green-foreground: #ffffff;
+	--status-green-soft: #e3f1e8;
+	--status-green-ink: #1f5c3f;
+	--status-yellow: #d9a23a;
+	--status-yellow-foreground: #1a1f2b;
+	--status-yellow-soft: #f8edd3;
+	--status-yellow-ink: #8a5f14;
+	--status-red: #c2553f;
+	--status-red-foreground: #ffffff;
+	--status-red-soft: #f7e4df;
+	--status-red-ink: #a3412e;
+	/* The streak flame (token only; the flame UI comes later). */
+	--flame: #ea580c;
+	/* Sora (next/font, self-hosted at build — app/layout.tsx): titles,
+	   headings and big numbers. A plain runtime var so markdown headings
+	   and --font-title both read it. */
+	--font-heading: var(--font-sora), ui-sans-serif, system-ui, sans-serif;
 	/* Code blocks sit a notch darker than the page in both modes. */
-	--lh-code-bg: var(--lb-surface-muted);
+	--lh-code-bg: var(--accent);
 	/* Emphasis inks default to the regular text color; explicit overrides
 	   land via the appearance settings vars. */
 	--lh-ink-strong: var(--foreground);
@@ -91,24 +116,41 @@
 
 .dark {
 	color-scheme: dark;
-	--background: #1f2428;
-	--foreground: #f6f4ef;
-	--card: #2e3338;
-	--card-foreground: #f6f4ef;
-	--popover: #2e3338;
-	--popover-foreground: #f6f4ef;
-	--primary: #476a7c;
+	--background: #14171c;
+	--foreground: #e8eaed;
+	--card: #1b1f26;
+	--card-foreground: #e8eaed;
+	--popover: #1b1f26;
+	--popover-foreground: #e8eaed;
+	/* Marine, lifted until it clears 3:1 against the canvas. */
+	--primary: #4a68a3;
 	--primary-foreground: #ffffff;
-	--secondary: #3a3f44;
-	--secondary-foreground: #f6f4ef;
-	--muted: #2e3338;
-	--muted-foreground: #b8b8b8;
-	--accent: #3a3f44;
-	--accent-foreground: #f6f4ef;
+	--secondary: #20252d;
+	--secondary-foreground: #e8eaed;
+	--muted: #20252d;
+	--muted-foreground: #a19c90;
+	--accent: #272c35;
+	--accent-foreground: #e8eaed;
 	--destructive: #dc6b6b;
-	--border: #464c52;
-	--input: #464c52;
-	--ring: #6f93a6;
+	--border: #2a2f37;
+	--input: #3a404a;
+	--ring: #7f95c2;
+	--gold: #d9b566;
+	--gold-soft: #3a3120;
+	--gold-ink: #e0c27a;
+	--status-green: #4fa37a;
+	--status-green-foreground: #14171c;
+	--status-green-soft: #1d3329;
+	--status-green-ink: #7cc6a0;
+	--status-yellow: #e5b454;
+	--status-yellow-foreground: #14171c;
+	--status-yellow-soft: #3a2f18;
+	--status-yellow-ink: #e8c068;
+	--status-red: #e06c5a;
+	--status-red-foreground: #14171c;
+	--status-red-soft: #3b2220;
+	--status-red-ink: #ee8f7c;
+	--flame: #f97316;
 	--lh-code-bg: color-mix(in oklab, var(--background) 86%, black);
 	--lh-ink-strong: var(--foreground);
 	--lh-ink-italic: var(--foreground);
@@ -123,7 +165,8 @@
 	--lh-map-none: oklch(0.66 0.01 70);
 }
 
-/* CMU Serif bold (titles) — bundled local file, no CDN dependency. */
+/* CMU Serif bold — only for the opt-in "Øktnavn med seriffer" setting
+   (components/settings/appearance.tsx); bundled local file, no CDN. */
 @font-face {
 	font-family: "lh-cmu";
 	src: url("/fonts/cmunbx.ttf") format("truetype");
@@ -133,8 +176,8 @@
 }
 
 @theme inline {
-	/* Fonts: chrome = JetBrains Mono, prose = Source Sans 3, titles = CMU
-	   Serif bold. The JetBrains/SourceSans variables attach in app/layout.tsx.
+	/* Fonts: chrome and prose = Inter, code = JetBrains Mono, titles = Sora
+	   (--font-heading). The next/font variables attach in app/layout.tsx.
 	   (owner, typography round) The Tailwind defaults are ALIASED to the app
 	   fonts: `font-mono`/`font-sans` utilities would otherwise fall to the
 	   SYSTEM stacks — a fourth font the app never chose — and streamdown's
@@ -170,12 +213,18 @@
 	--text-2xl--line-height: 1.3;
 	--text-3xl: 32px;
 	--text-3xl--line-height: 1.25;
-	/* Radii ladder — 4/8/12/16 multiples of the 4px base. */
+	/* Radii (profile D): very subtle corners. sm = labels and chips,
+	   md = buttons and inputs, lg and up = cards, panels and dialogs —
+	   xl/2xl are capped at the card radius so no surface reads rounder
+	   than 6px. Bare `rounded` = the card radius. Pills (rounded-full)
+	   stay only on small status dots, toggles and progress tracks. */
 	--radius-sm: 4px;
-	--radius-md: 8px;
-	--radius-lg: 12px;
-	--radius-xl: 16px;
-	--radius: 8px;
+	--radius-md: 5px;
+	--radius-lg: 6px;
+	--radius-xl: 6px;
+	--radius-2xl: 6px;
+	--radius-3xl: 6px;
+	--radius: 6px;
 	--color-background: var(--background);
 	--color-foreground: var(--foreground);
 	--color-card: var(--card);
@@ -194,10 +243,35 @@
 	--color-border: var(--border);
 	--color-input: var(--input);
 	--color-ring: var(--ring);
+	--color-gold: var(--gold);
+	--color-gold-soft: var(--gold-soft);
+	--color-gold-ink: var(--gold-ink);
+	--color-status-green: var(--status-green);
+	--color-status-green-foreground: var(--status-green-foreground);
+	--color-status-green-soft: var(--status-green-soft);
+	--color-status-green-ink: var(--status-green-ink);
+	--color-status-yellow: var(--status-yellow);
+	--color-status-yellow-foreground: var(--status-yellow-foreground);
+	--color-status-yellow-soft: var(--status-yellow-soft);
+	--color-status-yellow-ink: var(--status-yellow-ink);
+	--color-status-red: var(--status-red);
+	--color-status-red-foreground: var(--status-red-foreground);
+	--color-status-red-soft: var(--status-red-soft);
+	--color-status-red-ink: var(--status-red-ink);
+	--color-flame: var(--flame);
 }
 
 * {
 	border-color: var(--color-border);
+}
+
+/* Selection follows the palette: a marine tint, text keeps its color. */
+::selection {
+	background: color-mix(in oklab, var(--primary) 22%, transparent);
+}
+
+.dark ::selection {
+	background: color-mix(in oklab, var(--primary) 45%, transparent);
 }
 
 body {
@@ -207,7 +281,7 @@ body {
 }
 
 /* Teaching prose (the markdown renderer's container gets .lh-prose):
-   Source Sans 3 with the size/leading tokens; emphasis color bound to
+   Inter with the size/leading tokens; emphasis color bound to
    the settings-ready tokens. */
 .lh-prose {
 	font-family: var(--font-prose);
@@ -215,14 +289,11 @@ body {
 	line-height: var(--lh-prose-leading);
 }
 
-/* Session-name weight (owner, fix wave round 3): with the serif toggle
-   OFF, --font-title resolves to the prose font — Source Sans 3 is loaded
-   as a VARIABLE font, and without an explicit weight the titles render at
-   400, a whisper next to CMU's bold-only face. Request 900: the variable
-   font takes it, and CMU (a single 700 face) snaps to its nearest
-   available weight — the same rendering it already had. */
+/* Title weight (profile D): Sora at 600 with tight tracking. Sora is a
+   variable font, so 600 draws the real cut; the opt-in CMU serif (a
+   single 700 face) snaps to its nearest available weight. */
 .font-title {
-	font-weight: 700;
+	font-weight: 600;
 	letter-spacing: -0.02em;
 }
 
@@ -245,13 +316,12 @@ body {
 	padding-left: 1.5rem;
 }
 
-/* Markdown headings render at the font's BLACK weight (owner ask,
-   2026-09-19) — 900, not streamdown's font-semibold 600. The variable
-   Source Sans 3 axis spans 200–900 (next/font loads the full range), so
-   900 draws the real Black cut. Unlayered CSS beats the utility layer;
-   :where keeps specificity zero. Chrome titles (CMU Serif) don't live
-   under .lh-prose and stay untouched. */
+/* Markdown headings: Sora (profile D: headings share the title font), at
+   the appearance setting's weight. Unlayered CSS beats the utility layer;
+   :where keeps specificity zero. Chrome titles don't live under .lh-prose
+   and keep their own .font-title rule. */
 .lh-prose :where(h1, h2, h3, h4, h5, h6) {
+	font-family: var(--font-heading);
 	font-weight: var(--lh-heading-weight, 700);
 	letter-spacing: -0.02em;
 }
@@ -269,10 +339,11 @@ body {
 	line-height: 1.25;
 }
 
-/* Thin native scrollbar (app-wide): border-colored thumb, transparent track. */
+/* Thin native scrollbar (app-wide): input-edge thumb (a notch above the
+   hairlines so it reads on the near-white canvas), transparent track. */
 * {
 	scrollbar-width: thin;
-	scrollbar-color: var(--color-border) transparent;
+	scrollbar-color: var(--color-input) transparent;
 }
 
 ::-webkit-scrollbar {
@@ -285,8 +356,8 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-	background: var(--color-border);
-	border-radius: 8px;
+	background: var(--color-input);
+	border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -357,7 +428,7 @@ body {
 [data-streamdown="code-block"] {
 	border: 1px solid var(--border);
 	background: var(--lh-code-bg);
-	border-radius: 0.75rem;
+	border-radius: 6px;
 	padding: 0.375rem;
 }
 [data-streamdown="code-block-header"] {
@@ -583,7 +654,7 @@ body {
    session-name-serif toggle overrides this var at runtime, so the
    .font-title utility must read it through var(), not carry a baked copy. */
 @theme {
-	--font-title: "lh-cmu", serif;
+	--font-title: var(--font-heading);
 }
 
 /* Card enter (owner round, 2026-10-05): the transcript cards' one-shot

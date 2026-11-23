@@ -36,7 +36,7 @@ export function NodePickerControl({ count, onOpen, onClear, onPractice, practice
 				data-testid="practice-props-chip"
 				onClick={onOpen}
 				className={
-					"flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 font-ui text-xs transition-colors " +
+					"flex cursor-pointer items-center gap-1.5 rounded-md border px-3 py-1.5 font-ui text-xs transition-colors " +
 					(count > 0
 						? "border-border bg-card text-foreground hover:bg-accent"
 						: "border-dashed border-border/80 bg-transparent text-muted-foreground hover:bg-accent hover:text-foreground")
@@ -50,7 +50,7 @@ export function NodePickerControl({ count, onOpen, onClear, onPractice, practice
 					type="button"
 					data-testid="practice-props-clear"
 					onClick={onClear}
-					className="cursor-pointer rounded-full px-2 py-1 font-ui text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					className="cursor-pointer rounded-md px-2 py-1 font-ui text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
 				>
 					Fjern valg
 				</button>
@@ -61,7 +61,7 @@ export function NodePickerControl({ count, onOpen, onClear, onPractice, practice
 					data-testid="practice-props-start"
 					onClick={onPractice}
 					disabled={practiceDisabled}
-					className="cursor-pointer rounded-full bg-primary px-3 py-1.5 font-ui text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-50"
+					className="cursor-pointer rounded-md bg-primary px-3 py-1.5 font-ui text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 disabled:cursor-default disabled:opacity-50"
 				>
 					Øv på valgte noder
 				</button>

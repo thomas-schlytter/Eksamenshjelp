@@ -808,7 +808,7 @@ function SessionsSidebar() {
 		>
 			<div
 				className={cn(
-					"sidebar-slide absolute inset-y-0 left-0 flex w-72 flex-col border-r bg-background duration-200 will-change-transform",
+					"sidebar-slide absolute inset-y-0 left-0 flex w-72 flex-col border-r bg-card duration-200 will-change-transform",
 					open ? "visible translate-x-0" : "invisible -translate-x-full",
 				)}
 			>

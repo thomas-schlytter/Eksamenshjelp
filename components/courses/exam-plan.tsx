@@ -285,7 +285,7 @@ export function ExamPlanView({ course, plan, today, actions, examSession = null 
 									{todayPlan.items.map((item) => <PlanItemRow key={item.key} course={course} item={item} actions={actions} />)}
 								</ul>
 								{todayLeft.length === 0 && (
-									<p role="status" className="mt-2 font-ui text-sm font-medium text-emerald-700 dark:text-emerald-300">
+									<p role="status" className="mt-2 font-ui text-sm font-medium text-status-green-ink">
 										Bra jobba! Du er ferdig med dagens plan.
 									</p>
 								)}
