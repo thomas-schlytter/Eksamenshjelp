@@ -25,7 +25,7 @@
  * dismissal per chat (last write wins — there is one dock, one discard).
  */
 
-import { ChatInputError, dismissAppends, emit } from "../core";
+import { ChatInputError, dismissAppends, emit, heldQuestionRepose } from "../core";
 import type { ChatStore } from "../core/ports.ts";
 
 /** The parked dismissal body — exactly the parsed input the dismiss route
@@ -77,4 +77,21 @@ export function applyParkedDismissal(chatStore: ChatStore, chatId: string): void
 		if (err instanceof ChatInputError) return; // never materialized — drop
 		throw err;
 	}
+}
+
+/** THE HELD-QUESTION RE-POSE (fase 4, 2026-11): after a reply turn has
+ *  persisted, a question the learner parked with «Spør agenten» comes back
+ *  by itself — the synthetic re-pose (heldQuestionRepose, core) is appended
+ *  when the record says it is owed. Runs in onFinish beside the parked-
+ *  dismissal apply (after persistTurn, before endTurn), so a client
+ *  reacting to "turn-settled" already reads the question in the record and
+ *  the dock arms it without a "fortsett". Idempotent: once appended, the
+ *  record no longer owes it. */
+export function applyHeldQuestionRepose(chatStore: ChatStore, chatId: string): void {
+	const record = chatStore.getChat(chatId);
+	if (!record) return;
+	const repose = heldQuestionRepose(record.messages);
+	if (!repose) return;
+	chatStore.saveMessages(chatId, [...record.messages, repose]);
+	emit("record-changed", { chatId });
 }

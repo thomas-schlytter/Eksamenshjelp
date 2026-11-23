@@ -8,9 +8,12 @@ import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { ToolContentResponse } from "@/components/ai-elements/message";
+import { HintStepper } from "@/components/hint-stepper";
+import { SvgImage } from "@/components/artifacts/svg-image";
 import { cn } from "@/lib/utils";
 import {
 	buildAnswer,
+	normalizeHints,
 	repairMathForDisplay,
 	explainLabel,
 	normalizeQuizType,
@@ -82,11 +85,22 @@ export interface QuestionDockProps {
 	 *  agent move on. One click, no confirm; the page builds the skipped
 	 *  answer and sends it on the ordinary answer path. Absent = no button. */
 	onSkip?: () => void;
-	/** "Spør agenten" (2026-11): put the question on hold and hand the
-	 *  composer back. `draft` is whatever the learner had typed in the
-	 *  answer/thinking field, so it is never lost (it becomes the composer
-	 *  draft). Absent = no button. */
+	/** "Spør agenten" (2026-11): park the question and hand the composer
+	 *  back. `draft` is whatever the learner had typed in the answer/
+	 *  thinking field, so it is never lost (it becomes the composer draft).
+	 *  Nothing is dismissed here: the question stays (parked) until the
+	 *  learner's message is actually sent (fase 4). Absent = no button. */
 	onHold?: (draft: string) => void;
+	/** The question is PARKED (fase 4): the learner is writing to the agent
+	 *  in the composer below. The dock shows a slim «På vent» row with the
+	 *  way back; the form stays mounted (hidden, inert) so nothing typed or
+	 *  picked is lost. */
+	parked?: boolean;
+	/** «Tilbake til spørsmålet»: leave the parked state without sending. */
+	onUnpark?: () => void;
+	/** The question's figure (fase 4): the svg its `figure` id points at,
+	 *  shown above the question text. Null/absent = no figure. */
+	figureSvg?: string | null;
 	/** Restore only this call's unconfirmed submission after recovery. */
 	initialDraft?: QuestionFormDraft;
 	onSaveDraft?: (draft: QuestionFormDraft) => void;
@@ -126,6 +140,9 @@ export function QuestionDock({
 	onSubmit,
 	onSkip,
 	onHold,
+	parked = false,
+	onUnpark,
+	figureSvg,
 	initialDraft,
 	onSaveDraft,
 	onEscape,
@@ -161,9 +178,14 @@ export function QuestionDock({
 			: canonical === "explain"
 				? explainLabel(toolName, (parsed as { type?: unknown }).type)
 				: undefined;
+	// Parked (fase 4): the slim «På vent» row replaces every other variant;
+	// the composer renders below it (the DockOverlay owns that). The form
+	// stays mounted, hidden and inert, so the learner's picks survive.
+	const visible = expanded && !parked;
 	return (
 		<>
-			{!expanded && (
+			{parked && <QuestionParkedBar question={parsed.question} onUnpark={onUnpark} />}
+			{!expanded && !parked && (
 				<QuestionDockBar
 					toolName={canonical}
 					question={parsed.question}
@@ -183,7 +205,7 @@ export function QuestionDock({
 			    move on must not have to open the check first. Quiet, small,
 			    under the invitation. They carry the help center's anchors
 			    here; the form's own pair takes them over once it is open. */}
-			{!expanded && reveal && (onHold || onSkip) && (
+			{!expanded && !parked && reveal && (onHold || onSkip) && (
 				<div data-testid="question-collapsed-actions" className="flex flex-wrap items-center justify-end gap-1 border-t border-border/60 px-2 py-1">
 					{turnSettling && onSkip && (
 						<span role="status" className="mr-auto pl-2 text-xs text-muted-foreground">Et øyeblikk…</span>
@@ -227,20 +249,23 @@ export function QuestionDock({
 					)}
 				</div>
 			)}
-			<div className={expanded ? "dock-variant" : "invisible h-0 overflow-hidden"}>
+			<div className={visible ? "dock-variant" : "invisible h-0 overflow-hidden"}>
 				<QuestionDockForm
 					toolName={toolName}
 					toolCallId={toolCallId}
 					input={parsed}
 					phase={phase}
-					active={expanded}
+					active={visible}
+					parked={parked}
+					figureSvg={figureSvg}
 					onSubmit={onSubmit}
 					onSkip={onSkip}
 					onHold={onHold}
 					initialDraft={initialDraft}
 					onSaveDraft={onSaveDraft}
 					onEscape={onEscape}
-					dictationClaim={dictationClaim}
+					// Parked: the composer owns dictated speech.
+					dictationClaim={dictationClaim && !parked}
 					compactionRunning={compactionRunning}
 					turnSettling={turnSettling}
 				/>
@@ -327,6 +352,42 @@ export function QuestionDockBar({
 	);
 }
 
+/** The PARKED question (fase 4, «Spør agenten»): one slim row above the
+ *  composer — the question stays visible while the learner writes, and
+ *  the way back is one click. Nothing is dismissed until he sends. */
+export function QuestionParkedBar({ question, onUnpark }: { question: string; onUnpark?: () => void }) {
+	return (
+		<div
+			data-testid="question-parked"
+			className="dock-variant flex items-center gap-2.5 border-b border-border/60 px-4 py-2 text-sm"
+		>
+			<span className="shrink-0 text-xs font-medium uppercase tracking-wide text-muted-foreground">På vent</span>
+			<span className="min-w-0 flex-1 truncate text-muted-foreground">{teaserText(question)}</span>
+			{onUnpark && (
+				<Button
+					type="button"
+					variant="ghost"
+					data-testid="question-unpark"
+					onClick={onUnpark}
+					className="h-7 shrink-0 rounded-[6px] px-2 text-xs font-medium"
+				>
+					Tilbake til spørsmålet
+				</Button>
+			)}
+		</div>
+	);
+}
+
+/** The question's figure (fase 4): a waited visual, shown above the task
+ *  text on the same white backing as the transcript's figure card. */
+function QuestionFigure({ svg }: { svg: string }) {
+	return (
+		<div data-testid="question-figure" className="mb-3 w-full overflow-hidden rounded-lg bg-white">
+			<SvgImage svg={svg} className="mx-auto block h-auto max-h-[40dvh] max-w-full" />
+		</div>
+	);
+}
+
 /** The expanded question: label, question, options, and the unified bottom row. */
 function QuestionDockForm({
 	toolName,
@@ -334,6 +395,8 @@ function QuestionDockForm({
 	input,
 	phase = "probe",
 	active,
+	parked = false,
+	figureSvg,
 	onSubmit,
 	onSkip,
 	onHold,
@@ -343,8 +406,12 @@ function QuestionDockForm({
 	dictationClaim = true,
 	compactionRunning = false,
 	turnSettling = false,
-}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal">) {
+}: Omit<QuestionDockProps, "expanded" | "onExpand" | "reveal" | "onUnpark">) {
 	const kind = toolQuestionKind(toolName);
+	// The task's hidden hints (fase 4): authored with the call, opened only
+	// by the learner. The high-water mark rides the answer.
+	const hints = useMemo(() => normalizeHints((input as { hints?: unknown }).hints), [input]);
+	const [hintsRevealed, setHintsRevealed] = useState(() => Math.min(hints.length, initialDraft?.hintsRevealed ?? 0));
 
 	// Canonical QuestionData, built once per question. Quiz options are
 	// deterministically shuffled (seeded by toolCallId) so position never leaks
@@ -507,6 +574,8 @@ function QuestionDockForm({
 			// Always sent on quiz answers (owner: 50 must mean 50, never
 			// "untouched"); buildAnswer drops it on "I don't know".
 			confidence: kind === "quiz" ? CONFIDENCE_STOPS[confIdx] : undefined,
+			hintsOpened: hintsRevealed,
+			hintsTotal: hints.length,
 		};
 		// Snapshot before optimistic submission unmounts the form. Ref values
 		// include the dictation finals that just landed, unlike stale closures.
@@ -516,14 +585,19 @@ function QuestionDockForm({
 			other,
 			text: answerTextRef.current,
 			confidenceIndex: confIdx,
+			hintsRevealed,
 		});
 		onSubmit(buildAnswer(qd, req, toolName));
 	};
 
 	/* ENTER SUBMITS FROM ANYWHERE (owner round 6, 2026-10-05): the same
 	 * law as the practice dock — dictated answers rarely focus the field.
-	 * Rides submit() so the dictation-flush law is shared, not forked. */
-	useEnterSubmits(submit);
+	 * Rides submit() so the dictation-flush law is shared, not forked.
+	 * Parked (fase 4): Enter belongs to the learner's message, never to the
+	 * hidden question. */
+	useEnterSubmits(() => {
+		if (!parked) submit();
+	});
 
 	/* "Spør agenten" (2026-11): the question goes on hold and the composer
 	 * returns. Whatever sits in the learner's field travels along as the
@@ -707,12 +781,18 @@ function QuestionDockForm({
 								: "Spørsmål"}
 					{qd.mode === "multi-select" && " · velg alle som passer"}
 				</div>
+				{figureSvg && <QuestionFigure svg={figureSvg} />}
 				<div className="mb-3 font-medium">
 					<ToolContentResponse>{qd.question}</ToolContentResponse>
 				</div>
 				{qd.context && (
 					<div className="mb-3 text-sm text-muted-foreground">
 						<ToolContentResponse>{qd.context}</ToolContentResponse>
+					</div>
+				)}
+				{hints.length > 0 && (
+					<div className="mb-3">
+						<HintStepper hints={hints} revealed={hintsRevealed} onReveal={setHintsRevealed} />
 					</div>
 				)}
 

@@ -245,7 +245,11 @@ describe("persistent practice nudges", () => {
 	const normalizeWhitespace = (text: string) => text.replace(/\s+/g, " ").trim();
 	const approvedParagraphs = [
 		"- When a nudge does not land, reassess where the learner is stuck and offer only the next necessary piece of information. Do not jump to the full solution. Tentative answers, questions, and thinking aloud remain work in progress.",
-		"**On a wrong answer**, state the verdict plainly and localize the first break without giving the correction. Give the smallest nudge that lets the learner make the next move, then wait. If that nudge does not land, give another minimal nudge based on the new thinking. A failed attempt is never a reason to reveal the correction or conclude the problem. Continue until the learner finds and completes the correct solution.",
+		// Fase 4 (Thomas, 2026-11: hints only when the learner asks, "akkurat
+		// som på eksamen"): the verdict + localization stay; the nudge waits
+		// for his request.
+		"**On a wrong answer**, state the verdict plainly and localize the first break without giving the correction, then wait. That is the grader's feedback, not a hint; a nudge toward the next move is a hint and comes only when he asks for one (VI). If a nudge he asked for does not land, give another minimal one based on the new thinking. A failed attempt is never a reason to reveal the correction or conclude the problem. Continue until the learner finds and completes the correct solution.",
+		"**Hints are given only when the learner asks** — in words (\"I'm stuck\", \"hint?\", \"where do I start?\") or by opening the pre-written hints on the problem with the Hint button. A submission that only shows work in progress, without asking, gets no hint: acknowledge it in a line at most and let the work continue. This is the exam condition: nothing helps unless he reaches for it. A bare \"I'm stuck\" with an empty trace is a request with nothing to diagnose, so you start at the top of the ladder.",
 		"Conclude when the learner has solved the problem correctly or explicitly asks to end it. Do not infer permission to end it from mistakes, elapsed time, the number of attempts, frustration, or an apparent inability to proceed.",
 	];
 
@@ -274,7 +278,7 @@ describe("persistent practice nudges", () => {
 
 	it("preserves the approved concluded-problem switch and unbounded structural repair in source and the effective default prompt", () => {
 		const approvedDifficulty = "3. **Difficulty** — from the last outcomes on this target: clean success, one notch up; success that needed hints, hold; a miss, one notch down and consider dropping a mode. Two missed concluded problems in a row on this target: switch targets for the next demand. Never switch away from an active problem because of the number of attempts.";
-		const approvedClassification = "Classify every miss: cue miss (nothing came), discrimination error (wrong candidate won), execution slip (right proposition, wrong run), careless, or structural (the retrieved proposition is itself wrong — a misconception). The first four are practice information. Structural misses call for minimal nudges toward repairing the misconception, not an immediate correction or re-teaching. Keep each nudge surgical; do not impose a one-line or one-attempt limit on the repair as a whole.";
+		const approvedClassification = "Classify every miss: cue miss (nothing came), discrimination error (wrong candidate won), execution slip (right proposition, wrong run), careless, or structural (the retrieved proposition is itself wrong — a misconception). The first four are practice information. Structural misses call for minimal nudges toward repairing the misconception (given when he asks, VI), not an immediate correction or re-teaching. Keep each nudge surgical; do not impose a one-line or one-attempt limit on the repair as a whole.";
 		for (const text of [doctrine, composeInstructions("practice")]) {
 			const normalized = normalizeWhitespace(text);
 			assert.ok(normalized.includes(approvedDifficulty), "preserve the difficulty readout and exact approved switching rule");

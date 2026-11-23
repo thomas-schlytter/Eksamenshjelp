@@ -10,7 +10,7 @@ import {
 	parseOptionsIfString,
 	probeQuizInputSchema,
 	quizInputObject,
-	quizInputProblems,
+	quizInputProblems, hintInputProblems,
 } from "../core/question-core.ts";
 import { filterEnabledTools, type EnabledTools } from "../core/pending.ts";
 import { explainAnsweredNodesLh, type JobRecord } from "../core/contracts.ts";
@@ -138,6 +138,13 @@ export const quizExampleBody = {
 	correctAnswer: "a",
 };
 
+/** The teach tools' two optional fields (fase 4, 2026-11), mechanics only:
+ *  hidden hints the learner opens himself, and a waited figure's id. */
+const TEACH_HINTS_AND_FIGURE =
+	"Optional `hints` stay hidden until the learner presses Hint and steps through them himself; the answer reports " +
+	"how many he opened as hintsUsed. Optional `figure` takes the figure id a visual call with wait: true returned, " +
+	"and shows that figure above the question. ";
+
 /** The quiz mechanics every variant shares; `delta` appends the variant's
  *  own fields (its NAME among them — the probe-phase tools self-reference
  *  as probe/recall, owner 2026-10-09). All mechanics, zero doctrine — plus
@@ -157,7 +164,8 @@ function quizDescription(delta: { name: "quiz" | "probe"; nodeId: boolean; types
 			? "Every call declares `type` — the question's role in the teaching cycle; the field's own description says when each kind fires. "
 			: "") +
 		(delta.nodeId
-			? "Set `nodeId` (required) to the plan node this question is about — validated at call time against the session's plan map. For off-map checks use ask_user_question. "
+			? "Set `nodeId` (required) to the plan node this question is about — validated at call time against the session's plan map. For off-map checks use ask_user_question. " +
+				TEACH_HINTS_AND_FIGURE
 			: "") +
 		"ONE question per turn: call a single " +
 		delta.name +
@@ -191,7 +199,8 @@ function explainDescription(name: "explain" | "recall", nodeId: boolean): string
 		"after seeing his words. He sees the committed answer on submit. " +
 		(nodeId
 			? "Set `nodeId` (required) to the plan node this question is about — validated at call time against the session's plan map. " +
-				"Declare `type` as check. "
+				"Declare `type` as check. " +
+				TEACH_HINTS_AND_FIGURE
 			: "") +
 		"ONE question per turn: call a single " + name + ", then end your turn — his answer determines the next."
 	);
@@ -234,7 +243,7 @@ export function teachExplainToolFor(
 		prepareArguments: prepareQuestionArguments,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
-			const problems = [...explainInputProblems(input)];
+			const problems = [...explainInputProblems(input), ...hintInputProblems(input.hints)];
 			const nodeIdProblemText = nodeIdProblem(ctx, input.nodeId);
 			if (nodeIdProblemText) problems.push(nodeIdProblemText);
 			if (problems.length > 0) return invalidInputResult("explain", problems);
@@ -380,7 +389,7 @@ export function teachQuizToolFor(ctx: Pick<PlanToolContext, "chatId" | "chatStor
 		prepareArguments: prepareQuestionArguments,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
-			const problems = [...quizInputProblems(input)];
+			const problems = [...quizInputProblems(input), ...hintInputProblems(input.hints)];
 			const nodeIdProblemText = nodeIdProblem(ctx, input.nodeId);
 			if (nodeIdProblemText) problems.push(nodeIdProblemText);
 			if (problems.length > 0) return invalidInputResult("quiz", problems);

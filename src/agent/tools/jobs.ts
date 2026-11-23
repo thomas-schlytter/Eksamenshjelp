@@ -3,6 +3,7 @@ import type { AgentTool } from "@earendil-works/pi-agent-core";
 import { serverExecute } from "../tool-execute.ts";
 import type { JobRecord } from "../../core/contracts.ts";
 import type { JobStore } from "../../core/ports.ts";
+import { awaitJobResult } from "../subagents/awaited-jobs.ts";
 
 /**
  * Async sub-agent job tools (vision §2.5; W2/W6 kinds + the pi-model
@@ -11,7 +12,8 @@ import type { JobStore } from "../../core/ports.ts";
  * imports one), and resolves IMMEDIATELY with a fire-and-forget ack. The
  * teacher's turn does NOT end at the call; the result arrives later as a
  * steer message that wakes the teacher in a new turn. See contracts.ts
- * "THE ASYNC PROTOCOL".
+ * "THE ASYNC PROTOCOL". The one exception (fase 4): `visual` with
+ * `wait: true` holds the call until the figure is done (waitForVisual).
  */
 
 /** What the job tools need at execute time (injected by the composition root). */
@@ -55,6 +57,14 @@ export const visualInputSchema = Type.Object({
 			"Precise brief for ONE static figure: exactly what it must show — coordinates, labels, proportions, orientation. " +
 			"The maker sees NOTHING else of the lesson; a wrong or vague brief produces a wrong figure.",
 	}),
+	wait: Type.Optional(
+		Type.Boolean({
+			description:
+				"Set true when the figure belongs to a task or question you are about to pose: the call then WAITS until the " +
+				"figure is finished (the learner sees «Genererer oppgave …» meanwhile), the figure renders right here, and the " +
+				"result gives you its figure id to pass as `figure` on the question. Omit for figures that illustrate teaching.",
+		}),
+	),
 });
 
 export const pdfInputSchema = Type.Object({
@@ -111,8 +121,116 @@ const VISUAL_DESCRIPTION =
 	"Dispatch a background sub-agent that hand-authors ONE precise SVG figure, renders it, LOOKS at the render, and iterates " +
 	"until correct. Use it for exact spatial pictures auto-layout diagrams can't do: coordinate geometry, number lines, vectors, " +
 	"function plots, physical layouts. For flows/relations/taxonomies write mermaid inline instead. " +
-	"The call is ASYNC and fire-and-forget — it resolves immediately and your turn continues; the verified figure arrives later " +
-	"as a new message.";
+	"By default the call is ASYNC and fire-and-forget — it resolves immediately and your turn continues; the verified figure " +
+	"arrives later as a new message. With wait: true (a figure for a task you are about to pose) the call blocks until the " +
+	"figure is done and returns its figure id — then pose the question with figure set to that id.";
+
+/** How long a waited visual may take before the call gives up (fase 4).
+ *  Test seam, like toolTimeoutMs. */
+export const visualWaitMs = { current: 5 * 60_000 };
+/** How often the waiting call re-reads the job (learner abort, a finish
+ *  that somehow bypassed the hand-over). */
+const VISUAL_WAIT_POLL_MS = 1_000;
+
+/** Resolves after `ms`, or as soon as `signal` aborts. */
+function pause(ms: number, signal: AbortSignal | undefined): Promise<void> {
+	return new Promise((resolve) => {
+		if (signal?.aborted) return resolve();
+		const timer = setTimeout(done, ms);
+		function done() {
+			clearTimeout(timer);
+			signal?.removeEventListener("abort", done);
+			resolve();
+		}
+		signal?.addEventListener("abort", done, { once: true });
+	});
+}
+
+/** The waited visual's inline result (fase 4): the model reads the text;
+ *  `details` carries the figure for the transcript card and the dock
+ *  (figureSvgOf reads details.inline + jobId + result). */
+function inlineVisualResult(jobId: string, result: unknown): { text: string; details: unknown } {
+	const r = result as { svg?: unknown; notes?: unknown } | null | undefined;
+	const svg = typeof r?.svg === "string" ? r.svg : "";
+	const notes = typeof r?.notes === "string" && r.notes ? r.notes : "(none)";
+	const details = { inline: true, jobId, kind: "visual", result };
+	if (svg.length === 0) {
+		return {
+			text:
+				`The figure could not be made: ${notes}. No figure is shown. Pose the task without it (state the setup in words), ` +
+				"or re-call visual with wait: true and a tighter brief.",
+			details,
+		};
+	}
+	return {
+		text:
+			`Figure ready — figure id "${jobId}". It is rendered in the lesson right here, before what you write next. ` +
+			`Now pose the question and set figure: "${jobId}" so the figure also sits above the question. Maker notes: ${notes}`,
+		details,
+	};
+}
+
+/**
+ * The WAITED visual (fase 4, 2026-11 — figures before the task): the job
+ * is created and spawned exactly like a dispatch, but the call holds until
+ * the runner hands the result over (awaited-jobs), so the figure renders at
+ * the call site, before the question. Three honest exits besides success:
+ * the learner aborted the job (no figure), the turn was stopped (the job
+ * keeps running and delivers asynchronously), or the wait timed out (same:
+ * the figure arrives later as its own message, with its figure id).
+ */
+async function waitForVisual(
+	ctx: JobToolContext,
+	toolCallId: string,
+	input: VisualInput,
+	signal: AbortSignal | undefined,
+): Promise<string | { text: string; details: unknown }> {
+	const existing = ctx.jobStore.findJobByToolCallId(ctx.chatId, toolCallId);
+	if (existing && existing.status !== "running" && existing.result !== undefined) {
+		return inlineVisualResult(existing.id, existing.result);
+	}
+	const job = existing ?? ctx.jobStore.createJob({ kind: "visual", chatId: ctx.chatId, toolCallId, input });
+	// Register BEFORE the spawn: a fast finish must find the waiter.
+	const waiter = awaitJobResult(job.id);
+	if (!existing) ctx.spawn(job, input);
+	const deadline = Date.now() + visualWaitMs.current;
+	let claimed: { result: unknown } | undefined;
+	void waiter.promise.then((result) => {
+		claimed = { result };
+	});
+	for (;;) {
+		if (claimed) return inlineVisualResult(job.id, claimed.result);
+		const late = (): { text: string; details: unknown } | null => {
+			const result = waiter.release();
+			return result !== undefined ? inlineVisualResult(job.id, result) : null;
+		};
+		if (signal?.aborted) {
+			const got = late();
+			if (got) return got;
+			throw new Error("Operation aborted");
+		}
+		const record = ctx.jobStore.getJob(job.id);
+		if (record && record.status !== "running") {
+			const got = late();
+			if (got) return got;
+			// Finished without the hand-over: a learner abort (no result), or a
+			// result written outside the runner's finish path.
+			if (record.result !== undefined) return inlineVisualResult(job.id, record.result);
+			return "The figure job was aborted by the learner — no figure is coming. Pose the task without it, or re-call visual with wait: true if he wants the figure.";
+		}
+		if (Date.now() >= deadline) {
+			const got = late();
+			if (got) return got;
+			const minutes = Math.max(1, Math.round(visualWaitMs.current / 60_000));
+			return (
+				`The figure was not finished within ${minutes} min. It is still being drawn and will arrive later as its own ` +
+				`message (figure id "${job.id}"). Do not pose a task that needs it yet: tell the learner in one short line that ` +
+				`the task comes as soon as the figure is ready, and end your turn. When it arrives, pose the task with figure: "${job.id}".`
+			);
+		}
+		await Promise.race([waiter.promise, pause(VISUAL_WAIT_POLL_MS, signal)]);
+	}
+}
 const PDF_DESCRIPTION =
 	"Dispatch a background sub-agent that READS a learner-provided PDF on your behalf (triage, targeted extraction, visual page " +
 	"reading for equations and diagrams) and returns a brief with page citations. Use it when the learner gives you a PDF path " +
@@ -151,8 +269,16 @@ export function jobTools(ctx: JobToolContext): Record<string, AgentTool<any>> {
 			label: "visual",
 			description: VISUAL_DESCRIPTION,
 			parameters: visualInputSchema,
-			execute: serverExecute("visual", visualInputSchema, (input, { toolCallId }) =>
-				dispatch(ctx, "visual", toolCallId, VISUAL_ACK, input),
+			execute: serverExecute(
+				"visual",
+				visualInputSchema,
+				(input, { toolCallId, signal }) =>
+					input.wait === true
+						? waitForVisual(ctx, toolCallId, input, signal)
+						: dispatch(ctx, "visual", toolCallId, VISUAL_ACK, input),
+				// The waited call runs for minutes by design: its own deadline
+				// decides, the guard only backstops it.
+				(input) => (input.wait === true ? visualWaitMs.current + 30_000 : undefined),
 			),
 		},
 		pdf: {

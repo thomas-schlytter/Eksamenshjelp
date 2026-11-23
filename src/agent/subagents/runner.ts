@@ -20,6 +20,7 @@ import {
 	type VisualToolInput,
 } from "../../core/contracts.ts";
 import { registerJobAbort, unregisterJobAbort } from "./aborts.ts";
+import { claimAwaited, isAwaited } from "./awaited-jobs.ts";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -308,6 +309,20 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		// the record and queues the abort steer itself.
 		if (job.status !== "running") return;
 		const failed = isSubagentFailure(job.kind, result);
+		// A WAITED call (fase 4, visual with wait: true) takes the result
+		// inline as its own tool result: the delivery is done right here and
+		// no steer is queued — the figure must not also arrive a second time.
+		// Synchronous check-and-claim: the waiter cannot release in between.
+		if (isAwaited(jobId)) {
+			jobStore.updateJob(jobId, {
+				result,
+				status: failed ? "error" : "done",
+				activity: failed ? "mislyktes" : "ferdig",
+				delivery: { kind: "result", status: "delivered" },
+			});
+			claimAwaited(jobId, result);
+			return;
+		}
 		jobStore.updateJob(jobId, {
 			result,
 			status: failed ? "error" : "done",

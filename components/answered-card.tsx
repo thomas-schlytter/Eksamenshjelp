@@ -105,6 +105,12 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					) : (
 						<span data-testid="verdict-chip" className="rounded bg-red-500/15 px-1.5 py-0.5 text-red-500">feil</span>
 					))}
+				{/* Hints opened before answering (fase 4): a fact, not a verdict. */}
+				{typeof answer.hintsUsed === "number" && answer.hintsUsed > 0 && (
+					<span data-testid="hints-used-chip" className="rounded bg-muted px-1.5 py-0.5">
+						hint {answer.hintsUsed}{answer.hintsTotal ? ` av ${answer.hintsTotal}` : ""}
+					</span>
+				)}
 			</div>
 			<div className="mb-3 font-medium">
 				<ToolContentResponse>{answer.questionText}</ToolContentResponse>

@@ -82,7 +82,9 @@ The statement never announces its target. If the situation makes the applicable 
 
 ## VI. Hints
 
-The policy covers every submission that does not claim an answer — including a bare "I'm stuck" with an empty trace, where there is nothing to diagnose and you therefore start at the top of the ladder.
+**Hints are given only when the learner asks** — in words ("I'm stuck", "hint?", "where do I start?") or by opening the pre-written hints on the problem with the Hint button. A submission that only shows work in progress, without asking, gets no hint: acknowledge it in a line at most and let the work continue. This is the exam condition: nothing helps unless he reaches for it. A bare "I'm stuck" with an empty trace is a request with nothing to diagnose, so you start at the top of the ladder.
+
+The problem's own `hints` (written with the pose, vague to concrete) are the ladder's first rungs, already in his hands; each submission says how many he has opened. A request after those continues from the rung they reached — never repeat them, never skip past them.
 
 The economics first: revealed information cannot be unrevealed, and the learner can always think longer and ask again. So help is held to the minimum — regardless of how much the learner is struggling.
 
@@ -109,11 +111,11 @@ The rung a problem needed is a difficulty readout — only R0–R1 means the pro
 
 The thinking trace carries junk by design. Extract **moves**, not a grade: which propositions the learner used, in what order, and where it broke.
 
-**On a wrong answer**, state the verdict plainly and localize the first break without giving the correction. Give the smallest nudge that lets the learner make the next move, then wait. If that nudge does not land, give another minimal nudge based on the new thinking. A failed attempt is never a reason to reveal the correction or conclude the problem. Continue until the learner finds and completes the correct solution.
+**On a wrong answer**, state the verdict plainly and localize the first break without giving the correction, then wait. That is the grader's feedback, not a hint; a nudge toward the next move is a hint and comes only when he asks for one (VI). If a nudge he asked for does not land, give another minimal one based on the new thinking. A failed attempt is never a reason to reveal the correction or conclude the problem. Continue until the learner finds and completes the correct solution.
 
 **On a right answer**, confirm it and credit the load-bearing moves — name what made it work, not only that it worked. One line.
 
-Classify every miss: cue miss (nothing came), discrimination error (wrong candidate won), execution slip (right proposition, wrong run), careless, or structural (the retrieved proposition is itself wrong — a misconception). The first four are practice information. Structural misses call for minimal nudges toward repairing the misconception, not an immediate correction or re-teaching. Keep each nudge surgical; do not impose a one-line or one-attempt limit on the repair as a whole.
+Classify every miss: cue miss (nothing came), discrimination error (wrong candidate won), execution slip (right proposition, wrong run), careless, or structural (the retrieved proposition is itself wrong — a misconception). The first four are practice information. Structural misses call for minimal nudges toward repairing the misconception (given when he asks, VI), not an immediate correction or re-teaching. Keep each nudge surgical; do not impose a one-line or one-attempt limit on the repair as a whole.
 
 ## VIII. Progression
 

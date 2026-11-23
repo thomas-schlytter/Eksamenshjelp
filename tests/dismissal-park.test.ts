@@ -23,7 +23,7 @@ const TMP_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "lh-dismissal-park-"));
 process.env.LH_DATA_DIR = TMP_DATA;
 
 const { chatStore } = await import("../src/store/chats.ts");
-const { applyParkedDismissal, parkDismissal, takeParkedDismissal } = await import(
+const { applyHeldQuestionRepose, applyParkedDismissal, parkDismissal, takeParkedDismissal } = await import(
 	"../src/server/dismissal-park.ts"
 );
 const { beginTurn, endTurn, isTurnRunning } = await import("../src/server/turn-liveness.ts");
@@ -33,6 +33,12 @@ const {
 	answeredCallIds,
 	danglingQuestionOf,
 	dismissedAnswer,
+	figureSvgOf,
+	heldQuestionRepose,
+	inputAppends,
+	parseChatInput,
+	ChatInputError,
+	ON_HOLD_NOTE,
 } = await import("../src/core/index.ts");
 const newMessageId = (await import("../src/core/native-messages.ts")).newMessageId;
 
@@ -235,7 +241,7 @@ describe("Hopp over (answer route) and Spør agenten (silent route)", () => {
 		const result = messages.at(-1) as unknown as { role: string; content: Array<{ text: string }>; details: { onHold?: boolean } };
 		assert.equal(result.role, "toolResult");
 		assert.equal(result.details.onHold, true);
-		assert.deepEqual(JSON.parse(result.content[0]!.text), { kind: "quiz", dismissed: true, onHold: true });
+		assert.deepEqual(JSON.parse(result.content[0]!.text), { kind: "quiz", dismissed: true, onHold: true, question: "What is a cyclic group?", note: ON_HOLD_NOTE });
 	});
 
 	it("the ANSWER route's validation accepts a skipped answer as the call's result", async () => {
@@ -258,5 +264,147 @@ describe("Hopp over (answer route) and Spør agenten (silent route)", () => {
 		assert.deepEqual(JSON.parse(appends[0]!.content[0]!.text), { kind: "quiz", dismissed: true, skipped: true });
 		// With the result appended nothing dangles: the handler starts the turn.
 		assert.equal(danglingQuestionOf([...record.messages, ...(appends as never[])]), null);
+	});
+});
+
+// ─── «Spør agenten» (fase 4): the hold rides the message, the question returns ──
+
+/** A completed assistant reply (the agent answering the learner's message). */
+function reply(text: string): never {
+	return {
+		id: newMessageId(),
+		role: "assistant",
+		content: [{ type: "text", text }],
+		stopReason: "stop",
+		api: "test",
+		provider: "test",
+		model: "test",
+		usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, totalTokens: 2, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+		timestamp: Date.now(),
+	} as never;
+}
+
+describe("the parked question: one send carries hold + message, the app re-poses after the reply", () => {
+	it("a text input with a hold appends the onHold result AHEAD of the learner's message", () => {
+		const chat = chatWithDanglingQuiz("hold-send");
+		const record = chatStore.getChat(chat)!;
+		const pending = danglingQuestionOf(record.messages)!;
+		const input = parseChatInput({
+			type: "text",
+			text: "Hva betyr generator?",
+			hold: { toolCallId: pending.toolCallId, answer: dismissedAnswer("quiz", "What is a cyclic group?", { reason: "onHold", tool: "quiz" }) },
+		});
+		const appends = inputAppends(record, input) as unknown as Array<{ role: string; details?: { onHold?: boolean }; content: unknown }>;
+		assert.deepEqual(appends.map((m) => m.role), ["toolResult", "user"]);
+		assert.equal(appends[0]!.details?.onHold, true);
+		assert.equal(appends[1]!.content, "Hva betyr generator?");
+		assert.equal(danglingQuestionOf([...record.messages, ...(appends as never[])]), null, "nothing dangles once sent");
+	});
+
+	it("a hold must be a real onHold dismissal of THE pending question", () => {
+		const chat = chatWithDanglingQuiz("hold-bad");
+		const record = chatStore.getChat(chat)!;
+		const pending = danglingQuestionOf(record.messages)!;
+		assert.throws(() => parseChatInput({ type: "text", text: "x", hold: { toolCallId: pending.toolCallId, answer: dismissedAnswer("quiz", "Q") } }), ChatInputError);
+		const wrongCall = parseChatInput({ type: "text", text: "x", hold: { toolCallId: "nope", answer: dismissedAnswer("quiz", "Q", { reason: "onHold" }) } });
+		assert.throws(() => inputAppends(record, wrongCall), ChatInputError);
+	});
+
+	it("after the reply settles, the SAME question is re-posed under a fresh call id — once", () => {
+		const chat = chatWithDanglingQuiz("repose");
+		const record = chatStore.getChat(chat)!;
+		const pending = danglingQuestionOf(record.messages)!;
+		const appends = inputAppends(record, parseChatInput({
+			type: "text",
+			text: "Hva betyr generator?",
+			hold: { toolCallId: pending.toolCallId, answer: dismissedAnswer("quiz", "What is a cyclic group?", { reason: "onHold", tool: "quiz" }) },
+		}));
+		// Before the reply: nothing to re-pose yet (the agent has not answered).
+		assert.equal(heldQuestionRepose([...record.messages, ...appends]), null);
+		chatStore.saveMessages(chat, [...record.messages, ...appends, reply("En generator er …")]);
+		let changed = 0;
+		const off = subscribe((e) => {
+			if (e.type === "record-changed" && e.chatId === chat) changed++;
+		});
+		applyHeldQuestionRepose(chatStore, chat);
+		applyHeldQuestionRepose(chatStore, chat); // idempotent
+		off();
+		assert.equal(changed, 1);
+		const messages = chatStore.getChat(chat)!.messages;
+		const again = danglingQuestionOf(messages)!;
+		assert.ok(again, "the dock has the question again");
+		assert.notEqual(again.toolCallId, pending.toolCallId);
+		assert.equal(again.tool, "quiz");
+		assert.deepEqual(again.input, pending.input, "same arguments, nothing re-authored");
+		const last = messages.at(-1) as unknown as { provider: string; stopReason: string };
+		assert.equal(last.provider, "synthetic");
+		assert.equal(last.stopReason, "toolUse");
+	});
+
+	it("no re-pose when the agent posed a question itself, or the reply failed/was stopped", () => {
+		const chat = chatWithDanglingQuiz("repose-no");
+		const record = chatStore.getChat(chat)!;
+		const pending = danglingQuestionOf(record.messages)!;
+		const appends = inputAppends(record, parseChatInput({
+			type: "text",
+			text: "?",
+			hold: { toolCallId: pending.toolCallId, answer: dismissedAnswer("quiz", "Q", { reason: "onHold", tool: "quiz" }) },
+		}));
+		const base = [...record.messages, ...appends];
+		const aborted = { ...(reply("…") as object), stopReason: "aborted" } as never;
+		assert.equal(heldQuestionRepose([...base, aborted]), null, "a stopped reply waits for the next completed one");
+		const failed = { ...(reply("…") as object), stopReason: "error" } as never;
+		assert.equal(heldQuestionRepose([...base, failed]), null, "the Retry banner stays in charge");
+		const posed = {
+			...(reply("…") as object),
+			stopReason: "toolUse",
+			content: [{ type: "toolCall", id: "own-q", name: "explain", arguments: { question: "Q2", correctAnswer: "A" } }],
+		} as never;
+		assert.equal(heldQuestionRepose([...base, posed, reply("ok")]), null, "the agent's own question owns the dock");
+		// A plain (Esc) dismissal is never re-posed.
+		const escAppends = [{ ...(appends[0] as object), details: dismissedAnswer("quiz", "Q") } as never, appends[1]!];
+		assert.equal(heldQuestionRepose([...record.messages, ...escAppends, reply("ok")]), null);
+	});
+});
+
+describe("figureSvgOf: a question's figure, by figure id", () => {
+	it("reads a waited visual's inline result and a delivered steer; failures and unknown ids are null", () => {
+		const inline = {
+			id: newMessageId(), role: "toolResult", toolCallId: "v1", toolName: "visual",
+			content: [{ type: "text", text: "Figure ready" }], isError: false, timestamp: 0,
+			details: { inline: true, jobId: "job_a", kind: "visual", result: { svg: "<svg>a</svg>" } },
+		} as never;
+		const steer = {
+			id: newMessageId(), role: "custom", customType: "subagent-steer", content: "", display: true, timestamp: 0,
+			details: { jobId: "job_b", kind: "visual", toolCallId: "v2", result: { svg: "<svg>b</svg>" } },
+		} as never;
+		const failed = {
+			id: newMessageId(), role: "toolResult", toolCallId: "v3", toolName: "visual",
+			content: [{ type: "text", text: "x" }], isError: false, timestamp: 0,
+			details: { inline: true, jobId: "job_c", kind: "visual", result: { svg: "", notes: "FAILED" } },
+		} as never;
+		const messages = [inline, steer, failed];
+		assert.equal(figureSvgOf(messages, "job_a"), "<svg>a</svg>");
+		assert.equal(figureSvgOf(messages, "job_b"), "<svg>b</svg>");
+		assert.equal(figureSvgOf(messages, "job_c"), null);
+		assert.equal(figureSvgOf(messages, "job_x"), null);
+		assert.equal(figureSvgOf(messages, undefined), null);
+	});
+});
+
+describe("practice hints (fase 4): the opened count rides the thinking submission", () => {
+	it("the model reads the count in one line; none opened adds nothing; a bad count is refused", () => {
+		const base = chatStore.getChat(chatWithActiveProblem())!;
+		// A cleanly-posed problem: the pose plus its persisted ack.
+		const ack = { id: newMessageId(), role: "toolResult", toolCallId: "call-prob-1", toolName: "problem", content: [{ type: "text", text: "Problem posed" }], details: null, isError: false, timestamp: 0 } as never;
+		const record = { ...base, messages: [...base.messages, ack] };
+		assert.ok(activeProblemOf(record.messages), "fixture: the problem is active");
+		const [withHints] = inputAppends(record, parseChatInput({ type: "thinking", problemCallId: "call-prob-1", text: "Jeg prøver Lagrange.", hintsOpened: 2 })) as unknown as Array<{ content: string; details: { hintsOpened?: number } }>;
+		assert.match(withHints!.content, /Hints opened so far: 2/);
+		assert.equal(withHints!.details.hintsOpened, 2);
+		const [plain] = inputAppends(record, parseChatInput({ type: "thinking", problemCallId: "call-prob-1", text: "x" })) as unknown as Array<{ content: string; details: Record<string, unknown> }>;
+		assert.doesNotMatch(plain!.content, /Hints opened/);
+		assert.ok(!("hintsOpened" in plain!.details));
+		assert.throws(() => parseChatInput({ type: "thinking", problemCallId: "call-prob-1", text: "x", hintsOpened: -1 }), ChatInputError);
 	});
 });

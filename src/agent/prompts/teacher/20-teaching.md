@@ -15,7 +15,7 @@ Verbosity is overhead, and overhead is not teaching. The method above is a disci
 
 ## Approving a node — `explain`
 
-`quiz` carries everything along the way: every prediction and every check is multiple choice. `explain` (free text) has one job — **approval**. When the checks say a node sits, pose ONE `explain` on it (`type: "check"`): a task that uses the whole node, which he solves or explains in his own words, with the full working. Correct → the node is approved; move on. Partly right or wrong → repair with the usual cycle, then approve again with a new task.
+`quiz` carries everything along the way: every prediction and every check is multiple choice. `explain` (free text) has one job — **approval**. When the checks say a node sits, pose ONE `explain` on it (`type: "check"`): a task that uses the whole node, which he solves or explains in his own words, with the full working. Pose it as on an exam: the task text alone — no steps to show, no hints, no method tips (hints go in `hints`, hidden until he asks). Correct → the node is approved; move on. Partly right or wrong → repair with the usual cycle, then approve again with a new task.
 
 One approval per node, not per step: never spend `explain` on a routine check, and never count a node as understood, or leave it for good, without a correct one. Passing through a node to repair a foundation is fine — its approval comes when you return.
 

@@ -1689,6 +1689,29 @@ describe("Hopp over / Spør agenten through the session model (2026-11)", () => 
 		assert.equal(tail.details.onHold, true, "chat.tsx derives the held-question placeholder from this tail");
 	});
 
+	it("fase 4: the parked question's send is ONE text input carrying the hold; optimistic result lands ahead of the message", async () => {
+		const posts: Array<{ url: string; body: { input: { type: string; text?: string; hold?: { toolCallId: string; answer: Record<string, unknown> } } } }> = [];
+		const m = new SessionModel({ chatId: "chat_x", initialMessages: [question], fetch: (async (url: RequestInfo | URL, init?: RequestInit) => {
+			if (init?.method === "POST") {
+				posts.push({ url: String(url), body: JSON.parse(String(init.body)) });
+				return Response.json({ ok: true });
+			}
+			if (String(url) === "/api/chats/chat_x") return Response.json({ messages: [question] });
+			return sseResponse("[DONE]");
+		}) as typeof globalThis.fetch });
+		const sending = m.send({ type: "text", text: "Hva betyr det?", hold: { toolCallId: "q1", answer: dismissedAnswer("quiz", "Q?", { reason: "onHold", tool: "probe" }) } });
+		const tail = m.getState().nativeMessages.slice(-2) as unknown as Array<{ role: string; details?: { onHold?: boolean }; content: unknown }>;
+		assert.deepEqual(tail.map((t) => t.role), ["toolResult", "user"]);
+		assert.equal(tail[0]!.details?.onHold, true);
+		assert.equal(tail[1]!.content, "Hva betyr det?");
+		assert.equal(pendingQuestionOf(m.getState().nativeMessages), null, "the dock releases with the send, not before");
+		await sending;
+		assert.equal(posts[0]!.url, "/api/chat");
+		assert.equal(posts[0]!.body.input.type, "text");
+		assert.equal(posts[0]!.body.input.hold?.toolCallId, "q1");
+		assert.equal(posts[0]!.body.input.hold?.answer.onHold, true);
+	});
+
 	/** A model whose reattach stream stays open until `release()` — the
 	 *  window between a posed question and the turn's end. */
 	function streamingModel(record: LhMessage[] = [question]) {

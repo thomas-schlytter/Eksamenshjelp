@@ -47,7 +47,12 @@ import { QUESTION_TOOLS, toolQuestionKind } from "./pending.ts";
 
 /** One client-originated input event (the POST body's `input`). */
 export type ChatInput =
-	| { type: "text"; text: string }
+	/** `hold` (fase 4, «Spør agenten»): the learner parked the pending
+	 *  question and this is the message he wrote meanwhile. The question's
+	 *  onHold dismissal lands TOGETHER with it — never before the message
+	 *  is sent — and the app re-poses the question after the agent's reply
+	 *  (heldQuestionRepose). */
+	| { type: "text"; text: string; hold?: { toolCallId: string; answer: QuestionAnswerData } }
 	| { type: "answer"; toolCallId: string; answer: QuestionAnswerData }
 	| { type: "continue" }
 	/** The failed-turn retry (issue #110): the banner's Retry button. */
@@ -58,7 +63,7 @@ export type ChatInput =
 	 *  thinking on the ACTIVE problem — one lane (owner 2026-10-05):
 	 *  whether it claims an answer is read from the text. One
 	 *  problem may carry many submissions; each is its own turn. */
-	| { type: "thinking"; problemCallId: string; text: string }
+	| { type: "thinking"; problemCallId: string; text: string; hintsOpened?: number }
 	/** The practice move-on signal (owner round 16): the learner's
 	 *  explicit go-ahead during the between-problems pause — the Next
 	 *  chip or Enter on an empty composer. Practice sessions only, and
@@ -168,6 +173,17 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.text !== "string" || (i.text as string).trim().length === 0) {
 				throw new ChatInputError("text input requires non-empty text");
 			}
+			if (i.hold !== undefined) {
+				const hold = i.hold as { toolCallId?: unknown; answer?: unknown } | null;
+				const answer = hold?.answer as QuestionAnswerData | null | undefined;
+				if (typeof hold?.toolCallId !== "string" || hold.toolCallId.length === 0) {
+					throw new ChatInputError("text input's hold requires toolCallId");
+				}
+				if (typeof answer !== "object" || answer === null || answer.dismissed !== true || answer.onHold !== true) {
+					throw new ChatInputError("text input's hold must carry an onHold dismissal");
+				}
+				return { type: "text", text: i.text, hold: { toolCallId: hold.toolCallId, answer } };
+			}
 			return { type: "text", text: i.text };
 		case "answer":
 			if (typeof i.toolCallId !== "string" || i.toolCallId.length === 0) {
@@ -194,7 +210,15 @@ export function parseChatInput(input: unknown): ChatInput {
 			if (typeof i.text !== "string" || i.text.trim().length === 0) {
 				throw new ChatInputError("thinking input requires non-empty text");
 			}
-			return { type: "thinking", problemCallId: i.problemCallId, text: i.text };
+			if (i.hintsOpened !== undefined && (typeof i.hintsOpened !== "number" || !Number.isSafeInteger(i.hintsOpened) || i.hintsOpened < 0)) {
+				throw new ChatInputError("thinking input's hintsOpened must be a non-negative integer");
+			}
+			return {
+				type: "thinking",
+				problemCallId: i.problemCallId,
+				text: i.text,
+				...(typeof i.hintsOpened === "number" && i.hintsOpened > 0 ? { hintsOpened: i.hintsOpened } : {}),
+			};
 		case "next":
 			return { type: "next" };
 		default:
@@ -217,7 +241,7 @@ export function inputAppends(
 ): LhMessage[] {
 	switch (input.type) {
 		case "text":
-			return [...dismissalConclusion(record), newUserMessage(input.text)];
+			return [...holdAppends(record, input.hold), ...dismissalConclusion(record), newUserMessage(input.text)];
 		case "answer": {
 			const pending = danglingQuestionOf(record.messages);
 			if (!pending || pending.toolCallId !== input.toolCallId) {
@@ -238,7 +262,7 @@ export function inputAppends(
 			if (!active || active.toolCallId !== input.problemCallId) {
 				throw new ChatInputError("thinking input targets no active problem");
 			}
-			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text)];
+			return [...dismissalConclusion(record), newThinkingMessage(input.problemCallId, input.text, input.hintsOpened)];
 		}
 		case "next": {
 			// Honest 400s, the thinking gate's discipline: the signal is a
@@ -337,6 +361,17 @@ function failedTail(messages: readonly LhMessage[]): { ids: Set<string>; before:
 function dismissalConclusion(record: { messages: LhMessage[] }): LhMessage[] {
 	const problemCallId = pendingProblemDismissalOf(record.messages);
 	return problemCallId ? concludedByDismissalPair(problemCallId) : [];
+}
+
+/** The parked question's onHold result, riding the learner's message (the
+ *  dismissal discipline: the call must be the DANGLING question, and the
+ *  answer's kind must match it). Empty when the send carries no hold. */
+function holdAppends(
+	record: { messages: LhMessage[] },
+	hold: Extract<ChatInput, { type: "text" }>["hold"],
+): LhMessage[] {
+	if (!hold) return [];
+	return dismissAppends(record, { type: "dismiss", toolCallId: hold.toolCallId, answer: hold.answer });
 }
 
 /** Is this tool name a question tool (dock-owned, answer-gated)? */

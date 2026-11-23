@@ -705,12 +705,21 @@ export class SessionModel {
 		// write-ahead will persist (inputAppends), with LOCAL ids so
 		// adoption can tell them from the record's absorbed copies.
 		const optimistic: LhMessage[] = [];
-		if (input.type === "text") optimistic.push({ ...newUserMessage(input.text), id: localId() });
+		if (input.type === "text") {
+			// A parked question («Spør agenten», fase 4) is dismissed by this
+			// very send: its onHold result lands just ahead of the message,
+			// exactly as the server's write-ahead appends them.
+			if (input.hold) {
+				const tool = pendingCallTool([...this.base, ...this.tail], input.hold.toolCallId) ?? "quiz";
+				optimistic.push({ ...newAnswerResult(input.hold.toolCallId, tool, input.hold.answer), id: localId() });
+			}
+			optimistic.push({ ...newUserMessage(input.text), id: localId() });
+		}
 		else if (input.type === "thinking") {
 			// The practice submissions (2026-10-04): the marker lands
 			// optimistically — the card renders from its details the
 			// moment the button fires.
-			optimistic.push({ ...newThinkingMessage(input.problemCallId, input.text), id: localId() });
+			optimistic.push({ ...newThinkingMessage(input.problemCallId, input.text, input.hintsOpened), id: localId() });
 		} else if (input.type === "next") {
 			// The move-on signal (owner round 16): the NEXT PROBLEM line
 			// renders the instant the chip/Enter fires.
@@ -793,6 +802,13 @@ export class SessionModel {
 					this.tail = this.tail.filter(m => !ids.has(m.id));
 					for (const id of ids) this.unconfirmedAnswers.delete(id);
 				});
+			}
+			// A refused hold-send must not leave the parked question looking
+			// dismissed: drop its optimistic onHold result (the message bubble
+			// keeps the ordinary text-failure behavior).
+			if (input.type === "text" && input.hold && !accepted) {
+				const holdId = optimistic[0]?.id;
+				this.mutate(() => { this.tail = this.tail.filter(m => m.id !== holdId); });
 			}
 			this.setError((err as Error).message);
 			this.setStatus("error");
