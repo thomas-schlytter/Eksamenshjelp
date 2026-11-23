@@ -1,40 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-	CalendarIcon, ChevronRightIcon, EllipsisIcon, ExternalLinkIcon, LoaderCircleIcon, RefreshCwIcon, Trash2Icon, XIcon,
+	ChevronDownIcon, ChevronRightIcon, EllipsisIcon, ExternalLinkIcon, LoaderCircleIcon, PencilIcon, RefreshCwIcon, SparklesIcon, Trash2Icon, XIcon,
 } from "lucide-react";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Hint } from "@/components/ui/hint";
+import { MAKE_MOCK_EXAM_TEXT } from "@/components/artifacts/mock-exam-card";
+import { FlameCard } from "@/components/streak/flame-card";
 import { cn } from "@/lib/utils";
+import { courseVerdict, groupChatsByCourse, VERDICT_RULE, type CourseVerdict, type MockExamResult } from "@/src/core";
 import { ConfirmDialog } from "./confirm-dialog";
 import { courseApi, CourseApiError, courseErrorMessage, type CourseAndPlan } from "./course-api";
-import { groupChatsByCourse } from "@/src/core";
 import { CourseChatList } from "./course-chat-list";
 import { openCourseChatId, useChatList } from "./course-chats";
-import { daysLeftLabel, type SelfStatus } from "./course-format";
+import { type SelfStatus } from "./course-format";
 import { SourcesPanel } from "./course-sources";
-import { localIsoDate, type Course } from "./course-types";
+import {
+	countdownParts, examDayLabel, greenToastText, mockExamChange, mockExamPoints, newlyGreen, workNowTopics, workOnTopicText,
+	type MockExamPoint, type WorkNowTopic,
+} from "./course-summary";
+import { localIsoDate, topicCounts, TOPIC_STATUS_LABEL, type Course, type CourseTopic, type TopicStatus } from "./course-types";
 import { CourseWizard } from "./course-wizard";
 import { ExamPlanView } from "./exam-plan";
 import { LauncherSetupDialog, usePageTabCycle, useSessionLauncher } from "./session-launcher";
-import { StartBox } from "./start-box";
 import { TopicBoard } from "./topic-board";
 
-export type CourseTab = "plan" | "topics" | "context";
-const TABS: readonly { id: CourseTab; label: string; hash: string }[] = [
-	{ id: "plan", label: "Eksamensplan", hash: "plan" },
-	{ id: "topics", label: "Temaer", hash: "temaer" },
-	{ id: "context", label: "Kontekst", hash: "kontekst" },
-];
+/** The collapsed sections at the bottom of the fag page (fase 7b). */
+export type CourseSectionId = "chats" | "topics" | "plan" | "sources";
+const SECTION_HASH: Record<CourseSectionId, string> = { chats: "chatter", topics: "temaer", plan: "plan", sources: "kilder" };
 
-/** `#temaer` / `#kontekst` deep-link a tab (help center, shared links). */
-export function tabFromHash(hash: string): CourseTab | null {
-	return TABS.find((tab) => `#${tab.hash}` === hash)?.id ?? null;
+/** `#temaer` / `#plan` / `#kilder` (and the old `#kontekst`) open a
+ *  section (help center, shared links). */
+export function sectionFromHash(hash: string): CourseSectionId | null {
+	if (hash === "#kontekst") return "sources";
+	const entry = (Object.entries(SECTION_HASH) as [CourseSectionId, string][]).find(([, h]) => `#${h}` === hash);
+	return entry?.[0] ?? null;
 }
 
 /** «Fant ikke faget»: a calm dead end with the way home. */
@@ -100,13 +105,13 @@ function CourseMenu({ custom, refreshing, onRefresh, onDelete }: {
 			document.removeEventListener("keydown", onKeyDown);
 		};
 	}, [open]);
-	const item = "flex w-full cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-left font-ui text-sm outline-none transition-colors hover:bg-accent focus-visible:bg-accent";
+	const item = "flex w-full cursor-pointer items-center gap-2 rounded-md px-2.5 py-2 text-left font-ui text-sm outline-none transition-colors hover:bg-accent focus-visible:bg-accent";
 	return (
 		<div ref={root} className="relative">
 			<Button
 				ref={button}
-				variant="ghost"
-				size="icon"
+				variant="outline"
+				size="icon-lg"
 				aria-haspopup="menu"
 				aria-expanded={open}
 				aria-label="Flere valg for faget"
@@ -116,7 +121,7 @@ function CourseMenu({ custom, refreshing, onRefresh, onDelete }: {
 				{refreshing ? <LoaderCircleIcon className="animate-spin" aria-hidden="true" /> : <EllipsisIcon aria-hidden="true" />}
 			</Button>
 			{open && (
-				<div role="menu" data-lh-menu className="absolute right-0 top-full z-30 mt-1 flex w-56 flex-col gap-0.5 rounded-xl border bg-popover p-1.5 shadow-xl">
+				<div role="menu" data-lh-menu className="absolute right-0 top-full z-30 mt-1 flex w-56 flex-col gap-0.5 rounded-lg border bg-popover p-1.5 shadow-xl">
 					{!custom && (
 						<button type="button" role="menuitem" className={item} onClick={() => { setOpen(false); onRefresh(); }}>
 							<RefreshCwIcon className="size-4 text-muted-foreground" aria-hidden="true" />
@@ -133,154 +138,457 @@ function CourseMenu({ custom, refreshing, onRefresh, onDelete }: {
 	);
 }
 
-/**
- * The fag's header: what it is, when the exam is (editable in place), the
- * countdown, and what NTNU says about the exam. Pure apart from the date
- * draft: the page owns saving.
- */
-export function CourseHeader({ course, daysLeft, dateRef, onExamDate, menu }: {
-	course: Course;
-	daysLeft: number | null;
-	dateRef?: React.Ref<HTMLInputElement>;
-	/** Save the date ("" clears it). Resolves true when saved. */
-	onExamDate: (date: string) => Promise<boolean>;
-	menu?: React.ReactNode;
-}) {
-	const dateId = useId();
-	const saved = course.exam.date ?? "";
-	const [draft, setDraft] = useState(saved);
-	const [state, setState] = useState<"idle" | "saving" | "saved">("idle");
-	// Follow the server's truth (a refresh from NTNU, another window).
-	const [lastSaved, setLastSaved] = useState(saved);
-	if (lastSaved !== saved) {
-		setLastSaved(saved);
-		setDraft(saved);
-	}
-	const commit = () => {
-		// A date field reports "" while half-typed; only a real change saves.
-		if (draft === saved || state === "saving") return;
-		setState("saving");
-		void onExamDate(draft).then((ok) => {
-			setState(ok ? "saved" : "idle");
-			if (!ok) setDraft(saved);
-		});
-	};
-	const facts = [
-		["Eksamensform", course.exam.form],
-		["Varighet", course.exam.duration],
-		["Hjelpemidler", course.exam.aids],
-	].filter((fact): fact is [string, string] => !!fact[1]);
+const CARD = "rounded-lg border bg-card p-5";
+
+// ─── the countdown ───────────────────────────────────────────────────────────
+
+const VERDICT_CHIP: Record<CourseVerdict["id"], string> = {
+	"on-track": "bg-status-green-soft text-status-green-ink",
+	behind: "bg-status-yellow-soft text-status-yellow-ink",
+	"speed-up": "bg-status-red-soft text-status-red-ink",
+};
+
+/** The verdict chip; the rule is its tooltip. */
+export function VerdictChip({ verdict }: { verdict: CourseVerdict }) {
 	return (
-		<header data-testid="course-header">
-			<div className="flex items-start justify-between gap-3">
-				<div className="min-w-0">
-					<p className="font-ui text-sm font-semibold uppercase tracking-wider tabular-nums text-muted-foreground">
-						{course.code}
-						{course.credits && <span className="font-normal normal-case tracking-normal"> · {course.credits} studiepoeng</span>}
-					</p>
-					<h1 className="mt-0.5 font-ui text-2xl font-semibold tracking-tight text-balance sm:text-3xl">{course.name}</h1>
-				</div>
-				{menu}
-			</div>
-
-			<div className="mt-4 flex flex-wrap items-end gap-x-6 gap-y-3">
-				<div className="flex flex-col gap-1" data-tour="exam-date">
-					<label htmlFor={dateId} className="font-ui text-xs font-medium text-muted-foreground">Eksamensdato</label>
-					<Input
-						ref={dateRef}
-						id={dateId}
-						type="date"
-						value={draft}
-						onChange={(e) => {
-							setDraft(e.target.value);
-							setState("idle");
-						}}
-						onBlur={commit}
-						onKeyDown={(e) => {
-							if (e.key === "Enter") e.currentTarget.blur();
-						}}
-						data-testid="exam-date-input"
-						className="h-9 w-44 bg-card"
-					/>
-				</div>
-				<p className="flex h-9 items-center gap-2 font-ui text-base font-semibold" data-testid="course-countdown">
-					<CalendarIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-					{daysLeftLabel(daysLeft)}
-				</p>
-				<p role="status" className="flex h-9 items-center font-ui text-xs text-muted-foreground">
-					{state === "saving" ? "Lagrer …" : state === "saved" ? "Datoen er lagret" : ""}
-				</p>
-			</div>
-
-			{(facts.length > 0 || course.url) && (
-				<div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1 font-ui text-sm">
-					{facts.length > 0 && (
-						<dl className="flex flex-wrap gap-x-5 gap-y-1">
-							{facts.map(([label, value]) => (
-								<div key={label} className="flex gap-1.5">
-									<dt className="text-muted-foreground">{label}:</dt>
-									<dd className="max-w-xs truncate" title={value}>{value}</dd>
-								</div>
-							))}
-						</dl>
-					)}
-					{course.url && (
-						<a
-							href={course.url}
-							target="_blank"
-							rel="noreferrer"
-							className="flex items-center gap-1 rounded-sm text-muted-foreground underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
-						>
-							Emnesiden hos NTNU
-							<ExternalLinkIcon className="size-3.5" aria-hidden="true" />
-						</a>
-					)}
-				</div>
-			)}
-		</header>
+		<Hint label={VERDICT_RULE} side="bottom">
+			<span
+				tabIndex={0}
+				data-testid="course-verdict"
+				data-verdict={verdict.id}
+				className={cn("inline-flex cursor-default items-center self-start rounded-sm px-2.5 py-1 font-ui text-xs font-semibold outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50", VERDICT_CHIP[verdict.id])}
+			>
+				{verdict.label}
+			</span>
+		</Hint>
 	);
 }
 
-/** The three tabs. Arrow keys move between them (the tab pattern). */
-export function CourseTabs({ tab, onTab, panelId }: { tab: CourseTab; onTab: (tab: CourseTab) => void; panelId: string }) {
-	return (
-		<div role="tablist" aria-label="Visninger for faget" data-tour="course-tabs" data-testid="course-tabs" className="flex gap-1 border-b border-border">
-			{TABS.map((entry, index) => (
-				<button
-					key={entry.id}
-					type="button"
-					role="tab"
-					id={`${panelId}-tab-${entry.id}`}
-					aria-selected={tab === entry.id}
-					aria-controls={panelId}
-					data-tour-tab={entry.id}
-					onClick={() => onTab(entry.id)}
+/** The exam date, editable in place (the small pencil). */
+function ExamDateLine({ course, onExamDate }: { course: Course; onExamDate: (date: string) => Promise<boolean> }) {
+	const inputId = useId();
+	const saved = course.exam.date ?? "";
+	const [editing, setEditing] = useState(false);
+	const [draft, setDraft] = useState(saved);
+	const [saving, setSaving] = useState(false);
+	const input = useRef<HTMLInputElement>(null);
+	useEffect(() => {
+		if (editing) input.current?.focus();
+	}, [editing]);
+	const commit = () => {
+		if (saving) return;
+		if (draft === saved) {
+			setEditing(false);
+			return;
+		}
+		setSaving(true);
+		void onExamDate(draft).then(() => {
+			setSaving(false);
+			setEditing(false);
+		});
+	};
+	const day = examDayLabel(course.exam.date);
+	if (editing) {
+		return (
+			<div className="flex items-center gap-2" data-tour="exam-date">
+				<label htmlFor={inputId} className="font-ui text-sm text-primary-foreground/80">Eksamensdato</label>
+				<input
+					ref={input}
+					id={inputId}
+					type="date"
+					value={draft}
+					disabled={saving}
+					onChange={(e) => setDraft(e.target.value)}
+					onBlur={commit}
 					onKeyDown={(e) => {
-						if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
-						e.preventDefault();
-						const next = TABS[(index + (e.key === "ArrowRight" ? 1 : -1) + TABS.length) % TABS.length]!;
-						onTab(next.id);
-						document.getElementById(`${panelId}-tab-${next.id}`)?.focus();
+						if (e.key === "Enter") e.currentTarget.blur();
+						if (e.key === "Escape") {
+							e.preventDefault();
+							e.stopPropagation();
+							setDraft(saved);
+							setEditing(false);
+						}
 					}}
-					className={cn(
-						"-mb-px cursor-pointer rounded-t-md border-b-2 px-3 py-2.5 font-ui text-sm outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50 sm:px-4",
-						tab === entry.id
-							? "border-primary font-semibold text-foreground"
-							: "border-transparent text-muted-foreground hover:text-foreground",
-					)}
+					data-testid="exam-date-input"
+					className="h-8 rounded-sm border border-input bg-card px-2 font-ui text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+				/>
+				{saving && <LoaderCircleIcon className="size-4 animate-spin" aria-label="Lagrer" />}
+			</div>
+		);
+	}
+	return (
+		<div className="flex min-w-0 items-center gap-1.5" data-tour="exam-date">
+			<p className="min-w-0 truncate font-ui text-sm text-primary-foreground/80" data-testid="course-exam-day">
+				{day ? `Eksamen ${day}` : "Ingen eksamensdato"}
+			</p>
+			<Hint label={day ? "Endre eksamensdato" : "Sett eksamensdato"} side="bottom">
+				<button
+					type="button"
+					onClick={() => {
+						setDraft(saved);
+						setEditing(true);
+					}}
+					aria-label={day ? "Endre eksamensdato" : "Sett eksamensdato"}
+					data-testid="exam-date-edit"
+					className="inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm text-primary-foreground/80 outline-none transition-colors hover:bg-primary-foreground/10 hover:text-primary-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
 				>
-					{entry.label}
+					<PencilIcon className="size-3.5" aria-hidden="true" />
 				</button>
-			))}
+			</Hint>
 		</div>
 	);
 }
 
+/** Marine: the date, form and duration, the big «N dager igjen», the verdict. */
+export function CountdownCard({ course, daysLeft, verdict, onExamDate }: {
+	course: Course;
+	daysLeft: number | null;
+	verdict: CourseVerdict | null;
+	onExamDate: (date: string) => Promise<boolean>;
+}) {
+	const parts = countdownParts(daysLeft);
+	const facts = [course.exam.form, course.exam.duration].filter(Boolean).join(" · ");
+	return (
+		<section
+			data-testid="course-countdown"
+			aria-label="Nedtelling til eksamen"
+			className="flex min-h-44 flex-col justify-between gap-4 rounded-lg border border-primary bg-primary p-5 text-primary-foreground"
+		>
+			<div className="flex flex-col gap-0.5">
+				<ExamDateLine course={course} onExamDate={onExamDate} />
+				{facts && <p className="truncate font-ui text-xs text-primary-foreground/65" title={facts}>{facts}</p>}
+			</div>
+			<p className="flex items-baseline gap-3" data-testid="course-days-left">
+				{parts.big !== null && (
+					<span className="font-title text-7xl font-semibold leading-[0.9] tracking-tight tabular-nums">{parts.big}</span>
+				)}
+				<span className={cn("font-title font-medium", parts.big !== null ? "text-xl" : "text-2xl")}>{parts.words}</span>
+			</p>
+			{verdict && <VerdictChip verdict={verdict} />}
+		</section>
+	);
+}
+
+// ─── the progress ring ───────────────────────────────────────────────────────
+
+const LEGEND: { status: Exclude<TopicStatus, "unknown">; dot: string; label: (n: number) => string }[] = [
+	{ status: "green", dot: "bg-status-green", label: (n) => `${n} sitter` },
+	{ status: "yellow", dot: "bg-status-yellow", label: (n) => `${n} på vei` },
+	{ status: "red", dot: "bg-status-red", label: (n) => `${n} må jobbes med` },
+];
+
+/** Green topics of the total, with the counts per colour. `pulse` replays
+ *  the reward animation (a new key per new green). */
+export function ProgressRingCard({ counts, pulse = 0, onMakeTopics }: {
+	counts: Record<TopicStatus, number>;
+	pulse?: number;
+	onMakeTopics?: () => void;
+}) {
+	const total = counts.green + counts.yellow + counts.red + counts.unknown;
+	const r = 50, c = 2 * Math.PI * r;
+	const share = total === 0 ? 0 : counts.green / total;
+	// The reward: the arc grows to its new share (CSS transition) and the
+	// ring pulses once. Never with reduced motion.
+	const ring = useRef<SVGSVGElement>(null);
+	useEffect(() => {
+		if (pulse === 0 || !ring.current?.animate) return;
+		if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+		ring.current.animate(
+			[{ transform: "scale(1)" }, { transform: "scale(1.06)" }, { transform: "scale(1)" }],
+			{ duration: 700, easing: "ease-out" },
+		);
+	}, [pulse]);
+	if (total === 0) {
+		return (
+			<section data-testid="course-progress" aria-label="Temaer" className={cn(CARD, "flex flex-col items-start justify-center gap-3")}>
+				<p className="font-title text-lg font-semibold">Ingen temaer ennå</p>
+				{onMakeTopics && <Button variant="outline" onClick={onMakeTopics}>Lag temaliste</Button>}
+			</section>
+		);
+	}
+	return (
+		<section data-testid="course-progress" aria-label="Temaer" className={cn(CARD, "flex items-center gap-5")}>
+			<svg
+				ref={ring}
+				width="120"
+				height="120"
+				viewBox="0 0 120 120"
+				role="img"
+				aria-label={`${counts.green} av ${total} temaer sitter`}
+				className="shrink-0 origin-center"
+			>
+				<circle cx="60" cy="60" r={r} fill="none" stroke="var(--accent)" strokeWidth="11" />
+				<circle
+					cx="60"
+					cy="60"
+					r={r}
+					fill="none"
+					stroke="var(--gold)"
+					strokeWidth="11"
+					strokeLinecap={share > 0 && share < 1 ? "round" : "butt"}
+					strokeDasharray={`${share * c} ${c}`}
+					transform="rotate(-90 60 60)"
+					className="lh-ring-arc"
+					data-testid="course-ring-arc"
+				/>
+				<text x="60" y="62" textAnchor="middle" fontFamily="var(--font-heading)" fontSize="28" fontWeight="600" fill="var(--foreground)">
+					{counts.green}/{total}
+				</text>
+				<text x="60" y="80" textAnchor="middle" fontSize="11" fill="var(--muted-foreground)">temaer sitter</text>
+			</svg>
+			<ul className="flex flex-col gap-2 font-ui text-sm" data-testid="course-progress-legend">
+				{LEGEND.map((entry) => (
+					<li key={entry.status} className="flex items-center gap-2">
+						<span className={cn("size-2.5 shrink-0 rounded-full", entry.dot)} aria-hidden="true" />
+						{entry.label(counts[entry.status])}
+					</li>
+				))}
+				{counts.unknown > 0 && (
+					<li className="flex items-center gap-2 text-muted-foreground">
+						<span className="size-2.5 shrink-0 rounded-full bg-muted-foreground/40" aria-hidden="true" />
+						{counts.unknown} ikke kartlagt
+					</li>
+				)}
+			</ul>
+		</section>
+	);
+}
+
+// ─── what to work on ─────────────────────────────────────────────────────────
+
+const DOT: Record<TopicStatus, string> = {
+	red: "bg-status-red",
+	yellow: "bg-status-yellow",
+	green: "bg-status-green",
+	unknown: "bg-muted-foreground/40",
+};
+
+/** «Jobb med dette nå»: the three most important red and yellow topics;
+ *  a click starts work on it in the fag-chat. */
+export function WorkNowCard({ topics, items, onWork, onAllTopics, onMakeTopics }: {
+	topics: readonly CourseTopic[];
+	items: readonly WorkNowTopic[];
+	onWork: (topic: CourseTopic) => void;
+	onAllTopics: () => void;
+	onMakeTopics?: () => void;
+}) {
+	const allGreen = topics.length > 0 && topics.every((t) => t.status === "green");
+	return (
+		<section data-testid="course-work-now" aria-labelledby="work-now-title" className={cn(CARD, "flex flex-col gap-2.5")}>
+			<div className="flex items-baseline justify-between gap-3">
+				<h2 id="work-now-title" className="font-title text-xl font-semibold tracking-tight">Jobb med dette nå</h2>
+				{topics.length > 0 && (
+					<button type="button" onClick={onAllTopics} data-testid="course-all-topics" className="cursor-pointer rounded-sm font-ui text-sm text-primary underline-offset-4 outline-none hover:text-gold-ink hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:text-foreground">
+						Alle temaer
+					</button>
+				)}
+			</div>
+			{items.length > 0 ? (
+				<ul className="flex flex-col gap-2">
+					{items.map(({ topic, reason }) => (
+						<li key={topic.id}>
+							<button
+								type="button"
+								onClick={() => onWork(topic)}
+								data-testid="work-now-topic"
+								data-status={topic.status}
+								className="flex w-full cursor-pointer items-center gap-3 rounded-md bg-muted px-3.5 py-3 text-left font-ui outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+							>
+								<span className={cn("size-2.5 shrink-0 rounded-full", DOT[topic.status])} aria-hidden="true" />
+								<span className="sr-only">{TOPIC_STATUS_LABEL[topic.status]}:</span>
+								<span className="min-w-0 flex-1 truncate text-sm font-medium">{topic.title}</span>
+								<span className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground" title={reason}>{reason}</span>
+							</button>
+						</li>
+					))}
+				</ul>
+			) : topics.length === 0 ? (
+				<div className="flex flex-col items-start gap-3">
+					<p className="font-ui text-sm text-muted-foreground">Faget har ingen temaliste ennå.</p>
+					{onMakeTopics && <Button variant="outline" onClick={onMakeTopics}>Lag temaliste</Button>}
+				</div>
+			) : allGreen ? (
+				<p className="font-ui text-sm text-muted-foreground">Alle temaene sitter. Ta en prøveeksamen for å sjekke.</p>
+			) : (
+				<p className="font-ui text-sm text-muted-foreground">Ingen temaer er røde eller gule. Sett fargene under «Alle temaer».</p>
+			)}
+		</section>
+	);
+}
+
+// ─── the mock exams ──────────────────────────────────────────────────────────
+
+/** The score curve (percent per prøveeksamen) with dates and the change. */
+export function MockExamsCard({ points, loaded, busy, onMake }: {
+	points: readonly MockExamPoint[];
+	/** false until the first read. */
+	loaded: boolean;
+	busy?: boolean;
+	onMake: () => void;
+}) {
+	const change = mockExamChange(points);
+	const W = 360, H = 120;
+	const x = (i: number) => (points.length === 1 ? W / 2 : 20 + (i * (W - 40)) / (points.length - 1));
+	const y = (p: number) => 104 - (p / 100) * 88;
+	return (
+		<section data-testid="course-mock-exams" aria-labelledby="mock-exams-title" className={cn(CARD, "flex flex-col gap-2.5")}>
+			<div className="flex items-baseline justify-between gap-3">
+				<h2 id="mock-exams-title" className="font-title text-xl font-semibold tracking-tight">Prøveeksamener</h2>
+				{change && (
+					<span
+						data-testid="mock-exam-change"
+						className={cn(
+							"rounded-sm px-2.5 py-1 font-ui text-xs font-semibold",
+							change.delta > 0 ? "bg-status-green-soft text-status-green-ink" : change.delta < 0 ? "bg-status-red-soft text-status-red-ink" : "bg-muted text-muted-foreground",
+						)}
+					>
+						{change.label}
+					</span>
+				)}
+			</div>
+			{points.length === 0 ? (
+				<div className="flex flex-1 flex-col items-start justify-center gap-3" data-testid="mock-exams-empty">
+					<p className="font-ui text-sm text-muted-foreground">
+						{loaded ? "Ingen rettede prøveeksamener ennå." : "Laster …"}
+					</p>
+					{loaded && (
+						<Button variant="outline" onClick={onMake} disabled={busy}>
+							<SparklesIcon aria-hidden="true" />
+							Lag prøveeksamen
+						</Button>
+					)}
+				</div>
+			) : (
+				<>
+					<svg
+						viewBox={`0 0 ${W} ${H}`}
+						className="h-auto w-full"
+						role="img"
+						aria-label={points.length === 1
+							? `Én prøveeksamen: ${points[0]!.percent} prosent`
+							: `Poeng fra ${points[0]!.percent} til ${points.at(-1)!.percent} prosent`}
+					>
+						<line x1="0" y1="104" x2={W} y2="104" stroke="var(--accent)" />
+						{points.length > 1 && (
+							<polyline
+								points={points.map((p, i) => `${x(i)},${y(p.percent)}`).join(" ")}
+								fill="none"
+								stroke="var(--primary)"
+								strokeWidth="2.5"
+								strokeLinejoin="round"
+							/>
+						)}
+						{points.map((p, i) => (
+							<circle
+								key={p.id}
+								cx={x(i)}
+								cy={y(p.percent)}
+								r={i === points.length - 1 ? 6 : 5}
+								fill={i === points.length - 1 ? "var(--gold)" : "var(--primary)"}
+							/>
+						))}
+					</svg>
+					<ol className={cn("flex font-ui text-xs text-muted-foreground", points.length === 1 ? "justify-center" : "justify-between")}>
+						{points.map((p, i) => (
+							<li key={p.id} className={cn("tabular-nums", i === points.length - 1 && "font-semibold text-status-green-ink")}>
+								{p.label ? `${p.label} · ` : ""}{p.percent} %
+							</li>
+						))}
+					</ol>
+				</>
+			)}
+		</section>
+	);
+}
+
+// ─── the collapsed sections ──────────────────────────────────────────────────
+
+export function CourseSection({ id, title, open, onToggle, children, meta }: {
+	id: CourseSectionId;
+	title: string;
+	open: boolean;
+	onToggle: () => void;
+	children: ReactNode;
+	meta?: string;
+}) {
+	const panelId = useId();
+	return (
+		<section id={`seksjon-${SECTION_HASH[id]}`} data-testid={`course-section-${id}`} data-open={open || undefined} className="rounded-lg border bg-card">
+			<button
+				type="button"
+				onClick={onToggle}
+				aria-expanded={open}
+				aria-controls={panelId}
+				data-section={id}
+				className="flex w-full cursor-pointer items-center gap-3 rounded-lg px-5 py-4 text-left outline-none transition-colors hover:bg-accent/60 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+			>
+				<span className="font-title text-base font-semibold">{title}</span>
+				{meta && <span className="font-ui text-xs tabular-nums text-muted-foreground">{meta}</span>}
+				<ChevronDownIcon className={cn("ml-auto size-4 text-muted-foreground transition-transform", open && "rotate-180")} aria-hidden="true" />
+			</button>
+			{open && (
+				<div id={panelId} className="border-t px-5 py-5">
+					{children}
+				</div>
+			)}
+		</section>
+	);
+}
+
+// ─── the toast for a new green topic ─────────────────────────────────────────
+
+export function GreenToast({ text, onClose }: { text: string; onClose: () => void }) {
+	return (
+		<div className="pointer-events-none fixed right-5 top-20 z-40 flex justify-end">
+			<div role="status" data-testid="green-toast" className="lh-toast-in pointer-events-auto flex items-center gap-3 rounded-lg border border-l-4 border-l-status-green bg-card px-4 py-3 shadow-lg">
+				<span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-status-green-soft text-status-green" aria-hidden="true">
+					<SparklesIcon className="size-3.5" />
+				</span>
+				<p className="font-ui text-sm font-semibold">{text}</p>
+				<button
+					type="button"
+					onClick={onClose}
+					aria-label="Lukk"
+					className="cursor-pointer rounded-sm p-0.5 text-muted-foreground outline-none hover:bg-accent hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+				>
+					<XIcon className="size-4" aria-hidden="true" />
+				</button>
+			</div>
+		</div>
+	);
+}
+
+// ─── the page ────────────────────────────────────────────────────────────────
+
+/** The course's graded prøveeksamener (GET /api/mock-exams/[code]), kept
+ *  fresh by `mock-exams-changed` and reconnects. null until the first read. */
+function useMockExamResults(code: string): MockExamResult[] | null {
+	const [results, setResults] = useState<MockExamResult[] | null>(null);
+	const reload = useCallback(async () => {
+		try {
+			const res = await fetch(`/api/mock-exams/${encodeURIComponent(code)}`, { cache: "no-store" });
+			const body = res.ok ? ((await res.json()) as { results?: MockExamResult[] }) : {};
+			setResults(Array.isArray(body.results) ? body.results : []);
+		} catch {
+			setResults((prev) => prev ?? []);
+		}
+	}, [code]);
+	useEffect(() => {
+		void reload();
+	}, [reload]);
+	useServerEvent("mock-exams-changed", (payload) => {
+		if (payload.code === code) void reload();
+	});
+	useServerResync(() => void reload());
+	return results;
+}
+
 /**
- * THE FAG PAGE (/fag/[code]): header, the three tabs (Eksamensplan is the
- * default), the first-run wizard while there are no topics, the fag's
- * chats (fase 2: the fag-chat and its underchats), and a start box that
- * sends into the fag-chat.
+ * THE FAG PAGE (/fag/[code]), fase 7b: a small summary, built as the
+ * approved sketch (Main): how long to the exam and the verdict, the
+ * topics that sit, the flame; what to work on now and the mock exams; and,
+ * collapsed below, the chats, every topic, the exam plan and the sources.
+ * The first-run wizard shows while the fag has no topics.
  *
  * STATE: the server's `{ course, plan }` is the truth. Quick edits (a
  * status, a ticked plan item, minutes per day, removing a source) apply
@@ -299,15 +607,32 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		() => (chats === null ? null : groupChatsByCourse(chats, [code]).byCourse.get(code) ?? { main: null, subs: [] }),
 		[chats, code],
 	);
+	const results = useMockExamResults(code);
 	const [data, setData] = useState(initial);
 	const [gone, setGone] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
-	const [tab, setTab] = useState<CourseTab>("plan");
 	const [wizard, setWizard] = useState(initial.course.topics.length === 0);
 	const [today] = useState(() => localIsoDate());
-	const panelId = useId();
-	const dateRef = useRef<HTMLInputElement>(null);
+	const [open, setOpen] = useState<ReadonlySet<CourseSectionId>>(() => new Set());
 	const { course, plan } = data;
+
+	// ── the reward: a topic turned green ────────────────────────────────
+	const [pulse, setPulse] = useState(0);
+	const [greenToast, setGreenToast] = useState<string | null>(null);
+	const [lastTopics, setLastTopics] = useState(course.topics);
+	if (lastTopics !== course.topics) {
+		const fresh = newlyGreen(lastTopics, course.topics);
+		setLastTopics(course.topics);
+		if (fresh.length > 0) {
+			setPulse((n) => n + 1);
+			setGreenToast(greenToastText(fresh));
+		}
+	}
+	useEffect(() => {
+		if (!greenToast) return;
+		const id = setTimeout(() => setGreenToast(null), 5000);
+		return () => clearTimeout(id);
+	}, [greenToast]);
 
 	// ── the server round trip ────────────────────────────────────────────
 	const sequence = useRef(0);
@@ -348,7 +673,8 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		});
 	}, [mutate]);
 
-	// Another window, or the agent's topic_status tool mid-session.
+	// Another window, the agent's topic_status tool mid-session, or the
+	// topic update after «Avslutt økt».
 	const reloadTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 	useServerEvent("courses-changed", (payload) => {
 		if (payload.code && payload.code !== code) return;
@@ -360,20 +686,28 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		if (reloadTimer.current) clearTimeout(reloadTimer.current);
 	}, []);
 
-	// ── tabs (deep-linkable by hash) ─────────────────────────────────────
+	// ── sections (deep-linkable by hash) ─────────────────────────────────
+	const openSection = useCallback((id: CourseSectionId, scroll = false) => {
+		setOpen((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+		if (scroll) {
+			requestAnimationFrame(() => document.getElementById(`seksjon-${SECTION_HASH[id]}`)?.scrollIntoView({ behavior: "smooth", block: "start" }));
+		}
+	}, []);
+	const toggleSection = (id: CourseSectionId) => setOpen((prev) => {
+		const next = new Set(prev);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
+		return next;
+	});
 	useEffect(() => {
 		const fromHash = () => {
-			const next = tabFromHash(window.location.hash);
-			if (next) setTab(next);
+			const next = sectionFromHash(window.location.hash);
+			if (next) openSection(next, true);
 		};
 		fromHash();
 		window.addEventListener("hashchange", fromHash);
 		return () => window.removeEventListener("hashchange", fromHash);
-	}, []);
-	const selectTab = (next: CourseTab) => {
-		setTab(next);
-		window.history.replaceState(null, "", `#${TABS.find((entry) => entry.id === next)!.hash}`);
-	};
+	}, [openSection]);
 
 	// ── actions ──────────────────────────────────────────────────────────
 	const setStatus = (topicId: string, status: SelfStatus) => quick(
@@ -434,8 +768,8 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		if (error) setNotice(`Kunne ikke lage temaliste. ${error}`);
 		return error ? null : how;
 	};
-	// The fag-chat (fase 2): opened from the chat list, created the first
-	// time; the start box sends its text into it.
+	// The fag-chat (fase 2): «Fortsett i fag-chatten» opens it (created the
+	// first time); «Lag prøveeksamen» and a topic send their text into it.
 	const [openingChat, setOpeningChat] = useState(false);
 	const openMainChat = () => {
 		setOpeningChat(true);
@@ -446,11 +780,15 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 				setNotice("Kunne ikke åpne fag-chatten. Prøv igjen.");
 			});
 	};
-	const sendToCourseChat = (text: string) => void launcher.sendToCourseChat(code, text);
-	const focusExamDate = () => {
-		dateRef.current?.scrollIntoView({ block: "center" });
-		dateRef.current?.focus();
-		dateRef.current?.showPicker?.();
+	const sendToCourseChat = (text: string) => {
+		void launcher.sendToCourseChat(code, text).then((outcome) => {
+			if (outcome === "failed") setNotice("Kunne ikke åpne fag-chatten. Prøv igjen.");
+		});
+	};
+	const makeMockExam = () => sendToCourseChat(MAKE_MOCK_EXAM_TEXT);
+	const showWizard = () => {
+		setWizard(true);
+		root.current?.querySelector("[data-scroll-root]")?.scrollTo({ top: 0, behavior: "smooth" });
 	};
 
 	const [refreshing, setRefreshing] = useState(false);
@@ -490,6 +828,13 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		setConfirmBusy(false);
 	};
 
+	const counts = useMemo(() => topicCounts(course.topics), [course.topics]);
+	const verdict = useMemo(() => courseVerdict(plan.daysLeft, counts), [plan.daysLeft, counts]);
+	const workNow = useMemo(() => workNowTopics(course.topics), [course.topics]);
+	const points = useMemo(() => mockExamPoints(results ?? []), [results]);
+	const hasPlan = plan.days.some((day) => day.items.length > 0);
+	const chatCount = chatGroup ? (chatGroup.main ? 1 : 0) + chatGroup.subs.length : 0;
+
 	if (gone) return <CourseNotFound code={code} />;
 
 	return (
@@ -504,22 +849,33 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 				</nav>
 			</TopBar>
 
-			<div className="relative min-h-0 flex-1 overflow-y-auto">
-				<div className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-6 sm:px-6 sm:py-8">
-					<CourseHeader
-						course={course}
-						daysLeft={plan.daysLeft}
-						dateRef={dateRef}
-						onExamDate={setExamDate}
-						menu={
+			{/* One scroller (relative: the tour's highlight measures inside it). */}
+			<div data-scroll-root className="relative min-h-0 flex-1 overflow-y-auto">
+				<div className="mx-auto flex w-full max-w-6xl flex-col gap-5 px-4 py-7 sm:px-8 lg:px-11">
+					<header data-testid="course-header" className="flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
+						<div className="min-w-0">
+							<p className="font-ui text-[11px] font-semibold uppercase tracking-widest text-muted-foreground tabular-nums">
+								{course.code}
+								{course.credits && ` · ${course.credits.replace(".", ",")} studiepoeng`}
+							</p>
+							<h1 className="mt-1.5 font-title text-4xl font-semibold leading-tight tracking-tight text-balance">{course.name}</h1>
+						</div>
+						<div className="flex flex-wrap items-center gap-2.5">
+							<Button variant="outline" size="lg" onClick={makeMockExam} disabled={launcher.busy} data-testid="course-make-mock-exam">
+								Lag prøveeksamen
+							</Button>
+							<Button size="lg" onClick={openMainChat} disabled={openingChat || launcher.busy} data-testid="course-open-chat">
+								{openingChat && <LoaderCircleIcon className="animate-spin" aria-hidden="true" />}
+								Fortsett i fag-chatten
+							</Button>
 							<CourseMenu
 								custom={course.custom}
 								refreshing={refreshing}
 								onRefresh={() => void refresh()}
 								onDelete={() => setConfirm("delete")}
 							/>
-						}
-					/>
+						</div>
+					</header>
 
 					{/* One line for everything that needs saying. The live region
 					    is always mounted, so a message is announced when it lands. */}
@@ -539,48 +895,54 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 						)}
 					</div>
 
-					<CourseChatList code={code} group={chatGroup} onOpenMain={openMainChat} opening={openingChat} />
-
-					<CourseTabs tab={tab} onTab={selectTab} panelId={panelId} />
-
-					<div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-tab-${tab}`} className="min-h-80">
-						{tab === "plan" && (wizard ? (
-							<div className="flex flex-col items-center gap-3">
-								<CourseWizard
-									course={course}
-									actions={{
-										onExamDate: setExamDate,
-										onAddSource: (source) => mutate(null, () => courseApi.addSource(code, source)),
-										onRemoveSource: removeSource,
-										onGenerate: generateTopics,
-										onStatus: setStatus,
-										onOpenSetup: launcher.openSetup,
-										onDone: () => setWizard(false),
-									}}
-								/>
-								<Button variant="ghost" size="sm" onClick={() => setWizard(false)}>Lukk veiviseren</Button>
-							</div>
-						) : (
-							<ExamPlanView
+					{wizard && (
+						<div className="flex flex-col items-center gap-3">
+							<CourseWizard
 								course={course}
-								plan={plan}
-								today={today}
 								actions={{
-									onToggleDone: togglePlanItem,
-									onMinutesPerDay: setMinutesPerDay,
-									onOpenWizard: () => setWizard(true),
-									onMapTopics: () => selectTab("topics"),
-									onEditExamDate: focusExamDate,
+									onExamDate: setExamDate,
+									onAddSource: (source) => mutate(null, () => courseApi.addSource(code, source)),
+									onRemoveSource: removeSource,
+									onGenerate: generateTopics,
+									onStatus: setStatus,
+									onOpenSetup: launcher.openSetup,
+									onDone: () => setWizard(false),
 								}}
 							/>
-						))}
-						{tab === "topics" && (
+							<Button variant="ghost" size="sm" onClick={() => setWizard(false)}>Lukk veiviseren</Button>
+						</div>
+					)}
+
+					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]">
+						<CountdownCard course={course} daysLeft={plan.daysLeft} verdict={verdict} onExamDate={setExamDate} />
+						<ProgressRingCard counts={counts} pulse={pulse} onMakeTopics={showWizard} />
+						<FlameCard />
+					</div>
+
+					<div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+						<WorkNowCard
+							topics={course.topics}
+							items={workNow}
+							onWork={(topic) => sendToCourseChat(workOnTopicText(topic.title))}
+							onAllTopics={() => openSection("topics", true)}
+							onMakeTopics={showWizard}
+						/>
+						<MockExamsCard points={points} loaded={results !== null} busy={launcher.busy} onMake={makeMockExam} />
+					</div>
+
+					{/* The rest, collapsed. `course-tabs` keeps the help center's
+					    tours working: they open a section by its title. */}
+					<div data-tour="course-tabs" className="mt-2 flex flex-col gap-3">
+						<div data-tour="course-chats">
+							<CourseSection id="chats" title="Chatter" meta={chatCount > 0 ? String(chatCount) : undefined} open={open.has("chats")} onToggle={() => toggleSection("chats")}>
+								<CourseChatList code={code} group={chatGroup} onOpenMain={openMainChat} opening={openingChat} />
+							</CourseSection>
+						</div>
+						<CourseSection id="topics" title="Alle temaer" meta={course.topics.length > 0 ? String(course.topics.length) : undefined} open={open.has("topics")} onToggle={() => toggleSection("topics")}>
 							<TopicBoard
 								course={course}
-								onOpenWizard={() => {
-									setWizard(true);
-									selectTab("plan");
-								}}
+								simple
+								onOpenWizard={showWizard}
 								actions={{
 									onStatus: setStatus,
 									onSaveTopics: saveTopics,
@@ -588,30 +950,49 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 									regenerating: generating,
 								}}
 							/>
+						</CourseSection>
+						{hasPlan && (
+							<CourseSection id="plan" title="Eksamensplan" open={open.has("plan")} onToggle={() => toggleSection("plan")}>
+								<ExamPlanView
+									course={course}
+									plan={plan}
+									today={today}
+									compact
+									actions={{
+										onToggleDone: togglePlanItem,
+										onMinutesPerDay: setMinutesPerDay,
+										onOpenWizard: showWizard,
+										onMapTopics: () => openSection("topics", true),
+										onEditExamDate: () => root.current?.querySelector<HTMLElement>("[data-testid='exam-date-edit']")?.click(),
+									}}
+								/>
+							</CourseSection>
 						)}
-						{tab === "context" && (
-							<SourcesPanel
-								course={course}
-								onAdd={(source) => mutate(null, () => courseApi.addSource(code, source))}
-								onRemove={removeSource}
-							/>
-						)}
+						<CourseSection id="sources" title="Kilder" meta={course.sources.length > 0 ? String(course.sources.length) : undefined} open={open.has("sources")} onToggle={() => toggleSection("sources")}>
+							<div className="flex flex-col gap-4">
+								{course.url && (
+									<a
+										href={course.url}
+										target="_blank"
+										rel="noreferrer"
+										className="flex items-center gap-1 self-start rounded-sm font-ui text-sm text-muted-foreground underline underline-offset-4 outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									>
+										Emnesiden hos NTNU
+										<ExternalLinkIcon className="size-3.5" aria-hidden="true" />
+									</a>
+								)}
+								<SourcesPanel
+									course={course}
+									onAdd={(source) => mutate(null, () => courseApi.addSource(code, source))}
+									onRemove={removeSource}
+								/>
+							</div>
+						</CourseSection>
 					</div>
 				</div>
 			</div>
 
-			{/* Into the fag-chat (fase 2): docked under the scroll area. */}
-			<div className="shrink-0 border-t border-border/60 bg-background pb-4 pt-3">
-				<div className="mx-auto w-full max-w-[46rem] px-4">
-					<StartBox
-						launcher={launcher}
-						placeholder={`Spør om hva som helst i ${course.code}`}
-						ownsFieldCycle={false}
-						send={sendToCourseChat}
-						submitLabel="Send til fag-chatten"
-					/>
-				</div>
-			</div>
+			{greenToast && <GreenToast text={greenToast} onClose={() => setGreenToast(null)} />}
 
 			<ConfirmDialog
 				open={confirm === "delete"}

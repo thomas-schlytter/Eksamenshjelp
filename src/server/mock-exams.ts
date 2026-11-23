@@ -10,6 +10,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import { localIsoDate, normalizeCourseCode, type ChatCourseLink } from "../core/courses.ts";
+import { emit } from "../core/events.ts";
 import {
 	isMockExamId,
 	publicMockExam,
@@ -49,7 +50,11 @@ export const mockExamPort: MockExamPort = {
 	renderPdf: renderMockExamPdf,
 	getExam: getMockExam,
 	answers: getMockExamAnswers,
-	saveResult: saveMockExamResult,
+	// A new graded result: the fag page's score curve refetches (fase 7b).
+	saveResult: (result) => {
+		saveMockExamResult(result);
+		emit("mock-exams-changed", { code: result.code });
+	},
 };
 
 /** The fag-chat tools' context; undefined without a course link. */

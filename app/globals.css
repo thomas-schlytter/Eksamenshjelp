@@ -81,8 +81,28 @@
 	--status-red-foreground: #ffffff;
 	--status-red-soft: #f7e4df;
 	--status-red-ink: #a3412e;
-	/* The streak flame (token only; the flame UI comes later). */
+	/* The streak flame (fase 7b): --flame is the default (Glohet); each level
+	   has its fill, inner tongue(s) and -ink (text on canvas/card). */
 	--flame: #ea580c;
+	--flame-spark: #f6c453;
+	--flame-spark-core: #fff1c1;
+	--flame-spark-ink: #8a5f14;
+	--flame-flame: #f59e0b;
+	--flame-flame-core: #fde68a;
+	--flame-flame-ink: #92400e;
+	--flame-hot: var(--flame);
+	--flame-hot-core: #fdba74;
+	--flame-hot-ink: #9a3412;
+	--flame-inferno: #dc2626;
+	--flame-inferno-mid: #fb923c;
+	--flame-inferno-core: #fed7aa;
+	--flame-inferno-ink: #b91c1c;
+	--flame-blue: #3b6bff;
+	--flame-blue-mid: #8fb0ff;
+	--flame-blue-core: #f2f6ff;
+	--flame-blue-ink: #2747c9;
+	/* An unlit flame (no streak, a day not done). */
+	--flame-off: #d6d6d0;
 	/* Sora (next/font, self-hosted at build — app/layout.tsx): titles,
 	   headings and big numbers. A plain runtime var so markdown headings
 	   and --font-title both read it. */
@@ -151,6 +171,23 @@
 	--status-red-soft: #3b2220;
 	--status-red-ink: #ee8f7c;
 	--flame: #f97316;
+	--flame-spark: #f6c453;
+	--flame-spark-core: #fff1c1;
+	--flame-spark-ink: #f2cf6f;
+	--flame-flame: #fbbf24;
+	--flame-flame-core: #fef3c7;
+	--flame-flame-ink: #fcd34d;
+	--flame-hot-core: #fdba74;
+	--flame-hot-ink: #fb923c;
+	--flame-inferno: #ef4444;
+	--flame-inferno-mid: #fb923c;
+	--flame-inferno-core: #fed7aa;
+	--flame-inferno-ink: #f87171;
+	--flame-blue: #6b8cff;
+	--flame-blue-mid: #a5bfff;
+	--flame-blue-core: #f2f6ff;
+	--flame-blue-ink: #93acff;
+	--flame-off: #3a404b;
 	--lh-code-bg: color-mix(in oklab, var(--background) 86%, black);
 	--lh-ink-strong: var(--foreground);
 	--lh-ink-italic: var(--foreground);
@@ -259,6 +296,11 @@
 	--color-status-red-soft: var(--status-red-soft);
 	--color-status-red-ink: var(--status-red-ink);
 	--color-flame: var(--flame);
+	--color-flame-spark-ink: var(--flame-spark-ink);
+	--color-flame-flame-ink: var(--flame-flame-ink);
+	--color-flame-hot-ink: var(--flame-hot-ink);
+	--color-flame-inferno-ink: var(--flame-inferno-ink);
+	--color-flame-blue-ink: var(--flame-blue-ink);
 }
 
 * {
@@ -691,4 +733,43 @@ body {
 	background-color: var(--accent);
 	outline: 1px solid var(--border);
 	border-radius: 0.25rem;
+}
+
+/* Fase 7b rewards: the progress ring grows to its new share when a topic
+   turns green (the pulse is a Web Animation in course-page.tsx, gated on
+   the same media query); toasts rise in; the flame flickers. Reduced
+   motion: the ring jumps, nothing moves, toasts just appear. */
+.lh-ring-arc {
+	transition: stroke-dasharray 700ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes lh-toast-in {
+	from {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
+}
+.lh-toast-in {
+	animation: lh-toast-in 180ms ease-out;
+}
+@keyframes lh-flame-flicker {
+	0%, 100% { transform: scale(1) rotate(0deg); }
+	30% { transform: scale(1.04, 0.97) rotate(-1.5deg); }
+	60% { transform: scale(0.98, 1.03) rotate(1deg); }
+}
+.lh-flame-flicker {
+	animation: lh-flame-flicker 2.4s ease-in-out infinite;
+	transform-origin: 50% 90%;
+}
+@media (prefers-reduced-motion: reduce) {
+	.lh-ring-arc {
+		transition: none;
+	}
+	.lh-toast-in,
+	.lh-flame-flicker {
+		animation: none;
+	}
 }

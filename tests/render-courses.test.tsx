@@ -12,10 +12,11 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { parseHTML } from "linkedom";
-import { buildExamPlan, type Course, type CourseSummary, type CourseTopic, type ChatListItem } from "../src/core/index.ts";
+import { buildExamPlan, courseVerdict, topicCounts, type Course, type CourseSummary, type CourseTopic, type ChatListItem } from "../src/core/index.ts";
 import { CourseHitList, hitExamLine, ManualCourseForm } from "../components/courses/add-course.tsx";
 import { CourseLinkChip, CourseSelectChip } from "../components/courses/course-chip.tsx";
-import { CourseHeader, CourseNotFound, CourseTabs, tabFromHash } from "../components/courses/course-page.tsx";
+import { CountdownCard, CourseNotFound, CourseSection, MockExamsCard, ProgressRingCard, sectionFromHash, WorkNowCard } from "../components/courses/course-page.tsx";
+import { workNowTopics } from "../components/courses/course-summary.ts";
 import { SourceAdder, SourceList, SourcesPanel } from "../components/courses/course-sources.tsx";
 import { CourseWizard, type WizardActions } from "../components/courses/course-wizard.tsx";
 import { CourseCard, CoursesOverview } from "../components/courses/courses-home.tsx";
@@ -247,46 +248,79 @@ describe("Legg til fag: search results and the manual reserve", () => {
 	});
 });
 
-describe("fag page: header, tabs, not found", () => {
-	it("the header shows code, name, the editable exam date (anchored), the countdown and NTNU's exam facts", () => {
-		const document = dom(<CourseHeader course={course()} daysLeft={24} onExamDate={async () => true} />);
-		assert.equal(document.querySelector("h1")!.textContent, "Kybernetikk introduksjon");
+describe("fag page (fase 7b): the summary cards, sections, not found", () => {
+	it("the countdown: date, form and duration, the big number, the verdict with its rule; the date stays editable", () => {
+		const c = course();
+		const verdict = courseVerdict(24, topicCounts(c.topics));
+		const document = dom(<CountdownCard course={c} daysLeft={24} verdict={verdict} onExamDate={async () => true} />);
+		assert.equal(document.querySelector('[data-testid="course-exam-day"]')!.textContent, "Eksamen mandag 7. desember");
+		assert.match(document.body.textContent!, /Skriftlig skoleeksamen · 4 timer/);
+		assert.equal(document.querySelector('[data-testid="course-days-left"]')!.textContent, "24dager igjen");
+		assert.equal(document.querySelector('[data-testid="course-verdict"]')!.textContent, "På god vei");
 		const anchor = document.querySelector('[data-tour="exam-date"]')!;
-		const input = anchor.querySelector('input[type="date"]')!;
-		assert.equal(input.getAttribute("value"), "2026-12-07");
-		assert.equal(anchor.querySelector(`label[for="${input.id}"]`)!.textContent, "Eksamensdato");
-		assert.equal(document.querySelector('[data-testid="course-countdown"]')!.textContent, "24 dager til eksamen");
-		assert.match(document.querySelector("dl")!.textContent!, /Eksamensform:Skriftlig skoleeksamen/);
-		assert.match(document.querySelector("dl")!.textContent!, /Varighet:4 timer/);
-		const ntnu = document.querySelector('a[href="https://www.ntnu.no/studier/emner/TTK4100"]')!;
-		assert.equal(ntnu.getAttribute("target"), "_blank");
+		assert.equal(anchor.querySelector('[data-testid="exam-date-edit"]')!.getAttribute("aria-label"), "Endre eksamensdato");
 	});
 
-	it("a manual fag without NTNU data shows no empty fact rows and no dead link", () => {
-		const document = dom(<CourseHeader course={course({ custom: true, url: undefined, exam: {}, credits: undefined })} daysLeft={null} onExamDate={async () => true} />);
-		assert.equal(document.querySelector("dl"), null);
-		assert.equal(document.querySelectorAll("a").length, 0);
-		assert.equal(document.querySelector('[data-testid="course-countdown"]')!.textContent, "Sett eksamensdato");
-		assert.equal(document.querySelector('input[type="date"]')!.getAttribute("value"), "");
+	it("no date: says so, offers to set it, and gives no verdict", () => {
+		const c = course({ custom: true, url: undefined, exam: {}, credits: undefined });
+		const document = dom(<CountdownCard course={c} daysLeft={null} verdict={courseVerdict(null, topicCounts(c.topics))} onExamDate={async () => true} />);
+		assert.equal(document.querySelector('[data-testid="course-exam-day"]')!.textContent, "Ingen eksamensdato");
+		assert.equal(document.querySelector('[data-testid="exam-date-edit"]')!.getAttribute("aria-label"), "Sett eksamensdato");
+		assert.equal(document.querySelector('[data-testid="course-verdict"]'), null);
 	});
 
-	it("three tabs, Eksamensplan first; a real tablist wired to its panel", () => {
-		const document = dom(<CourseTabs tab="plan" onTab={() => {}} panelId="p" />);
-		const list = document.querySelector('[role="tablist"]')!;
-		assert.equal(list.getAttribute("data-tour"), "course-tabs");
-		const tabs = Array.from(list.querySelectorAll('[role="tab"]'));
-		assert.deepEqual(tabs.map((t) => t.textContent), ["Eksamensplan", "Temaer", "Kontekst"]);
-		assert.deepEqual(tabs.map((t) => t.getAttribute("aria-selected")), ["true", "false", "false"]);
-		assert.ok(tabs.every((t) => t.getAttribute("aria-controls") === "p"));
-		assert.deepEqual(tabs.map((t) => t.getAttribute("data-tour-tab")), ["plan", "topics", "context"]);
+	it("the ring: green of all, in words, with the three counts", () => {
+		const document = dom(<ProgressRingCard counts={{ green: 9, yellow: 3, red: 2, unknown: 0 }} />);
+		assert.equal(document.querySelector('svg[role="img"]')!.getAttribute("aria-label"), "9 av 14 temaer sitter");
+		const legend = Array.from(document.querySelectorAll('[data-testid="course-progress-legend"] li')).map((li) => li.textContent);
+		assert.deepEqual(legend, ["9 sitter", "3 på vei", "2 må jobbes med"]);
+		const empty = dom(<ProgressRingCard counts={{ green: 0, yellow: 0, red: 0, unknown: 0 }} onMakeTopics={() => {}} />);
+		assert.match(empty.body.textContent!, /Ingen temaer ennå/);
+		assert.equal(empty.querySelector("button")!.textContent, "Lag temaliste");
 	});
 
-	it("tabs deep-link by hash", () => {
-		assert.equal(tabFromHash("#temaer"), "topics");
-		assert.equal(tabFromHash("#kontekst"), "context");
-		assert.equal(tabFromHash("#plan"), "plan");
-		assert.equal(tabFromHash(""), null);
-		assert.equal(tabFromHash("#m_123"), null);
+	it("«Jobb med dette nå»: red before yellow, with the reason, and a link to every topic", () => {
+		const c = course();
+		const document = dom(<WorkNowCard topics={c.topics} items={workNowTopics(c.topics)} onWork={() => {}} onAllTopics={() => {}} />);
+		const rows = Array.from(document.querySelectorAll('[data-testid="work-now-topic"]'));
+		assert.deepEqual(rows.map((r) => r.getAttribute("data-status")), ["red", "yellow"]);
+		assert.match(rows[0]!.textContent!, /Laplacetransformasjon.*ikke øvd ennå/);
+		assert.match(rows[1]!.textContent!, /Bodediagram.*Blandet fase og forsterkning\./);
+		assert.equal(document.querySelector('[data-testid="course-all-topics"]')!.textContent, "Alle temaer");
+		const none = dom(<WorkNowCard topics={[]} items={[]} onWork={() => {}} onAllTopics={() => {}} onMakeTopics={() => {}} />);
+		assert.match(none.body.textContent!, /ingen temaliste/);
+	});
+
+	it("the mock exams: a curve with dates and the change; empty offers «Lag prøveeksamen»", () => {
+		const points = [
+			{ id: "a", percent: 62, label: "02.11", gradedAt: "2026-11-02T10:00:00.000Z" },
+			{ id: "b", percent: 71, label: "12.11", gradedAt: "2026-11-12T10:00:00.000Z" },
+		];
+		const document = dom(<MockExamsCard points={points} loaded onMake={() => {}} />);
+		assert.equal(document.querySelector('[data-testid="mock-exam-change"]')!.textContent, "+9 poeng");
+		assert.deepEqual(Array.from(document.querySelectorAll("ol li")).map((li) => li.textContent), ["02.11 · 62 %", "12.11 · 71 %"]);
+		assert.equal(document.querySelector('svg[role="img"]')!.getAttribute("aria-label"), "Poeng fra 62 til 71 prosent");
+		const empty = dom(<MockExamsCard points={[]} loaded onMake={() => {}} />);
+		assert.match(empty.querySelector('[data-testid="mock-exams-empty"]')!.textContent!, /Lag prøveeksamen/);
+	});
+
+	it("sections open by hash; the old #kontekst opens «Kilder»", () => {
+		assert.equal(sectionFromHash("#temaer"), "topics");
+		assert.equal(sectionFromHash("#kilder"), "sources");
+		assert.equal(sectionFromHash("#kontekst"), "sources");
+		assert.equal(sectionFromHash("#plan"), "plan");
+		assert.equal(sectionFromHash("#chatter"), "chats");
+		assert.equal(sectionFromHash(""), null);
+		assert.equal(sectionFromHash("#m_123"), null);
+	});
+
+	it("a section is a button with its state, the content only while open", () => {
+		const closed = dom(<CourseSection id="topics" title="Alle temaer" meta="4" open={false} onToggle={() => {}}><p>innhold</p></CourseSection>);
+		assert.equal(closed.querySelector("button")!.getAttribute("aria-expanded"), "false");
+		assert.ok(!closed.body.textContent!.includes("innhold"));
+		const open = dom(<CourseSection id="topics" title="Alle temaer" open onToggle={() => {}}><p>innhold</p></CourseSection>);
+		assert.equal(open.querySelector("button")!.getAttribute("aria-expanded"), "true");
+		assert.ok(open.body.textContent!.includes("innhold"));
 	});
 
 	it("an unknown fag gets a calm page with the way home", () => {
@@ -300,7 +334,7 @@ describe("fag page: header, tabs, not found", () => {
 });
 
 describe("Eksamensplan", () => {
-	it("anchored; today is open with its items, each with status, activity, minutes and a checkbox (fase 2: no Start)", () => {
+	it("anchored; today is open with its items, each with status, minutes and a checkbox (fase 2: no Start; fase 7b: no Lær/Øv/Repeter)", () => {
 		const c = course();
 		const plan = buildExamPlan(c, TODAY);
 		assert.ok(plan.days[0]!.items.length > 0, "fixture sanity: the planner schedules today");
@@ -314,13 +348,18 @@ describe("Eksamensplan", () => {
 		for (const [index, row] of items.entries()) {
 			const item = plan.days[0]!.items[index]!;
 			const box = row.querySelector('input[type="checkbox"]')!;
-			assert.match(box.getAttribute("aria-label")!, /^Marker som ferdig: (Lær|Øv|Repeter|Prøveeksamen), /);
+			assert.match(box.getAttribute("aria-label")!, /^Marker som ferdig: /);
+			assert.doesNotMatch(row.textContent!, /(Lær|Øv|Repeter)(\s|·|\d|$)/);
 			assert.equal(row.querySelector('[data-testid="plan-item-start"]'), null);
 			if (item.topicId) assert.ok(row.querySelector("[data-status] .sr-only"), "the topic's status is in words too");
 			assert.match(row.textContent!, /\d+ (min|t)/);
 		}
 		assert.ok(section.querySelectorAll('[data-testid="plan-day"]').length > 0, "coming days as compact rows");
 		assert.equal(section.querySelector('[data-testid="minutes-per-day"] option[selected]')!.textContent, "2 t");
+		// On the fag page the countdown sits in the card above (fase 7b).
+		const compact = dom(<ExamPlanView course={c} plan={plan} today={TODAY} actions={planActions} compact />);
+		assert.doesNotMatch(compact.body.textContent!, /24 dager til eksamen/);
+		assert.ok(compact.querySelector('[data-testid="minutes-per-day"]'));
 	});
 
 	it("a ticked item reads as done", () => {

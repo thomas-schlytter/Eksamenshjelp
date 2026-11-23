@@ -69,6 +69,8 @@ export {
 	getMockExamView, saveMockExamDraft, submitMockExam, openMockExamPdf, listCourseMockExams,
 	listMockExamResults, mockExamFailureResponse, mockExamSeams,
 } from "./mock-exams.ts";
+// The flame (fase 7b): GET /api/streak, the celebration mark, the watcher.
+export { readStreak, markStreakCelebrated, installStreakWatcher } from "./streak.ts";
 export { NtnuUnreachableError, createNtnuClient, parseNtnuCoursePage } from "./ntnu.ts";
 // "Importer fra LearnHarness": additive import of another data folder.
 export {

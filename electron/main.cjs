@@ -24,7 +24,7 @@
  *     would shadow every settings-page key change until restart.
  */
 
-const { app, BrowserWindow, Menu, ipcMain, nativeTheme, session, shell } = require("electron");
+const { app, BrowserWindow, Menu, Notification, ipcMain, nativeTheme, session, shell } = require("electron");
 const { createChatGPT, fileStore } = require("./chatgpt.cjs");
 const { attachChatGPTChild, trustedSender, chatGPTControl } = require("./chatgpt-ipc.cjs");
 const { createSubscriptions, loadSubscriptionSDK } = require("./subscriptions.cjs");
@@ -153,6 +153,8 @@ let subscriptionChild = null;
 let desktopAPISecret = null;
 let reopenWindow = null;
 const trustedAppWindows = new Set();
+/** Fokus notifications on screen (lh:notify). */
+const liveNotifications = new Set();
 
 // A GUI shell must never die to a stray exception (EPIPE dialogs, a race
 // in an event handler): the window + child server are the product, and
@@ -725,6 +727,28 @@ async function main() {
 	ipcMain.handle("lh:update:check", (event) => {
 		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
 		return checkForUpdates({ manual: true });
+	});
+	// Fokus (fase 7b): the timer's «Pause!» / «Pausen er over» as a system
+	// notification. Plain short strings only; silent (the app plays its own
+	// sound when the learner chose one). A click brings the window forward.
+	ipcMain.handle("lh:notify", (event, payload) => {
+		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
+		const title = typeof payload?.title === "string" ? payload.title.slice(0, 120) : "";
+		const body = typeof payload?.body === "string" ? payload.body.slice(0, 300) : "";
+		if (!title || !Notification.isSupported()) return false;
+		const note = new Notification({ title, body, silent: true });
+		const win = BrowserWindow.fromWebContents(event.sender);
+		note.on("click", () => {
+			if (win && !win.isDestroyed()) {
+				if (win.isMinimized()) win.restore();
+				win.focus();
+			}
+		});
+		// Held until closed: a collected notification loses its click.
+		liveNotifications.add(note);
+		note.on("close", () => liveNotifications.delete(note));
+		note.show();
+		return true;
 	});
 
 	// Sidebar-at-narrow-window (owner, 2026-09-17): the renderer auto-closes

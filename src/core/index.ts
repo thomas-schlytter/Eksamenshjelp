@@ -98,3 +98,8 @@ export * from "./session-markdown.ts";
 export * from "./courses.ts";
 // data-import.ts: the "Importer fra LearnHarness" contract (types + defaults).
 export * from "./data-import.ts";
+// Fase 7b: the fag page's verdict, the flame (days in a row) and the
+// Fokus timer's state machine. Pure, browser-safe.
+export * from "./course-verdict.ts";
+export * from "./streak.ts";
+export * from "./focus-timer.ts";

@@ -128,7 +128,7 @@ describe("tours", () => {
 			for (const step of tour.steps) {
 				if (step.route) assert.ok(routeExists(step.route), `${tour.id}/${step.id}: ${step.route}`);
 				if (step.openTab) {
-					assert.ok(["Eksamensplan", "Temaer", "Kontekst"].includes(step.openTab), `${tour.id}/${step.id}: ${step.openTab}`);
+					assert.ok(["Eksamensplan", "Alle temaer", "Kilder"].includes(step.openTab), `${tour.id}/${step.id}: ${step.openTab}`);
 					assert.equal(step.route, COURSE_ROUTE, `${tour.id}/${step.id}: tabs live on the course page`);
 				}
 				if (step.before) assertActionValid(step.before, `tour ${tour.id}/${step.id}`);

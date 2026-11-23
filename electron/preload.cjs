@@ -89,6 +89,9 @@ contextBridge.exposeInMainWorld("lh", {
 	},
 	getUpdateState: () => ipcRenderer.invoke("lh:update:get"),
 	checkForUpdates: () => ipcRenderer.invoke("lh:update:check"),
+	// Fokus (fase 7b): a system notification at a round's boundary. The
+	// renderer's own Notification API is denied by the permission handler.
+	notify: (title, body) => ipcRenderer.invoke("lh:notify", { title, body }),
 	onOpenSettings: (cb) => {
 		openSettingsListener = cb;
 		if (pendingOpenSettings !== null) {

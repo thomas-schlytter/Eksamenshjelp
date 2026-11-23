@@ -57,7 +57,7 @@ import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
 import { AbortTurnDialog, type AbortMode } from "@/components/abort-turn-dialog";
-import { ArrowRightIcon, DumbbellIcon, WaypointsIcon } from "lucide-react";
+import { ArrowRightIcon, WaypointsIcon } from "lucide-react";
 import type { PlanBlockData } from "@/src/core";
 import { QuestionDock } from "@/components/question-dock";
 import { SessionFind } from "@/components/session-find";
@@ -68,6 +68,8 @@ import { GraphContextCard, type GraphContextData } from "@/components/graph-cont
 import { CourseContextCard } from "@/components/course-context-card";
 import { TopBar } from "@/components/top-bar";
 import { MAKE_MOCK_EXAM_TEXT, MakeMockExamButton } from "@/components/artifacts/mock-exam-card";
+import { FocusControl } from "@/components/focus/focus-ui";
+import { consumePendingEndSession, FOCUS_END_SESSION_EVENT, type FocusEndSessionDetail } from "@/components/focus/focus-store";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
@@ -232,6 +234,7 @@ export function Chat({
 	initialConfigured = false,
 	kind = "teach",
 	initialWrapDraft = null,
+	courseCode,
 }: {
 	chatId: string;
 	title: string;
@@ -257,6 +260,9 @@ export function Chat({
 	initialConfigured?: boolean;
 	/** «Oppsummering» in progress on the record (the quiz resumes). */
 	initialWrapDraft?: SessionWrapDraft | null;
+	/** The fag the chat belongs to (fag-chat or underchat): the Fokus
+	 *  timer rides the header there (fase 7b). */
+	courseCode?: string;
 }) {
 	// Reattach plumbing (background-turn runner wave): the hook holds the
 	// settled terminal's callback — a stable ref assigned below, once
@@ -953,6 +959,32 @@ export function Chat({
 	const wrapHasContent = useMemo(() => hasWrapContent(nativeMessages), [nativeMessages]);
 	// Busy is no reason to wait: ending stops the teacher (server-side).
 	const endState: EndSessionState = wrapDraft ? "resume" : wrapHasContent ? "ready" : "empty";
+	const openEndSession = useCallback(() => {
+		setWrapReview(null);
+		if (wrapDraft) setWrapOpen(true);
+		else setEndAsk(true);
+	}, [wrapDraft]);
+	// Fokus (fase 7b): after the last round the timer asks the open chat to
+	// offer «Avslutt økt» (or this chat, once opened from the toast).
+	const endStateRef = useRef(endState);
+	endStateRef.current = endState;
+	useEffect(() => {
+		const onRequest = (e: Event) => {
+			const detail = (e as CustomEvent<FocusEndSessionDetail>).detail;
+			if (!detail || detail.handled || (detail.chatId && detail.chatId !== chatId)) return;
+			if (endStateRef.current === "empty") return;
+			detail.handled = true;
+			openEndSession();
+		};
+		window.addEventListener(FOCUS_END_SESSION_EVENT, onRequest);
+		return () => window.removeEventListener(FOCUS_END_SESSION_EVENT, onRequest);
+	}, [chatId, openEndSession]);
+	// Once per opened chat (a ref, so a later wrap draft does not re-run it).
+	const openEndSessionRef = useRef(openEndSession);
+	openEndSessionRef.current = openEndSession;
+	useEffect(() => {
+		if (endStateRef.current !== "empty" && consumePendingEndSession(chatId)) openEndSessionRef.current();
+	}, [chatId]);
 	// Real plan presence — gates the marginalia's clickable flank. A JSX
 	// element is always truthy; gating on the node alone mounted a phantom
 	// (invisible, clickable) button in the bottom-right whenever a question
@@ -1560,17 +1592,12 @@ export function Chat({
 							}}
 						/>
 					)}
+					{/* Fokus (fase 7b): the work/break timer, in a fag's chats. */}
+					{courseCode && <FocusControl origin={{ chatId, label: titleText }} />}
 					{/* «Avslutt økt» (2026-11-23): ends the current økt — the popup
 					    offers the summary + recall quiz or just the divider; a quiz
 					    already started resumes directly. */}
-					<EndSessionButton
-						state={endState}
-						onClick={() => {
-							setWrapReview(null);
-							if (wrapDraft) setWrapOpen(true);
-							else setEndAsk(true);
-						}}
-					/>
+					<EndSessionButton state={endState} onClick={openEndSession} />
 					{/* The extraction ring (owner-locked redesign, 2026-09-24): fills
 					    with uncovered vs the chunk threshold, pulses while a run is in
 					    flight, vanishes when the graph is off. Click → the exact
@@ -1579,21 +1606,9 @@ export function Chat({
 				    practice never extracts, so an ever-filling ring with no
 				    run behind it would lie. */}
 					{kind !== "practice" && <CoverageRing chatId={chatId} refreshKey={coverageTick} />}
-					{/* Practice sessions: no phase arc — a quiet Practice tag
-					    instead of the phase chip. */}
-					{kind === "practice" ? (
-						<span
-							data-testid="phase-chip"
-							data-phase="practice"
-							aria-hidden="true"
-							className="pointer-events-none flex shrink-0 select-none items-center gap-1 text-xs font-medium uppercase tracking-wide text-muted-foreground"
-						>
-							<DumbbellIcon className="size-3" />
-							Øving
-						</span>
-					) : (
-						<PhaseChip phase={phases.at(-1) ?? "probe"} />
-					)}
+					{/* Practice sessions: no phase arc, and no tag either (fase 7b:
+					    the «Øving» label is gone). */}
+					{kind !== "practice" && <PhaseChip phase={phases.at(-1) ?? "probe"} />}
 				</TopBar>
 
 				<SessionFind scopeRef={sessionFindScopeRef} scrollContextRef={scrollContextRef} />
