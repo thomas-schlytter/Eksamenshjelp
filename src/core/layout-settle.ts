@@ -1,5 +1,6 @@
 import type { GraphChain, GraphNode, Position } from "./contracts.ts";
-import { incrementalLayout } from "./layout.ts";
+import { COURSE_PULL_STRENGTH, INTER_CLUSTER_LINK_SCALE, LINK_DISTANCE, incrementalLayout } from "./layout.ts";
+import { groupedSeeds, type MapCluster } from "./knowledge-map.ts";
 import { attachImpToCommunities, birthSessionPartition } from "./session-clusters.ts";
 import { deriveView, getGraph } from "./graph.ts";
 
@@ -23,16 +24,52 @@ import { deriveView, getGraph } from "./graph.ts";
  * Server code imports it DIRECTLY; it is never re-exported through
  * src/core/index.ts.
  */
-export function settleGraphLayout(graphStore: {
-	readNodes(): GraphNode[];
-	readChains(): GraphChain[];
-	readPositions(): Record<string, Position>;
-	writePositions(positions: Record<string, Position>): void;
-}): void {
+/** The knowledge map's grouping for one settle (fase 8): the (fag, tema)
+ *  clusters, and the nodes whose group changed since they were laid out
+ *  (they lose their anchor and re-seed inside their new cluster). */
+export interface SettleGrouping {
+	clusters: ReadonlyArray<Pick<MapCluster, "id" | "course" | "members">>;
+	reseed: ReadonlySet<string>;
+}
+
+export function settleGraphLayout(
+	graphStore: {
+		readNodes(): GraphNode[];
+		readChains(): GraphChain[];
+		readPositions(): Record<string, Position>;
+		writePositions(positions: Record<string, Position>): void;
+	},
+	grouping?: SettleGrouping,
+): void {
 	const graph = getGraph(graphStore);
 	if (graph.nodes.length === 0) return;
 	const view = deriveView(graph);
 	const previous = new Map(Object.entries(graphStore.readPositions()));
+	if (grouping) {
+		// THE KNOWLEDGE MAP (fase 8): topic clusters pull tight, courses pull
+		// their topics together, cross-topic springs are damped, and nodes
+		// whose group changed re-seed inside their new cluster instead of
+		// being held where the old grouping left them.
+		const anchors = new Map([...previous].filter(([id]) => !grouping.reseed.has(id)));
+		const courses = new Map<string, string[]>();
+		for (const cluster of grouping.clusters) {
+			const key = cluster.course ?? "";
+			const list = courses.get(key) ?? [];
+			list.push(...cluster.members);
+			courses.set(key, list);
+		}
+		const next = incrementalLayout(view.nodes, view.edges, anchors, {
+			clusters: grouping.clusters,
+			courseGroups: [...courses.values()].map((members) => ({ members })),
+			coursePullStrength: COURSE_PULL_STRENGTH,
+			interClusterLinkScale: INTER_CLUSTER_LINK_SCALE,
+			seeds: groupedSeeds(grouping.clusters, previous, grouping.reseed, LINK_DISTANCE),
+			logicalEdges: view.logicalEdges,
+			impLinks: view.impLinks,
+		});
+		graphStore.writePositions(Object.fromEntries(next));
+		return;
+	}
 	// The cluster partition for the centroid pull: the SAME birth-session
 	// partition the snapshot renders (derived from provenance on read —
 	// core/session-clusters.ts, wave 7) — one cluster concept everywhere.

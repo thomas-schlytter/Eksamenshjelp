@@ -388,7 +388,7 @@ export function GraphSection({
 			    round): display-only. Off = the home shows the chains view
 			    instead of the canvas. The ledgers, the pipeline, everything
 			    data keeps working — that is the extraction switch above. */}
-			<SettingsRow label="Vis kunnskapskartet" hint="Av = kjedevisningen vises i stedet for kartet" testid="graph-row-rendering">
+			<SettingsRow label="Vis kunnskapskartet" hint="Av = kildevisningen vises i stedet for kartet" testid="graph-row-rendering">
 				<Toggle
 					checked={graph?.rendering ?? true}
 					label="vis kunnskapskartet"

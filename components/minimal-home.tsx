@@ -55,7 +55,7 @@ export function KnowledgeSummary({
 					{propositions} {propositions === 1 ? "påstand" : "påstander"}
 				</p>
 				<p className="font-ui text-sm text-muted-foreground">
-					{chains} {chains === 1 ? "kjede" : "kjeder"}
+					{chains} {chains === 1 ? "resonnementskjede" : "resonnementskjeder"}
 				</p>
 			</div>
 			<div className="h-4" aria-hidden="true" />
@@ -145,7 +145,7 @@ export function MinimalHome({
 			</div>
 
 			{/* The chrome survivors in the graph view's own places (owner,
-			    2026-10-06): the top-right column — actions row (Chains +
+			    2026-10-06): the top-right column — actions row (Kilder +
 			    Import, the same 36px band pills), the cost pill BELOW it.
 			    The column carries lh-no-drag EXACTLY like the graph
 			    chrome's (the DOM-order mask law): without it the drag band
@@ -156,7 +156,7 @@ export function MinimalHome({
 			<div className="lh-no-drag lh-wco-floating absolute right-2 top-2 z-10 flex max-w-[calc(100%-5.5rem)] flex-col items-end gap-2">
 				<div className="flex min-w-0 items-start gap-2">
 					<div className="graph-chrome-fade-in shrink-0 rounded-xl border bg-card/85 px-1 py-[3px] shadow-lg backdrop-blur">
-						<Hint label="Alle resonnementskjeder" side="bottom">
+						<Hint label="Kilder og resonnementskjeder" side="bottom">
 							<button
 								type="button"
 								onClick={() => setChainsOpen(true)}
@@ -164,7 +164,7 @@ export function MinimalHome({
 								className="flex h-7 items-center gap-1.5 rounded-lg px-2.5 text-xs text-muted-foreground transition-colors hover:bg-accent"
 							>
 								<ListTreeIcon className="size-3" />
-								Kjeder
+								Kilder
 							</button>
 						</Hint>
 					</div>

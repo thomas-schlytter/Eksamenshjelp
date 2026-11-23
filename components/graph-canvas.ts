@@ -54,10 +54,11 @@
 import { select } from "d3-selection";
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from "d3-zoom";
 import type { Simulation, SimulationLinkDatum } from "d3-force";
-import { clusterHue, type Pt } from "./cluster-geometry.ts";
+import { mixHex, type Pt } from "./cluster-geometry.ts";
 import {
-	CHARGE_STRENGTH,
-	CLUSTER_PULL_STRENGTH,
+	MIN_CLUSTER_SIZE,
+	COURSE_PULL_STRENGTH,
+	INTER_CLUSTER_LINK_SCALE,
 	createGraphSimulation,
 	DEFAULT_PHYSICS_TUNING,
 	DEFAULT_REGION_TUNING,
@@ -65,9 +66,6 @@ import {
 	sanitizeRegionTuning,
 	type PhysicsTuning,
 	type RegionTuning,
-	INCREMENTAL_GRAVITY,
-	LINK_DISTANCE,
-	type DepthAnchorMode,
 	type GraphRenderSettings,
 	type LayoutNode,
 	type Position,
@@ -103,20 +101,29 @@ export interface CanvasEdge {
  *  excluded from every hit-test path. Exported for the test pin. */
 export const isImpNodeId = (id: string): boolean => id.startsWith("arg_");
 
-/** One cluster region: member node ids + the LLM-coined label (or null). */
+/** One (fag, tema) cluster (fase 8): member node ids, the topic label,
+ *  the course it belongs to (null = «Uten fag»), and its resolved color
+ *  (#rrggbb — the course's color family, shaded per topic). */
 export interface CanvasCluster {
 	id: string;
 	label: string | null;
 	members: string[];
+	course: string | null;
+	color: string;
 }
 
 /** Theme colors, resolved to #rrggbb by the caller (canvas wants hex,
  *  and the renderer must not read CSS itself). */
 export interface CanvasColors {
+	/** Nodes outside every cluster (rare: a map without grouping). */
 	node: string;
 	edge: string;
 	label: string;
 	hoverText: string;
+	/** The page background: the halo behind cluster labels. */
+	halo: string;
+	/** True on a dark background (label ink lightens instead of darkens). */
+	dark: boolean;
 }
 
 export interface CanvasData {
@@ -158,16 +165,80 @@ export interface RendererCallbacks {
 const LABEL_SIZE = 12; // the reference label size the wrap-width ratio is taken against
 const LABEL_WEIGHT = "500";
 
-/** Region (cluster) labels — wave 7's session names made the labels
- *  LONG: imported-file paths and renamed chat titles. They wrap at a
- *  screen-fixed width (the labels are viewer-relative — this px value
- *  is exact on screen at any zoom), capped at a line count with an
- *  ellipsis on the last line (owner, 2026-09-23: wrap, cap 2–3 lines,
- *  ellipsize — a bounded footprint that keeps most of the path
- *  visible). */
-const REGION_LABEL_MAX_WIDTH = 220; // screen px
+/** Cluster labels (fase 8: topic names). They wrap at a screen-fixed
+ *  width (viewer-relative — this px value is exact on screen at any
+ *  zoom), capped at a line count with an ellipsis on the last line. */
+const REGION_LABEL_MAX_WIDTH = 200; // screen px
 const REGION_LABEL_MAX_LINES = 3;
 const REGION_LABEL_LINE_HEIGHT = 1.3;
+/** Screen px of free space kept around a placed label (collision pad). */
+const LABEL_COLLISION_PAD = 6;
+
+/** Node disc radius by degree (fase 8): a hub reads bigger, a leaf stays
+ *  a clear dot. Multiplies the nodeSize setting; capped so hubs never
+ *  swallow their neighbors. Exported for tests. */
+export function nodeRadiusFactor(degree: number): number {
+	return Math.min(1.4 + 0.55 * Math.sqrt(Math.max(degree, 0)), 4.5);
+}
+/** The smallest on-screen node radius (px): zoomed far out, nodes stay
+ *  visible dots instead of vanishing. */
+const MIN_NODE_PX = 2.2;
+/** Zoom quantization for the screen-floored radii: geometry rebuilds when
+ *  the camera crosses a quarter-octave, never per wheel frame. */
+const ZOOM_BUCKETS_PER_OCTAVE = 4;
+
+/** Edge styling (fase 8: «tynne og svake»): arrows inside a topic read
+ *  faintly, arrows between topics fainter still; a focused node (hover or
+ *  selection) lifts its own arrows and dims everything else. */
+const EDGE_ALPHA_INTRA = 0.3;
+const EDGE_ALPHA_INTER = 0.1;
+const FOCUS_EDGE_ALPHA = 0.9;
+const FOCUS_DIM = 0.75; // how much of the rest fades at full focus
+/** Neighbor names shown around a focused node, at most. */
+const FOCUS_NEIGHBOR_LABELS = 12;
+
+/** One screen-space box (labels' collision test). */
+export interface LabelBox {
+	x0: number;
+	y0: number;
+	x1: number;
+	y1: number;
+}
+
+/**
+ * Greedy label placement: candidates in priority order (the caller sorts),
+ * each kept when its box overlaps no kept box. A uniform grid keeps the
+ * test near O(n) at map scale. Returns the kept indices. Pure, exported
+ * for tests.
+ */
+export function placeLabels(boxes: readonly LabelBox[], cell = 96): number[] {
+	const grid = new Map<string, number[]>();
+	const kept: number[] = [];
+	const cells = (b: LabelBox, visit: (key: string) => boolean | void): boolean => {
+		const cx0 = Math.floor(b.x0 / cell);
+		const cx1 = Math.floor(b.x1 / cell);
+		const cy0 = Math.floor(b.y0 / cell);
+		const cy1 = Math.floor(b.y1 / cell);
+		for (let cx = cx0; cx <= cx1; cx++) for (let cy = cy0; cy <= cy1; cy++) if (visit(`${cx},${cy}`) === true) return true;
+		return false;
+	};
+	boxes.forEach((b, i) => {
+		const hit = cells(b, (key) => {
+			for (const j of grid.get(key) ?? []) {
+				const o = boxes[j]!;
+				if (b.x0 < o.x1 && b.x1 > o.x0 && b.y0 < o.y1 && b.y1 > o.y0) return true;
+			}
+		});
+		if (hit) return;
+		kept.push(i);
+		cells(b, (key) => {
+			const list = grid.get(key);
+			if (list) list.push(i);
+			else grid.set(key, [i]);
+		});
+	});
+	return kept;
+}
 
 /** Wrap one region label: word-wise first (session names), then
  *  char-wise for words alone wider than the max (long file paths — the
@@ -234,43 +305,6 @@ export function wrapRegionLabel(
 	return lines;
 }
 
-/** Label-only cluster patch (rename-shuffle fix, 2026-09-23): apply a set
- *  of live label updates to the data-side cluster records AND the built
- *  region meta (re-wrapping the changed entries with the provided
- *  measure — the same wrap a geometry build would produce). The
- *  hull-silence guard travels here: a cluster whose CURRENT label is
- *  null is a gone record — no rename can reach it. Pure, in-place on the
- *  provided arrays; returns whether anything changed (the caller only
- *  redraws when it did). Exported for tests. */
-export function applyClusterLabels(
-	clusters: { id: string; label: string | null }[],
-	regionMeta: { id: string; label: string | null; lines: string[] | null }[],
-	labels: ReadonlyMap<string, string | null>,
-	maxWidth: number,
-	maxLines: number,
-	measure: (s: string) => number,
-): boolean {
-	let changed = false;
-	for (const cluster of clusters) {
-		if (!labels.has(cluster.id)) continue;
-		if (cluster.label == null) continue; // hull silence: gone records stay silent
-		const label = labels.get(cluster.id) ?? null;
-		if (label === cluster.label) continue;
-		cluster.label = label;
-		changed = true;
-	}
-	if (!changed) return false;
-	for (const rm of regionMeta) {
-		if (!labels.has(rm.id)) continue;
-		if (rm.label == null) continue;
-		const label = labels.get(rm.id) ?? null;
-		rm.label = label;
-		rm.lines = label
-			? wrapRegionLabel(label, maxWidth, maxLines, measure)
-			: null;
-	}
-	return true;
-}
 const LABEL_MAX_WIDTH = 170; // wrap width at the reference label size, world units
 const LABEL_GAP = 2.9; // world units between node edge and first label line (the 2px-at-fit reference ÷ 0.69)
 const LABEL_LINE_HEIGHT = 1.3;
@@ -472,19 +506,22 @@ export function arrowGeometry(
 }
 
 
-/** Nearest node within maxDist of a screen point (linear scan — µs at
- *  our scale; a spatial grid only earns its keep past ~10k nodes). */
+/** Nearest node within reach of a screen point (linear scan — µs at our
+ *  scale; a spatial grid only earns its keep past ~10k nodes). `maxDist`
+ *  is one reach for all, or a per-node reach (fase 8: discs sized by
+ *  degree) — a node counts only inside its own reach. */
 export function pickNearest<T extends { id: string; x: number; y: number }>(
 	nodes: T[],
 	px: number,
 	py: number,
-	maxDist: number,
+	maxDist: number | ((node: T) => number),
 ): T | null {
 	let best: T | null = null;
-	let bestD = maxDist * maxDist; // compare squared distances
+	let bestD = Infinity; // squared distances
 	for (const n of nodes) {
+		const reach = typeof maxDist === "number" ? maxDist : maxDist(n);
 		const d = (n.x - px) ** 2 + (n.y - py) ** 2;
-		if (d < bestD) {
+		if (d < reach * reach && d < bestD) {
 			bestD = d;
 			best = n;
 		}
@@ -531,8 +568,6 @@ function wrapLabel(context: CanvasRenderingContext2D, text: string, maxWidth: nu
 
 /** World-unit sizes for the label pass, derived once per geometry build. */
 interface WorldSizes {
-	nodeR: number; // node disc radius, world units
-	glowOuter: number; // hover halo outer radius, world units
 	labelSize: number; // node label font, world units
 	labelGap: number; // node edge → first label line, world units
 }
@@ -547,12 +582,13 @@ function drawNameLines(
 	y: number,
 	lines: string[],
 	world: WorldSizes,
+	radius: number,
 	color: string,
 ): void {
 	context.fillStyle = color;
 	context.textAlign = "center";
 	context.textBaseline = "top";
-	const firstTop = y + world.nodeR + world.labelGap;
+	const firstTop = y + radius + world.labelGap;
 	for (let i = 0; i < lines.length; i++) {
 		context.fillText(lines[i]!, x, firstTop + i * world.labelSize * LABEL_LINE_HEIGHT);
 	}
@@ -584,6 +620,17 @@ export class GraphCanvasRenderer {
 	private nodeById = new Map<string, CanvasNode>();
 	private settings: GraphRenderSettings | null = null;
 	private visible: ReadonlySet<string> | null = null;
+	/** Per-node derivations from the data (setData): degree (logical
+	 *  arrows, both directions), the cluster color, the cluster index, and
+	 *  the drawn-edge indices touching each node (the focus walk). */
+	private degree = new Map<string, number>();
+	private colorOf = new Map<string, string>();
+	private clusterIndexOf = new Map<string, number>();
+	private incident = new Map<string, number[]>();
+	/** Node ids by label priority (degree desc) for the label collision pass. */
+	private labelOrder: string[] = [];
+	/** The selected node (the detail card): a focus that does not fade. */
+	private selectedId: string | null = null;
 
 	// ── Live physics ──
 	// One d3-force sim shared with the server settle (createGraphSimulation
@@ -636,14 +683,37 @@ export class GraphCanvasRenderer {
 	// changes (geoVersion). Camera moves just re-rasterize the same paths.
 	private geoVersion = 0; // bump = geometry inputs changed
 	private builtVersion = -1; // version the cache was built at
-	private nodesPath: Path2D | null = null;
-	private shaftsPath: Path2D = new Path2D();
-	private headsPath: Path2D = new Path2D();
+	/** Zoom bucket the paths were built at (screen-floored radii). */
+	private builtBucket = Number.NaN;
+	/** Label inputs (data/settings/visibility — NOT sim ticks or zoom):
+	 *  wrapping is measureText-heavy, so it rebuilds only on these. */
+	private labelVersion = 0;
+	private labelsBuiltVersion = -1;
+	/** Node discs, one path per color (a cluster's color = one fill). */
+	private nodePaths: Array<{ color: string; path: Path2D }> | null = null;
+	/** Effective world radius per node at the built zoom bucket. */
+	private radiusOf = new Map<string, number>();
+	private intraShafts: Path2D = new Path2D();
+	private intraHeads: Path2D = new Path2D();
+	private interShafts: Path2D = new Path2D();
+	private interHeads: Path2D = new Path2D();
 	private regionCanvas: HTMLCanvasElement | null = null;
 	/** World rect the bitmap covers (drawImage target coords). */
 	private regionRect: { minX: number; minY: number; w: number; h: number } | null = null;
-	/** Region labels: cluster centroid + hue, computed at splat build. */
-	private regionMeta: { id: string; label: string | null; lines: string[] | null; cx: number; cy: number; hue: number }[] = [];
+	/** Cluster labels: centroid, color, size and the wrapped lines with
+	 *  their widest line (screen px), computed at the region build. */
+	private regionMeta: {
+		id: string;
+		label: string | null;
+		lines: string[] | null;
+		width: number;
+		cx: number;
+		cy: number;
+		color: string;
+		size: number;
+	}[] = [];
+	/** Widest wrapped line per node label, world units (collision boxes). */
+	private labelWidth = new Map<string, number>();
 	private regionTuning: RegionTuning = DEFAULT_REGION_TUNING;
 	private physicsTuning: PhysicsTuning = DEFAULT_PHYSICS_TUNING;
 	/** Gravity center for the live sim (graph bbox centroid at setData). */
@@ -652,7 +722,7 @@ export class GraphCanvasRenderer {
 	private frameCount = 0; // draw counter for the live-sim splat throttle
 	private labelLines = new Map<string, string[]>();
 	private worldLabelFont = "";
-	private world: WorldSizes = { nodeR: 0, glowOuter: 0, labelSize: 0, labelGap: 0 };
+	private world: WorldSizes = { labelSize: 0, labelGap: 0 };
 
 	constructor(
 		canvas: HTMLCanvasElement,
@@ -752,6 +822,34 @@ export class GraphCanvasRenderer {
 	setData(data: CanvasData): void {
 		this.data = data;
 		this.nodeById = new Map(data.nodes.map((n) => [n.id, n]));
+		// Per-node derivations, once per data feed (never per frame).
+		this.degree = new Map();
+		for (const e of data.logicalEdges ?? data.edges) {
+			this.degree.set(e.from, (this.degree.get(e.from) ?? 0) + 1);
+			this.degree.set(e.to, (this.degree.get(e.to) ?? 0) + 1);
+		}
+		this.colorOf = new Map();
+		this.clusterIndexOf = new Map();
+		data.clusters.forEach((cluster, i) => {
+			for (const id of cluster.members) {
+				this.colorOf.set(id, cluster.color);
+				this.clusterIndexOf.set(id, i);
+			}
+		});
+		this.incident = new Map();
+		data.edges.forEach((e, i) => {
+			for (const id of [e.from, e.to]) {
+				const list = this.incident.get(id);
+				if (list) list.push(i);
+				else this.incident.set(id, [i]);
+			}
+		});
+		this.labelOrder = data.nodes
+			.filter((n) => !isImpNodeId(n.id))
+			.map((n) => n.id)
+			.sort((a, b) => (this.degree.get(b) ?? 0) - (this.degree.get(a) ?? 0) || (a < b ? -1 : 1));
+		if (this.selectedId && !this.nodeById.has(this.selectedId)) this.selectedId = null;
+		this.labelVersion++;
 		let minX = Infinity;
 		let minY = Infinity;
 		let maxX = -Infinity;
@@ -786,6 +884,16 @@ export class GraphCanvasRenderer {
 	setSettings(settings: GraphRenderSettings): void {
 		this.settings = settings;
 		this.geoVersion++; // sizes/wrap width changed → rebuild geometry
+		this.labelVersion++;
+		this.markDirty();
+	}
+
+	/** The selected node (the caller's detail card): its arrows and
+	 *  neighbors stay lifted while it is selected. null clears. */
+	setFocus(nodeId: string | null): void {
+		const id = nodeId !== null && this.nodeById.has(nodeId) ? nodeId : null;
+		if (id === this.selectedId) return;
+		this.selectedId = id;
 		this.markDirty();
 	}
 
@@ -824,45 +932,10 @@ export class GraphCanvasRenderer {
 		this.markDirty();
 	}
 
-	/** Label-only channel (rename-shuffle fix, 2026-09-23): live
-	 *  cluster-label updates with NO setData. The rename path used to
-	 *  build a fresh snapshot object, which flowed setData → geometry
-	 *  rebuild — and the rebuild treats the last-fetched ledger as
-	 *  authoritative and cancels any pending drag commit, so a rename
-	 *  visibly rewound the whole graph whenever display had drifted
-	 *  (recent drag, mid-anneal, physics re-anneal). This channel touches
-	 *  ONLY label text: the region meta the draw pass reads plus the
-	 *  data-side cluster record (so the next geometry rebuild —
-	 *  visibility/settings/size — keeps the fresh label). Nodes, the
-	 *  sim, positions, and the pending commit are never touched. */
-	setClusterLabels(labels: ReadonlyMap<string, string | null>): void {
-		const data = this.data;
-		if (!data) return;
-		const settings = this.settings;
-		// No settings yet → nothing is drawn; patch the data side only and
-		// let the next build derive the wrap (same guard the build uses).
-		if (!settings) {
-			applyClusterLabels(data.clusters, [], labels, REGION_LABEL_MAX_WIDTH, REGION_LABEL_MAX_LINES, () => 0);
-			return;
-		}
-		const ctx = this.ctx;
-		const prevFont = ctx.font;
-		ctx.font = `${LABEL_WEIGHT} ${settings.clusterLabelSize}px ${data.fontFamily}`;
-		const changed = applyClusterLabels(
-			data.clusters,
-			this.regionMeta,
-			labels,
-			REGION_LABEL_MAX_WIDTH,
-			REGION_LABEL_MAX_LINES,
-			(s) => ctx.measureText(s).width,
-		);
-		ctx.font = prevFont;
-		if (changed) this.markDirty();
-	}
-
 	setVisible(visible: ReadonlySet<string> | null): void {
 		this.visible = visible;
 		this.geoVersion++; // member visibility changes hulls + paths
+		this.labelVersion++;
 		this.markDirty();
 	}
 
@@ -1061,16 +1134,63 @@ export class GraphCanvasRenderer {
 		// nodeSize is world units now (2026-09-15): the on-screen hit radius
 		// is the disc's world radius × the camera zoom, plus the constant
 		// screen pad — the whole halo stays hit-testable.
-		const maxDist = this.settings.nodeSize * k + PICKING_PAD;
+		// Per-node radii since fase 8 (size by degree, screen-floored): the
+		// nearest node whose own disc + pad covers the point wins.
 		const projected: { id: string; x: number; y: number }[] = [];
 		for (const n of this.data.nodes) {
 			if (this.visible && !this.visible.has(n.id)) continue;
 			if (isImpNodeId(n.id)) continue; // pure geometry — never picked
 			projected.push({ id: n.id, x: n.x * k + tx, y: n.y * k + ty });
 		}
-		const hit = pickNearest(projected, px, py, maxDist);
-		if (!hit) return null;
-		return this.nodeById.get(hit.id) ?? null;
+		const hit = pickNearest(projected, px, py, (n) => this.effectiveRadius(n.id, k) * k + PICKING_PAD);
+		return hit ? this.nodeById.get(hit.id) ?? null : null;
+	}
+
+	/** A node's disc radius in world units: nodeSize × the degree factor. */
+	private baseRadius(id: string): number {
+		return (this.settings?.nodeSize ?? 1) * nodeRadiusFactor(this.degree.get(id) ?? 0);
+	}
+
+	/** The quantized camera scale the screen floor is computed at. */
+	private bucketScale(k: number): { bucket: number; scale: number } {
+		const bucket = Math.round(Math.log2(k) * ZOOM_BUCKETS_PER_OCTAVE);
+		return { bucket, scale: 2 ** (bucket / ZOOM_BUCKETS_PER_OCTAVE) };
+	}
+
+	/** The radius actually drawn: never below MIN_NODE_PX on screen. */
+	private effectiveRadius(id: string, k: number): number {
+		const built = this.radiusOf.get(id);
+		if (built !== undefined && this.builtBucket === this.bucketScale(k).bucket) return built;
+		return Math.max(this.baseRadius(id), MIN_NODE_PX / this.bucketScale(k).scale);
+	}
+
+	/** The focus: the selected node, else the hovered one (with its fade). */
+	private focus(): { id: string; amount: number } | null {
+		if (this.selectedId && (!this.visible || this.visible.has(this.selectedId))) return { id: this.selectedId, amount: 1 };
+		const n = this.hoverNode;
+		if (!n || this.hoverFade <= 0.02 || (this.visible && !this.visible.has(n.id))) return null;
+		return { id: n.id, amount: this.hoverFade };
+	}
+
+	/** The focused node's drawn arrows and neighbors. An argument's
+	 *  geometry counts whole: arrows through an implication point the node
+	 *  touches light up together (co-premises → point → conclusion). */
+	private focusSet(id: string): { edges: number[]; neighbors: string[] } {
+		const data = this.data;
+		if (!data) return { edges: [], neighbors: [] };
+		const edges = new Set<number>(this.incident.get(id) ?? []);
+		for (const i of [...edges]) {
+			const e = data.edges[i]!;
+			for (const end of [e.from, e.to]) {
+				if (end !== id && isImpNodeId(end)) for (const j of this.incident.get(end) ?? []) edges.add(j);
+			}
+		}
+		const neighbors = new Set<string>();
+		for (const i of edges) {
+			const e = data.edges[i]!;
+			for (const end of [e.from, e.to]) if (end !== id && !isImpNodeId(end)) neighbors.add(end);
+		}
+		return { edges: [...edges], neighbors: [...neighbors] };
 	}
 
 	private setHover(nodeId: string | null): void {
@@ -1214,91 +1334,130 @@ export class GraphCanvasRenderer {
 		this.viewH = h;
 	}
 
-	/** Derive ALL world geometry from data + visibility + settings.
-	 *  Runs only when geoVersion moves — never per frame, never per camera
-	 *  change. Zoom/pan pay zero geometry math, only rasterization. Sizes
-	 *  are WORLD UNITS straight from the settings (the 2026-09-15 pivot —
-	 *  no ÷kFit: the world scale is canonical, viewport-independent). */
-	private buildGeometry(): void {
+	/** Derive the world PATHS from data + visibility + settings + the zoom
+	 *  bucket. Runs only when geoVersion moves or the camera crosses a
+	 *  zoom bucket — never per frame. Sizes are WORLD UNITS from the
+	 *  settings (the 2026-09-15 pivot), with two fase-8 additions: a disc's
+	 *  radius grows with its degree, and never drops below MIN_NODE_PX on
+	 *  screen (hence the zoom bucket). */
+	private buildGeometry(k: number): void {
 		this.builtVersion = this.geoVersion;
 		const data = this.data;
 		const settings = this.settings;
 		if (!data || !settings) return;
+		const { bucket, scale } = this.bucketScale(k);
+		this.builtBucket = bucket;
+		const floor = MIN_NODE_PX / scale;
 
-		const nodeR = settings.nodeSize;
 		this.worldLabelFont = `${LABEL_WEIGHT} ${settings.labelSize}px ${data.fontFamily}`;
-		this.world = {
-			nodeR,
-			glowOuter: nodeR * GLOW_SCALE,
-			labelSize: settings.labelSize,
-			labelGap: LABEL_GAP,
-		};
+		this.world = { labelSize: settings.labelSize, labelGap: LABEL_GAP };
 		const visible = this.visible;
 		const isVisible = (id: string) => !visible || visible.has(id);
 
-		// Node discs: one Path2D, one fill() per frame. Implication nodes
-		// are pure geometry — never a disc, never a label, never picked.
-		const nodesPath = new Path2D();
+		// Node discs: one Path2D per color (one fill each). Implication
+		// nodes are pure geometry — never a disc, never a label, never picked.
+		this.radiusOf = new Map();
+		const byColor = new Map<string, Path2D>();
 		for (const n of data.nodes) {
-			if (!isVisible(n.id) || isImpNodeId(n.id)) continue;
-			nodesPath.moveTo(n.x + nodeR, n.y);
-			nodesPath.arc(n.x, n.y, nodeR, 0, Math.PI * 2);
+			if (isImpNodeId(n.id)) {
+				this.radiusOf.set(n.id, 0);
+				continue;
+			}
+			const r = Math.max(this.baseRadius(n.id), floor);
+			this.radiusOf.set(n.id, r);
+			if (!isVisible(n.id)) continue;
+			const color = this.colorOf.get(n.id) ?? data.colors.node;
+			let path = byColor.get(color);
+			if (!path) {
+				path = new Path2D();
+				byColor.set(color, path);
+			}
+			path.moveTo(n.x + r, n.y);
+			path.arc(n.x, n.y, r, 0, Math.PI * 2);
 		}
-		this.nodesPath = nodesPath;
+		this.nodePaths = [...byColor].map(([color, path]) => ({ color, path }));
 
 		// Edge shafts + arrowheads (rendering arc, owner 2026-09-30): all
-		// arrows are PLAIN single shafts — the old double-shaft glyph is
-		// gone entirely. An argument's geometry: lines INTO an implication
-		// node are HEADLESS and run all the way to the imp node's CENTER
-		// (co-premise lines converge to a point); the line OUT of it starts
-		// at the center and its arrowhead lands on the conclusion's disc
-		// edge. Single-premise arguments arrive here as ordinary
-		// proposition→proposition edges and draw exactly like any arrow.
-		const arrowLen = settings.arrowLength;
-		const shafts = new Path2D();
-		const heads = new Path2D();
+		// arrows are PLAIN single shafts. An argument's geometry: lines INTO
+		// an implication node are HEADLESS and run to its CENTER (co-premise
+		// lines converge to a point); the line OUT of it starts at the
+		// center and its arrowhead lands on the conclusion's disc edge.
+		// Fase 8: arrows inside a topic cluster and arrows between clusters
+		// are separate paths — the cross-topic ones draw fainter.
+		const intraShafts = new Path2D();
+		const intraHeads = new Path2D();
+		const interShafts = new Path2D();
+		const interHeads = new Path2D();
 		for (const e of data.edges) {
 			if (!isVisible(e.from) || !isVisible(e.to)) continue;
-			const a = this.nodeById.get(e.from);
-			const b = this.nodeById.get(e.to);
-			if (!a || !b) continue;
-			const intoImp = isImpNodeId(e.to);
-			const outOfImp = isImpNodeId(e.from);
-			const g = arrowGeometry(a, b, outOfImp ? 0 : nodeR, intoImp ? 0 : nodeR, arrowLen);
-			if (!g) continue;
-			shafts.moveTo(g.shaftFrom.x, g.shaftFrom.y);
-			if (intoImp) {
-				// toRadius 0 put the tip AT the imp node's center: the
-				// headless shaft terminates there (no head triangle).
-				shafts.lineTo(g.tip.x, g.tip.y);
-			} else {
-				shafts.lineTo(g.shaftTo.x, g.shaftTo.y);
-				heads.moveTo(g.tip.x, g.tip.y);
-				heads.lineTo(g.left.x, g.left.y);
-				heads.lineTo(g.right.x, g.right.y);
-				heads.closePath();
-			}
+			const ca = this.clusterIndexOf.get(e.from);
+			const intra = ca !== undefined && ca === this.clusterIndexOf.get(e.to);
+			this.traceArrow(e, intra ? intraShafts : interShafts, intra ? intraHeads : interHeads);
 		}
-		this.shaftsPath = shafts;
-		this.headsPath = heads;
+		this.intraShafts = intraShafts;
+		this.intraHeads = intraHeads;
+		this.interShafts = interShafts;
+		this.interHeads = interHeads;
 
 		// Cluster regions are NOT built here: they rasterize into their own
 		// low-res bitmap (see buildRegions), on their own rebuild schedule
 		// (live-sim frames skip 2 of 3 rebuilds and blit the last bitmap).
+	}
 
-		// Label wrapping: measureText once per node per geometry build,
-		// never per frame. Wrap width keeps the bigger-label/bigger-wrap
-		// behavior from the sigma era.
+	/** Add one drawn edge (shaft + head) to the given paths, at the
+	 *  built radii. Shared by the base pass and the focus overlay. */
+	private traceArrow(e: CanvasEdge, shafts: Path2D, heads: Path2D): void {
+		const a = this.nodeById.get(e.from);
+		const b = this.nodeById.get(e.to);
+		if (!a || !b || !this.settings) return;
+		const intoImp = isImpNodeId(e.to);
+		const outOfImp = isImpNodeId(e.from);
+		const g = arrowGeometry(
+			a,
+			b,
+			outOfImp ? 0 : this.radiusOf.get(e.from) ?? 0,
+			intoImp ? 0 : this.radiusOf.get(e.to) ?? 0,
+			this.settings.arrowLength,
+		);
+		if (!g) return;
+		shafts.moveTo(g.shaftFrom.x, g.shaftFrom.y);
+		if (intoImp) {
+			// toRadius 0 put the tip AT the imp node's center: the headless
+			// shaft terminates there (no head triangle).
+			shafts.lineTo(g.tip.x, g.tip.y);
+			return;
+		}
+		shafts.lineTo(g.shaftTo.x, g.shaftTo.y);
+		heads.moveTo(g.tip.x, g.tip.y);
+		heads.lineTo(g.left.x, g.left.y);
+		heads.lineTo(g.right.x, g.right.y);
+		heads.closePath();
+	}
+
+	/** Label wrapping: measureText once per node per LABEL build (data,
+	 *  settings, visibility) — never per frame, never per sim tick. Wrap
+	 *  width keeps the bigger-label/bigger-wrap behavior from the sigma era. */
+	private buildLabels(): void {
+		this.labelsBuiltVersion = this.labelVersion;
+		const data = this.data;
+		const settings = this.settings;
+		if (!data || !settings) return;
+		const visible = this.visible;
 		this.labelLines = new Map();
+		this.labelWidth = new Map();
 		const ctx = this.ctx;
 		const prevFont = ctx.font;
-		ctx.font = this.worldLabelFont;
+		ctx.font = `${LABEL_WEIGHT} ${settings.labelSize}px ${data.fontFamily}`;
 		const maxW = LABEL_MAX_WIDTH * (settings.labelSize / LABEL_SIZE);
 		for (const n of data.nodes) {
-			if (isVisible(n.id) && !isImpNodeId(n.id)) this.labelLines.set(n.id, wrapLabel(ctx, n.label, maxW));
+			if ((visible && !visible.has(n.id)) || isImpNodeId(n.id)) continue;
+			const lines = wrapLabel(ctx, n.label, maxW);
+			this.labelLines.set(n.id, lines);
+			this.labelWidth.set(n.id, Math.max(0, ...lines.map((l) => ctx.measureText(l).width)));
 		}
 		ctx.font = prevFont;
 	}
+
 
 	/** (Re)create the live sim from data.nodes at their current
 	 *  positions + the current physics tuning. Called by setData and
@@ -1311,6 +1470,18 @@ export class GraphCanvasRenderer {
 			return;
 		}
 		const t = this.physicsTuning;
+		// The knowledge map's forces (fase 8), matching the server settle:
+		// topic clusters pull tight, courses pull their topics together,
+		// cross-topic springs are damped. The depth anchor is retired from
+		// the map (it re-forms the graph into inference rows and would fight
+		// the grouping the settle lays out), whatever an old settings file says.
+		const courses = new Map<string, string[]>();
+		for (const cluster of data.clusters) {
+			const key = cluster.course ?? "";
+			const list = courses.get(key) ?? [];
+			list.push(...cluster.members);
+			courses.set(key, list);
+		}
 		this.sim = createGraphSimulation(data.nodes, data.edges, {
 			logicalEdges: data.logicalEdges,
 			impLinks: data.impLinks,
@@ -1322,16 +1493,11 @@ export class GraphCanvasRenderer {
 			linkDistance: t.linkDistance,
 			clusterPull:
 				data.clusters.length > 0 ? { clusters: data.clusters, strength: t.clusterPull } : undefined,
-			depthAnchor:
-				t.depthMode === "off"
-					? undefined
-					: {
-							mode: t.depthMode,
-							strength: t.depthStrength,
-							spacing: t.depthSpacing,
-							baseRadius: t.depthBaseRadius,
-							center: this.simCenter,
-						},
+			coursePull:
+				courses.size > 0
+					? { groups: [...courses.values()].map((members) => ({ members })), strength: COURSE_PULL_STRENGTH }
+					: undefined,
+			interClusterLinkScale: data.clusters.length > 0 ? INTER_CLUSTER_LINK_SCALE : undefined,
 		});
 		this.simById = new Map(data.nodes.map((n) => [n.id, n as LayoutNode]));
 		// Hygiene (2026-09-23 fix wave): a fresh sim starts at alpha 1 and
@@ -1394,9 +1560,14 @@ export class GraphCanvasRenderer {
 		// Label anchors ALWAYS compute (cheap — a centroid pass, no canvas):
 		// cluster labels follow their own `clusterLabels` setting and must
 		// survive the region paint being turned off.
+		// Presentation rule (MIN_CLUSTER_SIZE): only a cluster with at least
+		// three visible PROPOSITIONS gets a label and a tint; smaller ones
+		// still color their nodes.
 		this.regionMeta = [];
-		data.clusters.forEach((cluster) => {
+		const shown = new Set<number>();
+		data.clusters.forEach((cluster, ci) => {
 			let members = 0;
+			let propositions = 0;
 			let sumX = 0;
 			let sumY = 0;
 			for (const id of cluster.members) {
@@ -1404,26 +1575,29 @@ export class GraphCanvasRenderer {
 				const n = this.nodeById.get(id);
 				if (!n) continue;
 				members++;
+				if (!isImpNodeId(id)) propositions++;
 				sumX += n.x;
 				sumY += n.y;
 			}
-			if (members > 0) {
+			if (propositions >= MIN_CLUSTER_SIZE) {
+				shown.add(ci);
 				this.regionMeta.push({
 					id: cluster.id,
 					label: cluster.label || null,
 					cx: sumX / members,
 					cy: sumY / members,
-					hue: clusterHue(cluster.id),
+					color: cluster.color,
+					size: propositions,
 					lines: null,
+					width: 0,
 				});
 			}
 		});
 
-		// Wrap the region labels ONCE per geometry build, at their
-		// SCREEN-fixed size (viewer-relative labels — this px size is what
-		// lands on screen at any zoom, so the wrap never goes stale mid-
-		// camera-move). Session names are short; file paths are not (wave
-		// 7) — the cap + ellipsis keeps the footprint bounded.
+		// Wrap the cluster labels at their SCREEN-fixed size (viewer-relative
+		// labels — this px size is what lands on screen at any zoom, so the
+		// wrap never goes stale mid-camera-move); the widest line feeds the
+		// collision boxes. The cap + ellipsis keeps long topic names bounded.
 		const settings = this.settings;
 		if (settings) {
 			const ctx = this.ctx;
@@ -1433,6 +1607,7 @@ export class GraphCanvasRenderer {
 				rm.lines = rm.label
 					? wrapRegionLabel(rm.label, REGION_LABEL_MAX_WIDTH, REGION_LABEL_MAX_LINES, (s) => ctx.measureText(s).width)
 					: null;
+				rm.width = rm.lines ? Math.max(...rm.lines.map((l) => ctx.measureText(l).width)) : 0;
 			}
 			ctx.font = prevFont;
 		}
@@ -1497,7 +1672,8 @@ export class GraphCanvasRenderer {
 		// — they double-counted where nodes sit on edges (user-identified
 		// hot spots, when clusters were edge-based).
 		data.clusters.forEach((cluster, ci) => {
-			const hue = clusterHue(cluster.id);
+			if (!shown.has(ci)) return; // below the presentation threshold
+			const color = cluster.color;
 			// Full-opacity strokes: alpha is applied ONCE at the very end
 			// (dilate at 1 → blur → scale by edgeAlpha). Baking per-stroke
 			// alpha in here made source-over stacking ACCUMULATE it — an
@@ -1505,7 +1681,7 @@ export class GraphCanvasRenderer {
 			// counted spot (user report 2026-09-14). At alpha 1 the alpha
 			// channel is a pure coverage indicator: overlaps of any count
 			// contribute exactly 1.0.
-			rctx.strokeStyle = `hsla(${hue}, 65%, 60%, 1)`;
+			rctx.strokeStyle = color;
 			rctx.beginPath();
 			// Endpoints actually covered by a stroke's round caps.
 			const touched = new Set<string>();
@@ -1534,7 +1710,7 @@ export class GraphCanvasRenderer {
 			// radius as a round cap = dilation) covers exactly the members no
 			// stroke reached: every member is painted by its edges' caps OR
 			// one disc, never both — the no-double-counting rule survives.
-			rctx.fillStyle = `hsla(${hue}, 65%, 60%, 1)`;
+			rctx.fillStyle = color;
 			const discR = dilationW / cell;
 			for (const id of cluster.members) {
 				if (touched.has(id) || !isVisible(id)) continue;
@@ -1598,9 +1774,11 @@ export class GraphCanvasRenderer {
 		this.regionRect = { minX, minY, w: spanX, h: spanY };
 	}
 
+
 	/** THE draw function: every layer, one frame, one camera. All drawing
-	 *  happens in WORLD coordinates under the camera transform; nothing is
-	 *  recomputed per frame except layer styling. */
+	 *  happens in WORLD coordinates under the camera transform (cluster
+	 *  labels excepted: screen space); nothing is recomputed per frame
+	 *  except layer styling, the focus overlay and label placement. */
 	private draw(): void {
 		this.dirty = false;
 		const data = this.data;
@@ -1614,6 +1792,7 @@ export class GraphCanvasRenderer {
 		ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 		ctx.clearRect(0, 0, w, h);
 
+		const { x: tx, y: ty, k } = this.transform;
 		this.frameCount++;
 		// Regions: rebuild on stale geometry at rest; during the live sim,
 		// every REGION_EVERY-th frame (others blit the last bitmap).
@@ -1624,115 +1803,201 @@ export class GraphCanvasRenderer {
 			this.buildRegions();
 			this.regionBuiltVersion = this.geoVersion;
 		}
-		if (this.builtVersion !== this.geoVersion) this.buildGeometry();
-		if (!this.nodesPath) return;
+		if (this.builtVersion !== this.geoVersion || this.builtBucket !== this.bucketScale(k).bucket) this.buildGeometry(k);
+		if (this.labelsBuiltVersion !== this.labelVersion) this.buildLabels();
+		if (!this.nodePaths) return;
 
-		const { x: tx, y: ty, k } = this.transform;
 		// THE camera: one transform, then everything is world coordinates.
 		ctx.setTransform(dpr * k, 0, 0, dpr * k, dpr * tx, dpr * ty);
 
 		const ratio = zoomRatioOf(this.kFit, k);
 		const nodeAlpha = labelAlpha(ratio, settings.labelZoom);
 		const regionAlpha = 1 - nodeAlpha;
-		const { nodeR, glowOuter } = this.world;
+		// The focus (hover or selection) dims everything it does not touch.
+		const focus = this.focus();
+		const dim = focus ? FOCUS_DIM * focus.amount : 0;
+		const focusSet = focus ? this.focusSet(focus.id) : null;
 
 		// 1. Cluster regions: one tiny world-space bitmap blit. The upscale
 		//    blur is the region softness; adjacent cluster tints blend
-		//    source-over where they overlap (decided: multiply is invisible
-		//    on the dark background).
+		//    source-over where they overlap.
 		if (this.regionCanvas && this.regionRect) {
 			const { minX, minY, w, h } = this.regionRect;
 			ctx.imageSmoothingEnabled = true;
+			ctx.save();
+			ctx.globalAlpha = 1 - dim * 0.5;
 			ctx.drawImage(this.regionCanvas, minX, minY, w, h);
+			ctx.restore();
 		}
 
-		// 3. Edges: shafts + arrowheads from cached paths; width constant on
-		// screen (÷ k), geometry in world units (scales with the graph).
-		// Supports shafts: a second, thinner stroke (owner, 2026-09-29) —
-		// heads share the one fill at full geometry (shaft-only ruling).
-		// A true 0-width stroke is undefined on canvas: the ratio's 0 end
-		// floors to a hairline (0.5px on screen — hiding is the toggle's).
+		// 2. Edges: thin and faint (fase 8) — inside a topic faintly, across
+		// topics fainter still. Width constant on screen (÷ k), geometry in
+		// world units. A true 0-width stroke is undefined on canvas: the
+		// ladder's low end is a hairline.
 		if (settings.edgeWidth > 0) {
+			ctx.save();
 			ctx.strokeStyle = data.colors.edge;
 			ctx.fillStyle = data.colors.edge;
 			ctx.lineWidth = settings.edgeWidth / k;
 			ctx.lineCap = "round";
-			ctx.stroke(this.shaftsPath);
-			ctx.fill(this.headsPath);
+			ctx.globalAlpha = EDGE_ALPHA_INTER * (1 - dim);
+			ctx.stroke(this.interShafts);
+			ctx.fill(this.interHeads);
+			ctx.globalAlpha = EDGE_ALPHA_INTRA * (1 - dim);
+			ctx.stroke(this.intraShafts);
+			ctx.fill(this.intraHeads);
+			ctx.restore();
 		}
 
-		// 4. Nodes: one cached Path2D, one fill.
-		ctx.fillStyle = data.colors.node;
-		ctx.fill(this.nodesPath);
+		// 3. Nodes: one cached path per cluster color, one fill each.
+		ctx.save();
+		ctx.globalAlpha = 1 - dim * 0.85;
+		for (const { color, path } of this.nodePaths) {
+			ctx.fillStyle = color;
+			ctx.fill(path);
+		}
+		ctx.restore();
 
-		// 6. Node labels — one global gate, faded together. World-scaled
-		// with the graph (they grow as you zoom in, Obsidian-style).
-		if (nodeAlpha > 0.01) {
+		// 4. The focus overlay: the focused node's arrows (an argument's
+		// whole geometry) drawn clearly, then it and its neighbors at full
+		// strength over their dimmed selves.
+		if (focus && focusSet) {
+			const shafts = new Path2D();
+			const heads = new Path2D();
+			for (const i of focusSet.edges) {
+				const e = data.edges[i]!;
+				if (this.visible && (!this.visible.has(e.from) || !this.visible.has(e.to))) continue;
+				this.traceArrow(e, shafts, heads);
+			}
 			ctx.save();
-			ctx.globalAlpha = nodeAlpha;
-			ctx.font = this.worldLabelFont;
-			for (const [id, lines] of this.labelLines) {
+			ctx.globalAlpha = FOCUS_EDGE_ALPHA * focus.amount;
+			ctx.strokeStyle = data.colors.hoverText;
+			ctx.fillStyle = data.colors.hoverText;
+			ctx.lineWidth = Math.max(settings.edgeWidth, 0.6) * 1.5 / k;
+			ctx.lineCap = "round";
+			ctx.stroke(shafts);
+			ctx.fill(heads);
+			ctx.globalAlpha = focus.amount;
+			for (const id of [focus.id, ...focusSet.neighbors]) {
 				const n = this.nodeById.get(id);
-				if (!n) continue;
-				drawNameLines(ctx, n.x, n.y, lines, this.world, data.colors.label);
+				if (!n || (this.visible && !this.visible.has(id))) continue;
+				const r = this.radiusOf.get(id) ?? 0;
+				ctx.fillStyle = this.colorOf.get(id) ?? data.colors.node;
+				ctx.beginPath();
+				ctx.arc(n.x, n.y, r, 0, Math.PI * 2);
+				ctx.fill();
 			}
 			ctx.restore();
 		}
 
-		// 7. Hover glow (topmost): halo in the node's color + the brightened
-		// name, both on the SAME fade factor. World units like everything
-		// else. Shows even when labels are zoomed out (hover is its own
-		// affordance, not a label).
+		// 5. Node labels at high zoom — one global gate, faded together,
+		// world-scaled with the graph, and COLLISION-PLACED (fase 8): hubs
+		// first, a name that would overlap a placed one is skipped.
+		if (nodeAlpha > 0.01) {
+			const boxes: LabelBox[] = [];
+			const ids: string[] = [];
+			const lineW = this.world.labelSize * LABEL_LINE_HEIGHT;
+			for (const id of this.labelOrder) {
+				const lines = this.labelLines.get(id);
+				const n = this.nodeById.get(id);
+				if (!lines || !n) continue;
+				const sx = n.x * k + tx;
+				const sy = n.y * k + ty;
+				if (sx < -200 || sx > w + 200 || sy < -200 || sy > h + 200) continue;
+				const half = ((this.labelWidth.get(id) ?? 0) * k) / 2 + 2;
+				const top = sy + ((this.radiusOf.get(id) ?? 0) + this.world.labelGap) * k;
+				boxes.push({ x0: sx - half, y0: top - 1, x1: sx + half, y1: top + lines.length * lineW * k + 1 });
+				ids.push(id);
+			}
+			ctx.save();
+			ctx.globalAlpha = nodeAlpha * (1 - dim);
+			ctx.font = this.worldLabelFont;
+			for (const i of placeLabels(boxes)) {
+				const id = ids[i]!;
+				const n = this.nodeById.get(id)!;
+				drawNameLines(ctx, n.x, n.y, this.labelLines.get(id)!, this.world, this.radiusOf.get(id) ?? 0, data.colors.label);
+			}
+			ctx.restore();
+		}
+
+		// 6. Hover glow: a halo in the node's own color, on the hover fade.
 		if (this.hoverNode && this.hoverFade > 0.02) {
 			const n = this.visible && !this.visible.has(this.hoverNode.id)
-				? null // filtered out by search — no glow on hidden nodes
+				? null // filtered out — no glow on hidden nodes
 				: this.hoverNode;
 			if (n) {
-				const glow = ctx.createRadialGradient(n.x, n.y, nodeR, n.x, n.y, glowOuter);
-				glow.addColorStop(0, rgbaFromHex(data.colors.node, GLOW_ALPHA * this.hoverFade));
-				glow.addColorStop(1, rgbaFromHex(data.colors.node, 0));
+				const r = this.radiusOf.get(n.id) ?? 0;
+				const outer = r * GLOW_SCALE;
+				const color = this.colorOf.get(n.id) ?? data.colors.node;
+				const glow = ctx.createRadialGradient(n.x, n.y, r, n.x, n.y, outer);
+				glow.addColorStop(0, rgbaFromHex(color, GLOW_ALPHA * this.hoverFade));
+				glow.addColorStop(1, rgbaFromHex(color, 0));
 				ctx.fillStyle = glow;
 				ctx.beginPath();
-				ctx.arc(n.x, n.y, glowOuter, 0, Math.PI * 2);
-				ctx.arc(n.x, n.y, nodeR, 0, Math.PI * 2, true);
+				ctx.arc(n.x, n.y, outer, 0, Math.PI * 2);
+				ctx.arc(n.x, n.y, r, 0, Math.PI * 2, true);
 				ctx.fill("evenodd");
-				ctx.save();
-				ctx.globalAlpha = this.hoverFade;
-				ctx.font = this.worldLabelFont;
-				drawNameLines(ctx, n.x, n.y, this.labelLines.get(n.id) ?? [], this.world, data.colors.hoverText);
-				ctx.restore();
 			}
 		}
 
-		// 8. Cluster region labels — THE TOPMOST layer (user 2026-09-16:
-		// node labels and hover names drew over them before; region labels
-		// must never be occluded by content). Inverse-gated on THE zoom
-		// control (visible zoomed-out, fading as node labels come in).
-		// Viewer-relative by design (UI, not graph content): drawn at the
-		// world centroid with a font of clusterLabelSize / k — a constant
-		// size on screen at any zoom (user-tunable since 2026-09-16).
-		// Wave 7: labels are session names / file paths — pre-wrapped at
-		// the geometry build (cap + ellipsis), drawn centered on the
-		// centroid line by line.
-		if (settings.clusterLabels && regionAlpha > 0.01) {
+		// 7. Focus names: the focused node (bright) and a handful of its
+		// neighbors, at any zoom — this is where node names live by default.
+		if (focus && focusSet) {
 			ctx.save();
-			ctx.globalAlpha = regionAlpha;
-			ctx.font = `${LABEL_WEIGHT} ${settings.clusterLabelSize / k}px ${data.fontFamily}`;
+			ctx.font = this.worldLabelFont;
+			ctx.globalAlpha = focus.amount;
+			for (const id of focusSet.neighbors.slice(0, FOCUS_NEIGHBOR_LABELS)) {
+				const n = this.nodeById.get(id);
+				const lines = this.labelLines.get(id);
+				if (!n || !lines) continue;
+				drawNameLines(ctx, n.x, n.y, lines, this.world, this.radiusOf.get(id) ?? 0, data.colors.label);
+			}
+			const n = this.nodeById.get(focus.id);
+			const lines = this.labelLines.get(focus.id);
+			if (n && lines) drawNameLines(ctx, n.x, n.y, lines, this.world, this.radiusOf.get(focus.id) ?? 0, data.colors.hoverText);
+			ctx.restore();
+		}
+
+		// 8. Cluster labels — THE TOPMOST layer, in SCREEN space (UI, not
+		// graph content: a constant size at any zoom). Inverse-gated on the
+		// zoom control (visible zoomed out, fading as node names come in),
+		// at each cluster's centroid, biggest clusters first, and a label
+		// that would overlap a placed one is skipped (fase 8). A halo in the
+		// page background keeps them legible over dots and arrows.
+		if (settings.clusterLabels && regionAlpha > 0.01 && this.regionMeta.length > 0) {
+			ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+			const size = settings.clusterLabelSize;
+			const lineH = size * REGION_LABEL_LINE_HEIGHT;
+			const order = this.regionMeta
+				.map((rm, i) => ({ rm, i }))
+				.filter(({ rm }) => rm.lines !== null)
+				.sort((a, b) => b.rm.size - a.rm.size || a.i - b.i);
+			const boxes = order.map(({ rm }) => {
+				const sx = rm.cx * k + tx;
+				const sy = rm.cy * k + ty;
+				const halfW = rm.width / 2 + LABEL_COLLISION_PAD;
+				const halfH = (rm.lines!.length * lineH) / 2 + LABEL_COLLISION_PAD / 2;
+				return { x0: sx - halfW, y0: sy - halfH, x1: sx + halfW, y1: sy + halfH };
+			});
+			ctx.save();
+			ctx.globalAlpha = regionAlpha * (1 - dim * 0.6);
+			ctx.font = `${LABEL_WEIGHT} ${size}px ${data.fontFamily}`;
 			ctx.textAlign = "center";
 			ctx.textBaseline = "middle";
-			// Screen px ÷ k = world units — the lines stay evenly spaced
-			// at a constant on-screen pitch at any zoom.
-			const lineH = (settings.clusterLabelSize * REGION_LABEL_LINE_HEIGHT) / k;
-			// Light mode needs dark ink: the pastel 78% lightness only reads
-			// on the dark canvas.
-			const labelLightness = typeof document === "undefined" || document.documentElement.classList.contains("dark") ? 78 : 32;
-			for (const rm of this.regionMeta) {
-				if (!rm.lines) continue;
-				ctx.fillStyle = `hsla(${rm.hue}, 55%, ${labelLightness}%, 0.85)`;
-				const firstOffset = (-(rm.lines.length - 1) / 2) * lineH;
-				for (let i = 0; i < rm.lines.length; i++) {
-					ctx.fillText(rm.lines[i]!, rm.cx, rm.cy + firstOffset + i * lineH);
-				}
+			ctx.lineJoin = "round";
+			ctx.lineWidth = 3;
+			ctx.strokeStyle = rgbaFromHex(data.colors.halo, 0.85);
+			for (const i of placeLabels(boxes)) {
+				const { rm } = order[i]!;
+				const sx = rm.cx * k + tx;
+				const sy = rm.cy * k + ty;
+				// Ink in the cluster's own family: lighter on dark, darker on light.
+				ctx.fillStyle = mixHex(rm.color, data.colors.dark ? "#ffffff" : "#000000", 0.35);
+				const firstOffset = (-(rm.lines!.length - 1) / 2) * lineH;
+				rm.lines!.forEach((line, li) => {
+					ctx.strokeText(line, sx, sy + firstOffset + li * lineH);
+					ctx.fillText(line, sx, sy + firstOffset + li * lineH);
+				});
 			}
 			ctx.restore();
 		}

@@ -56,6 +56,10 @@ export interface ServerEvents {
 	 *  status set by the agent's topic_status tool. `code` names the course;
 	 *  `chatId` is present when a session's agent made the change. */
 	"courses-changed": { code?: string; chatId?: string };
+	/** The knowledge map's grouping changed without a graph write (the
+	 *  background topic classification finished a round): open maps
+	 *  refetch the snapshot. */
+	"map-changed": Record<string, never>;
 }
 
 export type ServerEventType = keyof ServerEvents;
@@ -74,6 +78,7 @@ export const SERVER_EVENT_TYPES = [
 	"record-changed",
 	"compaction-changed",
 	"courses-changed",
+	"map-changed",
 ] as const satisfies readonly ServerEventType[];
 
 /** One notification: the type discriminates the payload. */

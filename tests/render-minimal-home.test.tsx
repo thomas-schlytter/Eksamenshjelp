@@ -25,7 +25,7 @@ function render(props: Partial<Parameters<typeof KnowledgeSummary>[0]> = {}) {
 describe("KnowledgeSummary — the quiet home summary (2026-10-06)", () => {
 	it("every count on its OWN line — no dot separators (owner refinement, same day)", () => {
 		const html = render();
-		for (const line of ["12 påstander", "5 kjeder", "3 læringsøkter", "2 øvingsøkter", "4 importerte notater"]) {
+		for (const line of ["12 påstander", "5 resonnementskjeder", "3 læringsøkter", "2 øvingsøkter", "4 importerte notater"]) {
 			const i = html.indexOf(line);
 			assert.ok(i !== -1, `${line} renders`);
 			// own-line: the count is its own text node — the char after the
@@ -48,7 +48,7 @@ describe("KnowledgeSummary — the quiet home summary (2026-10-06)", () => {
 
 	it("singularizes: one of each reads as single, not '1 sessions'", () => {
 		const html = render({ propositions: 1, chains: 1, teachSessions: 1, practiceSessions: 1, importedNotes: 1 });
-		for (const line of ["1 påstand", "1 kjede", "1 læringsøkt", "1 øvingsøkt", "1 importert notat"]) {
+		for (const line of ["1 påstand", "1 resonnementskjede", "1 læringsøkt", "1 øvingsøkt", "1 importert notat"]) {
 			// singular exactly: the label ends its element, no plural suffix
 			assert.ok(html.includes(`${line}<`), `${line} is singular`);
 		}

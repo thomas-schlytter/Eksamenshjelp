@@ -298,6 +298,11 @@ export interface Cluster {
 	label: string | null;
 	/** Node ids, sorted. Hull + centroid are renderer concerns. */
 	members: string[];
+	/** The knowledge map's grouping (fase 8): the course code (null =
+	 *  «Uten fag») and the topic id ("annet", or null = the whole course).
+	 *  Absent on birth-session clusters. */
+	course?: string | null;
+	topic?: string | null;
 }
 
 export interface GraphSnapshot {
@@ -340,6 +345,10 @@ export interface GraphSnapshot {
 	 * nodes are never partitioned. Purely provenance-derived — never
 	 * depends on layout. */
 	clusters: Cluster[];
+	/** The courses the map groups by (fase 8), in display order — the
+	 *  legend's and the course filter's list. Absent on birth-session
+	 *  snapshots. */
+	courses?: Array<{ code: string; name: string }>;
 	/** Resting layout positions per node id, when a positions ledger
 	 *  exists (core/layout.ts settle writes it). Absent on a fresh graph —
 	 *  the view then falls back to its own one-shot forceAtlas2 pass. */

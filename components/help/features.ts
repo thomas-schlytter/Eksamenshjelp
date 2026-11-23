@@ -61,7 +61,7 @@ export const FEATURES: readonly FeatureEntry[] = [
 		id: "kunnskapskart",
 		title: "Kunnskapskart",
 		description: "Se det du har lært som et kart av påstander og sammenhenger.",
-		keywords: ["kart", "graf", "knowledge graph", "påstander", "kjeder", "resonnementskjeder", "noder"],
+		keywords: ["kart", "graf", "knowledge graph", "påstander", "kilder", "resonnementskjeder", "noder", "fag", "tema"],
 		action: { kind: "route", href: "/kart" },
 	},
 	{
@@ -164,7 +164,7 @@ export const FEATURES: readonly FeatureEntry[] = [
 		id: "innstillinger-kunnskapskart",
 		title: "Innstillinger for kunnskapskartet",
 		description: "Velg hvordan kartet skal vises.",
-		keywords: ["kart", "graf", "kartvisning", "kjedevisning", "graph"],
+		keywords: ["kart", "graf", "kartvisning", "kildevisning", "graph"],
 		action: { kind: "settings", section: "graph" },
 	},
 	{
