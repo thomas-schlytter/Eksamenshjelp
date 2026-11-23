@@ -9,7 +9,6 @@
  */
 
 import * as fs from "node:fs";
-import { createRequire } from "node:module";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { PATHS } from "../../config.ts";
@@ -24,12 +23,11 @@ let katexCssCache: string | null = null;
  *  paper loaded from a temp dir still finds the math fonts. */
 export function katexCssForPrint(): string {
 	if (katexCssCache !== null) return katexCssCache;
-	const candidates = [path.join(PATHS.root, "node_modules", "katex", "dist", "katex.min.css")];
-	try {
-		candidates.push(createRequire(import.meta.url).resolve("katex/dist/katex.min.css"));
-	} catch {
-		/* the root path is the packaged layout's answer */
-	}
+	// Plain file paths only: a module-resolution of the .css (require.resolve)
+	// makes Turbopack try to bundle the stylesheet into the server chunk and
+	// fails the build. The standalone server chdirs into its own folder, where
+	// next.config's tracing includes put node_modules/katex/dist.
+	const candidates = [...new Set([PATHS.root, process.cwd()])].map((dir) => path.join(dir, "node_modules", "katex", "dist", "katex.min.css"));
 	for (const file of candidates) {
 		try {
 			const css = fs.readFileSync(file, "utf-8");
