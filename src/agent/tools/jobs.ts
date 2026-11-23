@@ -115,10 +115,10 @@ const VISUAL_DESCRIPTION =
 	"as a new message.";
 const PDF_DESCRIPTION =
 	"Dispatch a background sub-agent that READS a learner-provided PDF on your behalf (triage, targeted extraction, visual page " +
-	"reading for equations and diagrams) and returns a brief with page citations. Use it when the learner gives you a PDF path " +
-	"and you need its CONTENT for the lesson. The call is ASYNC and fire-and-forget — it resolves immediately and your turn " +
-	"continues; the brief arrives later as a new message. For quick looks at plain text or image files, use the read tool " +
-	"directly instead of dispatching.";
+	"reading for equations and diagrams) and returns a brief with page citations. The read tool already reads PDFs directly " +
+	"(page text plus page images, in the same turn) — use read for the learner's answers and for any document you need now. " +
+	"Dispatch this only for a LONG document where you need one targeted answer and no page-by-page reading. The call is ASYNC " +
+	"and fire-and-forget — it resolves immediately and your turn continues; the brief arrives later as a new message.";
 
 /**
  * Per-request job tool registry: each tool closes over the composition root's

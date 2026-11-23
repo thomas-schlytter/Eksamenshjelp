@@ -26,7 +26,6 @@ import { notifySettingsSaved } from "@/components/settings-signal";
 import { useSidebar } from "@/components/sidebar";
 import { openLegacyImport } from "@/components/import/legacy-import-event";
 import { LegacyImportHost } from "@/components/import/legacy-import-host";
-import { TranscribeHost } from "@/components/transcribe/transcribe-host";
 import { HelpContext, type HelpApi } from "./help-context.ts";
 import { answerInvite, inviteAnswered, loadCompletedTours, markTourCompleted, setPendingArticle } from "./storage.ts";
 import { TOUR_IDLE, tourReducer, type TourEvent, type TourState } from "./tour-machine.ts";
@@ -241,8 +240,6 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 			{children}
 			{/* The global listener for lh:open-legacy-import (settings, palette, help, home). */}
 			<LegacyImportHost />
-			{/* The global listener for lh:open-transcribe (composer paste/button, session drop). */}
-			<TranscribeHost />
 			{palette.open && (
 				// The fallback is a real, focused field: keys typed before the
 				// palette's code has arrived land there and carry over.

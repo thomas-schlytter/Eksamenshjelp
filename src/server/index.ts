@@ -60,8 +60,8 @@ export * from "./courses.ts";
 // recall quiz) and the course-topic update that follows it.
 export * from "./session-wrap.ts";
 export * from "./session-topics.ts";
-// Screenshot → LaTeX: the /api/transcribe service.
-export * from "./transcribe.ts";
+// «Legg inn besvarelse»: the /api/attachments service (pasted images → files).
+export * from "./attachments.ts";
 export { NtnuUnreachableError, createNtnuClient, parseNtnuCoursePage } from "./ntnu.ts";
 // "Importer fra LearnHarness": additive import of another data folder.
 export {

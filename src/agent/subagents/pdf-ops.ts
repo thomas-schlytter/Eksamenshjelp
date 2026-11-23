@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { documentToMarkdown, type PdfPage } from "./pdf-markdown.ts";
 
 /**
@@ -265,4 +266,118 @@ export function renderDir(filePath: string): string {
 		h = Math.imul(h, 0x01000193) >>> 0;
 	}
 	return path.join("/tmp", `lh-pdf-${h.toString(16).padStart(8, "0")}`);
+}
+// ─── synchronous page reading (the read tool's PDF branch) ─────────────────
+
+/** Why a page also goes to the model as a picture: its text alone would
+ *  lose what is on it (a scan or handwriting, a figure, typeset math). */
+export type PdfPageVisual = "no-text" | "thin-text" | "picture" | "drawing" | "math";
+
+export interface PdfPageReading {
+	number: number;
+	/** The page's Markdown ("" when it has no text layer). */
+	markdown: string;
+	/** Why the page should be seen, or null when its text carries it. */
+	visual: PdfPageVisual | null;
+}
+
+/** Below this many characters a page is "thin": a title, a stray heading
+ *  over handwriting, a figure caption. */
+export const THIN_TEXT_CHARS = 200;
+/** A raster image covering this share of the page is content (a scan, a
+ *  photographed answer, a figure), not a logo. */
+const PICTURE_COVERAGE = 0.1;
+/** Vector paths at or above this count: a drawn figure or handwriting from
+ *  a tablet (every stroke is a path); ordinary text pages draw a handful. */
+const DRAWING_PATHS = 100;
+/** The pdf-reader's math signal: equations extract as flat, garbled text. */
+const MATH_DENSITY = 0.03;
+
+const IDENTITY_DET = 1;
+
+/** Share of the page covered by raster images, and the vector path count.
+ *  Every image op paints the unit square through the current transform, so
+ *  its area is |det(CTM)|; determinants multiply, so a stack of scalars is
+ *  the whole state (save/restore, cm, form XObjects). */
+async function paintedArea(page: PDFPageProxy): Promise<{ coverage: number; paths: number }> {
+	const { OPS } = await loadPdfjs();
+	const imageOps = new Set<number>([
+		OPS.paintImageXObject,
+		OPS.paintImageXObjectRepeat,
+		OPS.paintInlineImageXObject,
+		OPS.paintInlineImageXObjectGroup,
+		OPS.paintImageMaskXObject,
+		OPS.paintImageMaskXObjectGroup,
+		OPS.paintImageMaskXObjectRepeat,
+		OPS.paintSolidColorImageMask,
+	]);
+	const det = (m: unknown): number => {
+		if (!Array.isArray(m) || m.length < 4) return 1;
+		const [a, b, c, d] = m.map(Number) as [number, number, number, number];
+		const value = a * d - b * c;
+		return Number.isFinite(value) ? value : 1;
+	};
+	const { fnArray, argsArray } = await page.getOperatorList();
+	const stack: number[] = [];
+	let current = IDENTITY_DET;
+	let painted = 0;
+	let paths = 0;
+	for (let i = 0; i < fnArray.length; i++) {
+		const fn = fnArray[i]!;
+		const args = argsArray[i] as unknown[] | null;
+		if (fn === OPS.save) stack.push(current);
+		else if (fn === OPS.restore) current = stack.pop() ?? IDENTITY_DET;
+		else if (fn === OPS.transform) current *= det(args);
+		else if (fn === OPS.paintFormXObjectBegin) { stack.push(current); current *= det(args?.[0]); }
+		else if (fn === OPS.paintFormXObjectEnd) current = stack.pop() ?? IDENTITY_DET;
+		else if (fn === OPS.constructPath) paths++;
+		else if (imageOps.has(fn)) painted += Math.abs(current);
+	}
+	const [x0 = 0, y0 = 0, x1 = 0, y1 = 0] = page.view;
+	const area = Math.abs((x1 - x0) * (y1 - y0)) || 1;
+	return { coverage: Math.min(1, painted / area), paths };
+}
+
+async function readOnePage(doc: PDFDocumentProxy, number: number): Promise<PdfPageReading> {
+	const [converted] = await documentToMarkdown(doc, [number]);
+	const markdown = converted?.kind === "text" ? converted.markdown : "";
+	const { coverage, paths } = await paintedArea(await doc.getPage(number));
+	const text = markdown.trim();
+	let visual: PdfPageVisual | null = null;
+	if (!text) visual = coverage > 0 || paths > 0 ? "no-text" : null;
+	else if (coverage >= PICTURE_COVERAGE) visual = "picture";
+	else if (paths >= DRAWING_PATHS) visual = "drawing";
+	else if (text.length < THIN_TEXT_CHARS) visual = "thin-text";
+	else if (mathDensity(text) >= MATH_DENSITY) visual = "math";
+	return { number, markdown, visual };
+}
+
+export interface PdfPageReader {
+	pageCount: number;
+	/** One page's text plus the look-at-it verdict. */
+	read(page: number): Promise<PdfPageReading>;
+	close(): Promise<void>;
+}
+
+/** Open a PDF for page-by-page reading. Throws pdfjs's error for a broken,
+ *  encrypted or non-PDF file. */
+export async function openPdfPages(data: Uint8Array): Promise<PdfPageReader> {
+	const { doc, task } = await openBytes(data);
+	return {
+		pageCount: doc.numPages,
+		read: (page) => readOnePage(doc, page),
+		close: () => task.destroy(),
+	};
+}
+
+/** "1-3,5,7-8" for a sorted page list — the continuation hint's spec. */
+export function compactPageSpec(pages: readonly number[]): string {
+	const parts: string[] = [];
+	for (let i = 0; i < pages.length; i++) {
+		const start = pages[i]!;
+		let end = start;
+		while (pages[i + 1] === end + 1) end = pages[++i]!;
+		parts.push(end === start ? `${start}` : `${start}-${end}`);
+	}
+	return parts.join(",");
 }

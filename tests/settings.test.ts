@@ -216,14 +216,13 @@ describe("sanitizeUserSettings", () => {
 		}
 	});
 
-	it("BACKGROUND_MODEL_ROLES matches the five background roles plus the screenshot transcriber", () => {
+	it("BACKGROUND_MODEL_ROLES matches the five background roles (practice trio deleted 2026-10-04)", () => {
 		assert.deepEqual([...BACKGROUND_MODEL_ROLES], [
 			"researcher",
 			"demoBuilder",
 			"visualMaker",
 			"extractor",
 			"auditor",
-			"transcriber",
 		]);
 	});
 });

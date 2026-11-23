@@ -1,11 +1,10 @@
 "use client";
 
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { ArrowRightIcon, CornerDownLeftIcon, ScanTextIcon, SquareIcon } from "lucide-react";
+import { ArrowRightIcon, CornerDownLeftIcon, SquareIcon, XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Hint } from "@/components/ui/hint";
-import { PathInput } from "@/components/path-input";
-import { firstImageFile, joinTranscription, openTranscribe } from "@/components/transcribe/transcribe-event";
+import { INSERT_FILE_PATHS_EVENT, PathInput } from "@/components/path-input";
+import { AnswerUploadButton, firstImageFile, saveAttachment, withAnswerPaths } from "@/components/answer-upload";
 
 /**
  * The chat composer — content row ONLY (the persistent rounded shell lives in
@@ -97,7 +96,7 @@ export function ChatSessionComposer({
 			placeholder={placeholder}
 			nextProblem={nextProblem}
 			onNext={onNext}
-			transcribe
+			answerUpload
 		/>
 	);
 }
@@ -115,7 +114,7 @@ export function Composer({
 	placeholder = "Spør, svar eller styr økta…",
 	nextProblem = false,
 	onNext,
-	transcribe = false,
+	answerUpload = false,
 }: {
 	busy: boolean;
 	value: string;
@@ -141,19 +140,26 @@ export function Composer({
 	/** The signal's dispatcher (send({type:"next"})) — the chip and the
 	 *  empty-Enter share it. */
 	onNext?: () => void;
-	/** «Les av skjermbilde» (session composer only): a pasted image or the
-	 *  button's picked file opens the review window, and the approved LaTeX
-	 *  lands in this draft as its own paragraph — never sent on its own. */
-	transcribe?: boolean;
+	/** «Legg inn besvarelse» (session composer only): the button picks PDFs
+	 *  and images and puts their paths in this draft (with a short lead when
+	 *  it is empty); a pasted image is saved as a file and attached the
+	 *  same way a dropped file is. Never sent on its own. */
+	answerUpload?: boolean;
 }) {
 	const latest = useRef({ value, onChange });
 	useLayoutEffect(() => { latest.current = { value, onChange }; }, [value, onChange]);
-	const filePicker = useRef<HTMLInputElement>(null);
-	const readImage = (image: Blob) =>
-		openTranscribe({
-			image,
-			insert: (text) => latest.current.onChange(joinTranscription(latest.current.value, text)),
-		});
+	const [pasteNotice, setPasteNotice] = useState("");
+	/** A pasted screenshot has no file behind it: save it, then insert its
+	 *  chip at the caret like a drop (no lead: a paste is not always an answer). */
+	const attachPasted = async (image: Blob, input: HTMLElement) => {
+		setPasteNotice("");
+		try {
+			const path = await saveAttachment(image);
+			input.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: [path] }));
+		} catch (err) {
+			setPasteNotice(err instanceof Error ? err.message : "Klarte ikke å legge ved bildet.");
+		}
+	};
 	const act = () => {
 		const action = enterAction({ busy, canSend, nextProblem });
 		if (action === "stop") onStop();
@@ -163,7 +169,7 @@ export function Composer({
 	return (
 		<form
 			data-testid="composer"
-			className="flex items-end gap-1.5 p-1.5"
+			className="relative flex items-end gap-1.5 p-1.5"
 			onSubmit={(e) => {
 				e.preventDefault();
 				act();
@@ -174,12 +180,12 @@ export function Composer({
 				value={value}
 				onValueChange={onChange}
 				defaultDropTarget
-				onPaste={transcribe ? (e) => {
+				onPaste={answerUpload ? (e) => {
 					// Text wins: the editor has already taken a text paste. Only an
-					// image-only clipboard (a screenshot) opens the reader.
+					// image-only clipboard (a screenshot) becomes an attached file.
 					if (e.clipboardData.getData("text/plain") !== "") return;
 					const image = firstImageFile(e.clipboardData.files);
-					if (image) readImage(image);
+					if (image) void attachPasted(image, e.currentTarget);
 				} : undefined}
 				onKeyDown={(e) => {
 					// Esc ends dictation before anything else Esc might someday mean
@@ -204,32 +210,18 @@ export function Composer({
 				autoFocus={autoFocus}
 				className="field-sizing-content lh-input max-h-48 min-h-10 flex-1 resize-none bg-transparent px-2.5 py-2 outline-none placeholder:text-muted-foreground"
 			/>
-			{transcribe && (
-				<>
-					<input
-						ref={filePicker}
-						type="file"
-						accept="image/*"
-						hidden
-						data-testid="transcribe-file"
-						onChange={(e) => {
-							const image = firstImageFile(e.target.files);
-							e.target.value = "";
-							if (image) readImage(image);
-						}}
-					/>
-					<Hint label="Les av skjermbilde til LaTeX">
-						<button
-							type="button"
-							data-testid="transcribe-button"
-							aria-label="Les av skjermbilde til LaTeX"
-							onClick={() => filePicker.current?.click()}
-							className="flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-						>
-							<ScanTextIcon className="size-5" />
-						</button>
-					</Hint>
-				</>
+			{answerUpload && (
+				<AnswerUploadButton
+					onPaths={(paths) => latest.current.onChange(withAnswerPaths(latest.current.value, paths))}
+				/>
+			)}
+			{pasteNotice && (
+				<div role="status" className="absolute right-2 bottom-full z-50 mb-2 flex max-w-[90%] items-center gap-2 rounded-md border bg-card px-3 py-2 font-ui text-xs shadow-sm">
+					<span>{pasteNotice}</span>
+					<button type="button" aria-label="Lukk meldingen om vedlegg" onClick={() => setPasteNotice("")} className="shrink-0 rounded-sm p-1 hover:bg-accent">
+						<XIcon className="size-3" aria-hidden />
+					</button>
+				</div>
 			)}
 			{/* The button follows the text (owner report 2026-10-03): while
 				 a turn runs WITH text typed it stays the SEND affordance

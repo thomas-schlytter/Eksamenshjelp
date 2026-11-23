@@ -723,8 +723,8 @@ export function courseContextText(course: Course, link: ChatCourseLink, todayIso
 	lines.push(
 		"",
 		"How to use the sources: the file and folder paths are on the learner's machine. Read them when you need them instead " +
-			"of guessing what the course covers: `ls` and `find` list a folder, `read` opens text and image files, `grep` searches, " +
-			"and the `pdf` tool reads PDF files. File names often tell you what is what (earlier exam papers, solutions, lecture notes); " +
+			"of guessing what the course covers: `ls` and `find` list a folder, `read` opens text, image and PDF files " +
+			"(a PDF comes back as page text plus page images, a range at a time with `pages`), and `grep` searches. File names often tell you what is what (earlier exam papers, solutions, lecture notes); " +
 			"earlier exams are the best guide to what the exam asks.",
 		"",
 		"Topic status: when you have real evidence of how well the learner masters a topic (several answers or worked steps, " +

@@ -78,8 +78,8 @@ async function fixture({ desktop = true, claimed = true } = {}) {
 		}
 	};
 	const editor = doc.querySelector<HTMLElement>('[data-testid="editor"]')!;
-	function file(name: string, path?: string | Error) {
-		const result = new File(["synthetic bytes must never be read"], name, { type: "application/pdf" });
+	function file(name: string, path?: string | Error, type = "application/pdf") {
+		const result = new File(["synthetic bytes must never be read"], name, { type });
 		for (const method of ["text", "arrayBuffer", "stream"] as const) {
 			Object.defineProperty(result, method, { value: () => { byteReads++; throw new Error("No file content reads"); } });
 		}
@@ -125,6 +125,22 @@ test("desktop drop inserts quoted paths at the focused editor caret instead of t
 	assert.deepEqual(f.appends, [], "focused editor wins over the registered question field");
 	assert.deepEqual(f.resolved, files, "only Electron's full path, never File.name, enters the draft");
 	assert.equal(f.status, "", "successful file attachment is silent");
+	f.assertPathOnly();
+});
+
+test("one dropped image is attached as a path chip like any file (no transcription window)", async () => {
+	const f = await fixture();
+	let opened = 0;
+	const count = () => { opened++; };
+	window.addEventListener("lh:open-transcribe", count);
+	try {
+		await f.event("drop", f.transfer([f.file("utregning.png", "/Users/me/utregning.png", "image/png")]));
+	} finally {
+		window.removeEventListener("lh:open-transcribe", count);
+	}
+	assert.deepEqual(f.appends, ["`/Users/me/utregning.png`"]);
+	assert.equal(opened, 0);
+	assert.equal(f.status, "");
 	f.assertPathOnly();
 });
 
