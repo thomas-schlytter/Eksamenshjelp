@@ -658,7 +658,11 @@ const MODE_INSTRUCTION: Record<NonNullable<ChatCourseLink["mode"]>, string> = {
 		"Mode: SIDE CHAT. This chat sits beside the course's main chat, where the learner's exam plan for the whole course " +
 		"lives. He opened it to work on one part of the course in its own thread: follow his lead, explain or pose exam-style " +
 		"tasks as the conversation calls for, and ground both in the sources. The exam plan map and its colors belong to the " +
-		"main chat, not to this one. What you learn here about his mastery goes onto the course topics with `topic_status`.",
+		"main chat, not to this one. What you learn here about his mastery goes onto the course topics with `topic_status`. " +
+		"No diagnostic probe in a side chat (owner, 2026-11-23): the topic colors above and the main chat already say where " +
+		"he stands. If you are in the probing phase, conclude it on your first turn — call `probe_done` with an assessment " +
+		"built from the topic colors, their notes and his opening message, without quizzing him first — so teaching starts " +
+		"at once.",
 	exam:
 		"Mode: EXAM SESSION. This is one continuous exam session for the whole course, with no single focus topic. The sources " +
 		"listed below are the pensum basis: the earlier exam papers, solutions and notes among them are where the emner and the " +

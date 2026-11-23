@@ -82,7 +82,7 @@ describe("prøveeksamen in the transcript", () => {
 		assert.equal(scanHandInText("P", "mx_a_0001", ["/a/side 1.jpg"]), 'Her er besvarelsen min på prøveeksamen «P» (eksamen-id mx_a_0001): `/a/side 1.jpg`');
 	});
 
-	it("the result card: total, grade only with a scale, points per task, comments and the løsningsforslag", () => {
+	it("the result card: total, grade (NTNU scale by default), points per task, comments and the løsningsforslag", () => {
 		const result = computeMockExamResult(exam, [
 			{ part: "1", points: 4, comment: "Riktig.", missing: "" },
 			{ part: "2a", points: 2.5, comment: "Halvveis.", missing: "Kjerneregelen." },
@@ -91,7 +91,7 @@ describe("prøveeksamen in the transcript", () => {
 		const html = renderToStaticMarkup(<MockGradeCard result={{ examId: exam.id, resultId: result.id, result }} />);
 		assert.match(html, /12,5 \/ 15 poeng/);
 		assert.match(html, /83 %/);
-		assert.ok(!html.includes("Karakterestimat"), "no scale, no grade");
+		assert.match(html, /Karakterestimat: <strong>B<\/strong>/, "83 % is a B on NTNU's default scale");
 		assert.match(html, /Oppgave 2<\/td><td[^>]*>8,5 \/ 11/);
 		assert.match(html, /Manglet: Kjerneregelen\./);
 		assert.match(html, /riktig svar: b\)/);

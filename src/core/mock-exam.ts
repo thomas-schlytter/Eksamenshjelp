@@ -122,6 +122,10 @@ export interface MockExamAnswers {
 	answers: Record<string, string>;
 	/** When he started the countdown (ISO); absent = no timer. */
 	timerStartedAt?: string;
+	/** «Hard mode» (owner, 2026-11-23): chosen when the countdown starts —
+	 *  like the real exam, the answers are handed in automatically when the
+	 *  time runs out. Without it the view only says «Tiden er ute». */
+	hardMode?: boolean;
 	updatedAt: string;
 	/** Set once at «Lever»: the answers are frozen from then on. */
 	submittedAt?: string;
@@ -457,6 +461,25 @@ export function gradeProblems(exam: MockExam, grades: readonly MockExamPartGrade
 	return problems;
 }
 
+/** NTNU's recommended percent scale (owner, 2026-11-23: the default when the
+ *  course material states no scale of its own). */
+export const NTNU_DEFAULT_GRADE_SCALE: MockExamGradeScale = {
+	source: "NTNUs anbefalte karakterskala",
+	bands: [
+		{ grade: "A", minPercent: 89 },
+		{ grade: "B", minPercent: 77 },
+		{ grade: "C", minPercent: 65 },
+		{ grade: "D", minPercent: 53 },
+		{ grade: "E", minPercent: 41 },
+		{ grade: "F", minPercent: 0 },
+	],
+};
+
+/** The scale a result is graded on: the exam's own, else NTNU's default. */
+export function effectiveGradeScale(exam: Pick<MockExam, "gradeScale">): MockExamGradeScale {
+	return exam.gradeScale && exam.gradeScale.bands.length > 0 ? exam.gradeScale : NTNU_DEFAULT_GRADE_SCALE;
+}
+
 /** The letter grade for a percent on a scale (highest band first). */
 export function gradeFor(percent: number, scale: MockExamGradeScale | undefined): string | undefined {
 	if (!scale || scale.bands.length === 0) return undefined;
@@ -502,7 +525,8 @@ export function computeMockExamResult(
 			topicTotals.set(topicId, acc);
 		}
 	}
-	const grade = gradeFor(percent, exam.gradeScale);
+	const scale = effectiveGradeScale(exam);
+	const grade = gradeFor(percent, scale);
 	return {
 		id: meta.id,
 		examId: exam.id,
@@ -515,7 +539,7 @@ export function computeMockExamResult(
 		points,
 		max,
 		percent,
-		...(grade ? { grade, gradeScaleSource: exam.gradeScale!.source } : {}),
+		...(grade ? { grade, gradeScaleSource: scale.source } : {}),
 		tasks,
 		parts,
 		topics: [...topicTotals].map(([topicId, t]) => ({ topicId, points: roundPoints(t.points), max: roundPoints(t.max) })),

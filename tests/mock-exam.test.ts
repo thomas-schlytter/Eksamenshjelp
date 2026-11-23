@@ -170,12 +170,14 @@ describe("the exam contract", () => {
 		assert.ok(r.parts[1]!.solution.includes(SECRET_SOLUTION), "the løsningsforslag is released with the result");
 	});
 
-	it("estimates no grade without a known scale (percent only)", () => {
+	it("falls back to NTNU's recommended scale when the material states none", () => {
 		const e = { ...exam(), gradeScale: undefined };
 		const r = core.computeMockExamResult(e, core.allParts(e).map(({ key, part }) => ({ part: key, points: part.points, comment: "ok", missing: "" })), { id: "mr_test_0002", gradedAt: "2026-11-24T10:00:00.000Z", source: "scan", files: ["/a.pdf"], summary: "s" });
 		assert.equal(r.percent, 100);
-		assert.equal(r.grade, undefined);
-		assert.match(core.mockGradeSteerText({ examId: e.id, resultId: r.id, result: r }), /no known grade scale \(percent only\)/);
+		assert.equal(r.grade, "A");
+		assert.equal(r.gradeScaleSource, "NTNUs anbefalte karakterskala");
+		assert.equal(core.gradeFor(88.9, core.NTNU_DEFAULT_GRADE_SCALE), "B");
+		assert.equal(core.gradeFor(40, core.NTNU_DEFAULT_GRADE_SCALE), "F");
 	});
 
 	it("keeps only real parts when sanitizing answers, and formats them for the grader", () => {
@@ -525,6 +527,17 @@ describe("the HTTP routes", () => {
 		assert.equal((await viewRoute.GET(req("GET"), at("mx_none_0001"))).status, 404);
 		const list = await listRoute.GET(req("GET"), { params: Promise.resolve({ code: "TTK4100" }) });
 		assert.deepEqual((await list.json()).exams.map((x: { id: string }) => x.id), [e.id]);
+	});
+
+	it("hard mode is kept with the timer and dropped without one", async () => {
+		const e = exam("mx_route_0003");
+		store.saveMockExam(e);
+		const hard = await viewRoute.PUT(req("PUT", { answers: {}, timerStartedAt: "2026-11-23T10:00:00.000Z", hardMode: true }), at(e.id));
+		assert.equal((await hard.json()).answers.hardMode, true);
+		const kept = await viewRoute.PUT(req("PUT", { answers: { "2a": "x" } }), at(e.id));
+		assert.equal((await kept.json()).answers.hardMode, true, "a later save keeps the choice");
+		const cleared = await viewRoute.PUT(req("PUT", { answers: {}, timerStartedAt: null, hardMode: true }), at(e.id));
+		assert.equal((await cleared.json()).answers.hardMode, undefined, "no timer, no hard mode");
 	});
 
 	it("«Åpne PDF» opens the stored paper with the OS viewer", async () => {

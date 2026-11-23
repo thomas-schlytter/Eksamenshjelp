@@ -120,14 +120,17 @@ export function saveMockExamDraft(rawCode: string, rawId: string, body: unknown)
 	const { code, exam } = found;
 	const previous = getMockExamAnswers(code, exam.id);
 	if (previous?.submittedAt) return fail(409, "submitted", "Besvarelsen er allerede levert.");
-	const b = (typeof body === "object" && body !== null ? body : {}) as { answers?: unknown; timerStartedAt?: unknown };
+	const b = (typeof body === "object" && body !== null ? body : {}) as { answers?: unknown; timerStartedAt?: unknown; hardMode?: unknown };
 	const timer = typeof b.timerStartedAt === "string" && !Number.isNaN(Date.parse(b.timerStartedAt))
 		? b.timerStartedAt
 		: b.timerStartedAt === null ? undefined : previous?.timerStartedAt;
+	// Hard mode rides with the timer: no timer, no hard mode.
+	const hardMode = timer !== undefined && (typeof b.hardMode === "boolean" ? b.hardMode : previous?.hardMode === true);
 	const answers: MockExamAnswers = {
 		examId: exam.id,
 		answers: sanitizeAnswers(exam, b.answers ?? previous?.answers ?? {}),
 		...(timer ? { timerStartedAt: timer } : {}),
+		...(hardMode ? { hardMode: true } : {}),
 		updatedAt: new Date().toISOString(),
 	};
 	saveMockExamAnswers(code, answers);

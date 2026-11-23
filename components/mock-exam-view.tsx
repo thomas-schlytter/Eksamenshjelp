@@ -68,6 +68,7 @@ export function MockExamAnswerView({
 	const [exam, setExam] = useState<PublicMockExam | null>(initial?.exam ?? null);
 	const [answers, setAnswers] = useState<Record<string, string>>(initial?.answers?.answers ?? {});
 	const [timerStartedAt, setTimerStartedAt] = useState<string | undefined>(initial?.answers?.timerStartedAt);
+	const [hardMode, setHardMode] = useState<boolean>(initial?.answers?.hardMode === true);
 	const [submittedAt, setSubmittedAt] = useState<string | undefined>(initial?.answers?.submittedAt);
 	const [loadError, setLoadError] = useState("");
 	const [save, setSave] = useState<SaveState>("idle");
@@ -76,8 +77,8 @@ export function MockExamAnswerView({
 	const [submitting, setSubmitting] = useState(false);
 	const [now, setNow] = useState(() => Date.now());
 	const dirty = useRef(false);
-	const latest = useRef({ answers, timerStartedAt });
-	latest.current = { answers, timerStartedAt };
+	const latest = useRef({ answers, timerStartedAt, hardMode });
+	latest.current = { answers, timerStartedAt, hardMode };
 	const base = `/api/mock-exams/${encodeURIComponent(code)}/${encodeURIComponent(examId)}`;
 
 	useEffect(() => {
@@ -94,6 +95,7 @@ export function MockExamAnswerView({
 				setExam(body.exam);
 				setAnswers(body.answers?.answers ?? {});
 				setTimerStartedAt(body.answers?.timerStartedAt);
+				setHardMode(body.answers?.hardMode === true);
 				setSubmittedAt(body.answers?.submittedAt);
 			})
 			.catch(() => live && setLoadError("Klarte ikke å hente prøveeksamenen."));
@@ -110,7 +112,7 @@ export function MockExamAnswerView({
 			const res = await fetch(base, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ answers: latest.current.answers, timerStartedAt: latest.current.timerStartedAt ?? null }),
+				body: JSON.stringify({ answers: latest.current.answers, timerStartedAt: latest.current.timerStartedAt ?? null, hardMode: latest.current.hardMode }),
 			});
 			setSave(res.ok ? "saved" : "error");
 		} catch {
@@ -162,7 +164,7 @@ export function MockExamAnswerView({
 			const res = await fetch(`${base}/submit`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ answers, timerStartedAt: timerStartedAt ?? null }),
+				body: JSON.stringify({ answers, timerStartedAt: timerStartedAt ?? null, hardMode }),
 			});
 			const body = (await res.json().catch(() => ({}))) as { answers?: MockExamAnswers; error?: string };
 			if (!res.ok) {
@@ -183,6 +185,24 @@ export function MockExamAnswerView({
 	const locked = Boolean(submittedAt);
 	const left = exam && timerStartedAt ? remainingMs(timerStartedAt, exam.cover.durationMinutes, now) : null;
 
+	// Hard mode: like the real exam, the answers go in when the time is up —
+	// once (the ref survives re-renders while the submit is in flight).
+	const autoSubmitted = useRef(false);
+	const timeUp = left !== null && left <= 0;
+	useEffect(() => {
+		if (!hardMode || !timeUp || locked || submitting || autoSubmitted.current) return;
+		autoSubmitted.current = true;
+		void submit();
+		// submit is recreated each render; the ref guard keeps this to one call.
+	}, [hardMode, timeUp, locked, submitting]);
+
+	const startTimer = (hard: boolean) => {
+		dirty.current = true;
+		setHardMode(hard);
+		setTimerStartedAt(new Date().toISOString());
+		setNow(Date.now());
+	};
+
 	const body = (
 		<div className="lh-no-drag fixed inset-0 z-50 flex items-center justify-center bg-background/80">
 			<div
@@ -196,22 +216,34 @@ export function MockExamAnswerView({
 					<h2 className="min-w-0 flex-1 truncate text-sm font-semibold">{exam?.title ?? "Prøveeksamen"}</h2>
 					{exam && !locked && (
 						left === null ? (
-							<Button
-								variant="outline"
-								size="sm"
-								data-testid="mock-exam-timer-start"
-								onClick={() => {
-									dirty.current = true;
-									setTimerStartedAt(new Date().toISOString());
-									setNow(Date.now());
-								}}
-							>
-								<TimerIcon aria-hidden />
-								Start nedtelling ({durationLabel(exam.cover.durationMinutes)})
-							</Button>
+							<div className="flex items-center gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									data-testid="mock-exam-timer-start"
+									onClick={() => startTimer(false)}
+								>
+									<TimerIcon aria-hidden />
+									Start nedtelling ({durationLabel(exam.cover.durationMinutes)})
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									data-testid="mock-exam-hard-mode"
+									title="Som ekte eksamen: besvarelsen leveres automatisk når tiden er ute."
+									onClick={() => startTimer(true)}
+								>
+									Hard mode
+								</Button>
+							</div>
 						) : (
-							<span data-testid="mock-exam-timer" className={cn("text-sm tabular-nums", left <= 0 ? "font-medium text-destructive" : "text-muted-foreground")}>
-								{left <= 0 ? "Tiden er ute" : `Tid igjen ${remainingLabel(left)}`}
+							<span data-testid="mock-exam-timer" className={cn("flex items-center gap-2 text-sm tabular-nums", left <= 0 ? "font-medium text-destructive" : "text-muted-foreground")}>
+								{hardMode && (
+									<span data-testid="mock-exam-hard-mode-badge" className="rounded-sm bg-primary px-1.5 py-0.5 text-[11px] font-semibold text-primary-foreground">
+										Hard mode
+									</span>
+								)}
+								{left <= 0 ? (hardMode ? "Tiden er ute. Leverer …" : "Tiden er ute") : `Tid igjen ${remainingLabel(left)}`}
 							</span>
 						)
 					)}
