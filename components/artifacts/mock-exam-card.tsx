@@ -40,7 +40,7 @@ export function MockGradeDispatchCard({ part }: ArtifactPartProps) {
 	return <DispatchCard toolCallId={part.toolCallId} kind="mockGrade" />;
 }
 
-export { MAKE_MOCK_EXAM_TEXT } from "@/src/core/mock-exam";
+export { MAKE_MOCK_EXAM_TEXT } from "@/src/core";
 
 /** «Lag prøveeksamen» in the fag-chat's top bar. */
 export function MakeMockExamButton({ onClick }: { onClick: () => void }) {
