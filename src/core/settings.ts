@@ -50,7 +50,6 @@ export const BACKGROUND_MODEL_ROLES = [
 	"visualMaker",
 	"extractor",
 	"auditor",
-	"transcriber",
 ] as const;
 
 export type BackgroundModelRole = (typeof BACKGROUND_MODEL_ROLES)[number];
@@ -337,8 +336,6 @@ export const ROLE_SLOT: Readonly<Record<ModelRole, ModelSlotName>> = {
 	auditor: "cheap",
 	visualMaker: "vision",
 	pdfReader: "vision",
-	// Screenshot → LaTeX reader: vision tier unless its own override is set.
-	transcriber: "vision",
 };
 
 /** General settings — app-level behavior. Version DISPLAY and plans login
