@@ -347,14 +347,14 @@ describe("physics sliders (fine-grained log, unchanged 2026-09-17)", () => {
 		assert.equal(sanitizeRegionTuning({ blur: 0 }).blur, REGION_BLUR_LADDER[0]);
 	});
 
-	test("enabled is the compute off switch: only an explicit false turns it off", () => {
+	test("enabled is the compute switch: off by default, only an explicit true turns it on", () => {
 		// Default on; old persisted files predate the field (missing → on);
 		// garbage falls back to on (fail toward the tuned look).
-		assert.equal(DEFAULT_REGION_TUNING.enabled, true);
-		assert.equal(sanitizeRegionTuning({}).enabled, true);
+		assert.equal(DEFAULT_REGION_TUNING.enabled, false);
+		assert.equal(sanitizeRegionTuning({}).enabled, false);
 		assert.equal(sanitizeRegionTuning({ enabled: false }).enabled, false);
 		assert.equal(sanitizeRegionTuning({ enabled: true }).enabled, true);
-		assert.equal(sanitizeRegionTuning({ enabled: "no" as unknown as boolean }).enabled, true);
+		assert.equal(sanitizeRegionTuning({ enabled: "no" as unknown as boolean }).enabled, false);
 		// An explicit false survives even alongside garbage in other fields.
 		assert.equal(sanitizeRegionTuning({ enabled: false, blur: 99, bitmap: 99999 }).enabled, false);
 	});

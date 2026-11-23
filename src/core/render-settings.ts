@@ -161,7 +161,9 @@ export const DEFAULT_REGION_TUNING: RegionTuning = {
 	blur: 40,
 	bitmap: 256,
 	edgeAlpha: 0.2,
-	enabled: true,
+	// Off by default (owner, 2026-11-23): the map reads like a science map —
+	// coloured dots and cluster labels, no tinted regions behind them.
+	enabled: false,
 };
 
 /** Nearest member of a fixed option set (dropdowns have no free values). */
@@ -183,9 +185,8 @@ export function sanitizeRegionTuning(input: Partial<RegionTuning> | null | undef
 		blur: ladd(input?.blur, REGION_BLUR_LADDER, d.blur),
 		bitmap: snapToOption(bitmap, REGION_BITMAP_OPTIONS),
 		edgeAlpha: ladd(input?.edgeAlpha, REGION_EDGE_ALPHA_LADDER, d.edgeAlpha),
-		// Old persisted files predate the switch: missing → on (the look
-		// users tuned); only an explicit false turns regions off.
-		enabled: typeof input?.enabled === "boolean" ? input.enabled : true,
+		// Missing → the default (off since 2026-11-23); an explicit choice wins.
+		enabled: typeof input?.enabled === "boolean" ? input.enabled : d.enabled,
 	};
 }
 
