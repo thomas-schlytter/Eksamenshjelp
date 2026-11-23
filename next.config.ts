@@ -91,6 +91,11 @@ const nextConfig: NextConfig = {
 			// Wave E stage 2: resvg rasterizes visual-maker SVGs natively; same
 			// per-platform-binary story as the canvas above (one per build).
 			"node_modules/@resvg/resvg-js-*/**/*",
+			// Prøveeksamen PDFs (fase 6): the printed paper's math reads the
+			// KaTeX stylesheet and fonts from disk at print time — a runtime
+			// read the tracer cannot see.
+			"node_modules/katex/dist/katex.min.css",
+			"node_modules/katex/dist/fonts/**/*",
 			"node_modules/@earendil-works/pi-ai/dist/providers/data/**/*",
 			// Public native OAuth factories load these flows through variable imports.
 			// Electron main uses the same standalone SDK; the offline runtime gate

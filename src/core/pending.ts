@@ -169,6 +169,8 @@ const ACTIVITY_LABELS: Record<string, string> = {
 	demo: "Bygger en demo…",
 	visual: "Lager en visualisering…",
 	pdf: "Leser en PDF…",
+	mock_exam: "Starter prøveeksamen…",
+	grade_mock_exam: "Starter rettingen…",
 	plan_init: "Setter opp planen…",
 	plan_status: "Fargelegger planen…",
 	probe_done: "Avslutter kartleggingen…",

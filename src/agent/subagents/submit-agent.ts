@@ -76,6 +76,8 @@ export async function runSubmitAgent<T>(opts: {
 	 *  a problem string yields an isError result (invalidInputResult) →
 	 *  the model retries within maxTurns. null = accept. */
 	validate?: (value: T) => string | null;
+	/** Activity line per tool execution (the job record's live line). */
+	onToolStart?: (toolName: string, args: unknown) => void;
 }): Promise<T> {
 	let submitted: T | undefined;
 	const result = await runSubagent(
@@ -114,6 +116,7 @@ export async function runSubmitAgent<T>(opts: {
 			maxTurns: opts.maxTurns ?? 4,
 			abortSignal: opts.signal,
 			chatId: opts.chatId,
+			...(opts.onToolStart ? { onToolStart: opts.onToolStart } : {}),
 			onAssistantMessage: (message, step) =>
 				opts.onStep(
 					message.usage,

@@ -160,8 +160,10 @@ export function browserServiceBinary(): string | null {
 const BROWSER_SERVICE_TIMEOUT_MS = 15_000;
 let browserServiceProc: import("node:child_process").ChildProcess | null = null;
 
-async function connectBrowserService(): Promise<import("puppeteer-core").Browser | null> {
-	const puppeteer = (await import("puppeteer-core")).default;
+/** The running helper (spawned on first use, reused after): its process
+ *  — the IPC channel the PDF printer talks over — and its CDP port. null
+ *  when no helper binary exists or it failed to start. */
+export async function ensureBrowserService(): Promise<{ proc: import("node:child_process").ChildProcess; port: number } | null> {
 	const { spawn } = await import("node:child_process");
 	let port: number | null = null;
 
@@ -213,7 +215,14 @@ async function connectBrowserService(): Promise<import("puppeteer-core").Browser
 		}
 		(proc as { __cdpPort?: number }).__cdpPort = port;
 	}
+	return browserServiceProc ? { proc: browserServiceProc, port } : null;
+}
 
+async function connectBrowserService(): Promise<import("puppeteer-core").Browser | null> {
+	const puppeteer = (await import("puppeteer-core")).default;
+	const service = await ensureBrowserService();
+	if (!service) return null;
+	const { port } = service;
 	try {
 		const version = await fetch(`http://127.0.0.1:${port}/json/version`);
 		const info = (await version.json()) as { webSocketDebuggerUrl?: string };

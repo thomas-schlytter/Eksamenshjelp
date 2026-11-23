@@ -7,6 +7,7 @@ import { ProbeDoneCard } from "@/components/artifacts/probe-done-card";
 import { ToolCallCard } from "@/components/artifacts/tool-call-card";
 import { TopicStatusCard } from "@/components/artifacts/topic-status-card";
 import { ProblemCard, ConcludeCard } from "@/components/practice-cards";
+import { MockExamDispatchCard, MockGradeDispatchCard } from "@/components/artifacts/mock-exam-card";
 
 /**
  * Artifact renderer registry — the extension point for tool-part UI.
@@ -54,4 +55,8 @@ export const artifactRenderers: Record<string, ComponentType<ArtifactPartProps>>
 	// Exam mode: the agent's topic_status call is one calm line (status
 	// dot + topic + new status), never the raw arguments.
 	topic_status: TopicStatusCard,
+	// Prøveeksamen (fase 6): the job's dispatch card; the exam and the
+	// result render from their steer messages (steer-card.tsx).
+	mock_exam: MockExamDispatchCard,
+	grade_mock_exam: MockGradeDispatchCard,
 };

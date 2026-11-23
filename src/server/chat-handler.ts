@@ -32,6 +32,7 @@ import { collectToolCallIds } from "./pi/call-ids.ts";
 import { providerEventNote } from "../agent/provider-events.ts";
 import { effectiveSettings, stores } from "./stores.ts";
 import { courseToolContextFor } from "./courses.ts";
+import { mockExamPort, mockExamToolContextFor } from "./mock-exams.ts";
 import { searchAvailable, searchProvider } from "./search.ts";
 import { providerKeyPresent } from "./keys.ts";
 import { CLAUDE_CODE_PROVIDER } from "../core/contracts/claude-code.ts";
@@ -97,6 +98,8 @@ const jobRunner = createJobRunner({
 	chatStore: stores.chatStore,
 	jobStore: stores.jobStore,
 	deliver: deliverJobResult,
+	// Prøveeksamen (fase 6): course snapshot, storage and the PDF printer.
+	mockExams: mockExamPort,
 	// BYOK (owner, 2026-09-22): job engines resolve the chain — role
 	// override → slot → NOTHING — read FRESH per job (a settings PUT
 	// between dispatch and spawn lands); an empty chain flows through as
@@ -462,7 +465,14 @@ export async function handleChatInput(
 	// in whichever registry this turn builds; the port keeps the agent layer
 	// off the course store. No course link = no tool.
 	const courseContext = courseToolContextFor(record.course, chatId);
-	const courseTool = courseContext ? { course: courseContext } : {};
+	// Prøveeksamen (fase 6): the fag-chat only — an exam session with a course.
+	const mockExamContext = record.kind === "exam"
+		? mockExamToolContextFor(record.course, chatId, (job, input) => void jobRunner.runJob(job.id, input))
+		: undefined;
+	const courseTool = {
+		...(courseContext ? { course: courseContext } : {}),
+		...(mockExamContext ? { mockExam: mockExamContext } : {}),
+	};
 	// PRACTICE BRANCH (owner design, 2026-10-04): a kind:"practice"
 	// session builds the practitioner from turn 1 — no prober→teacher
 	// split, no plan/question/job tools; the whole registry is

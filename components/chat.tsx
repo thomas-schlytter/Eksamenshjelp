@@ -67,6 +67,7 @@ import { ThinkingCard, type PracticeThinkingData } from "@/components/practice-c
 import { GraphContextCard, type GraphContextData } from "@/components/graph-context-card";
 import { CourseContextCard } from "@/components/course-context-card";
 import { TopBar } from "@/components/top-bar";
+import { MAKE_MOCK_EXAM_TEXT, MakeMockExamButton } from "@/components/artifacts/mock-exam-card";
 import type { ArtifactPartProps, JobRecord, Phase3, QuestionAnswerData, QuestionFormDraft, TurnUsage, SessionPricing } from "@/src/core";
 import type { LhViewMessage } from "@/src/core";
 import { PhaseChip, PhaseDivider } from "@/components/phase-divider";
@@ -1417,7 +1418,10 @@ export function Chat({
 				chatId,
 				syncFromServer,
 				sendText: (t: string) => {
-					void send({ type: "text", text: t });
+					// Mid-turn the text steers in, the composer's own rule (fase 6:
+					// the prøveeksamen cards hand in through here).
+					if (busy) void steer(t);
+					else void send({ type: "text", text: t });
 				},
 				openSetup: () => setSetupOpen(true),
 			}}
@@ -1529,6 +1533,16 @@ export function Chat({
 							Plan
 						</button>
 </Hint>
+					)}
+					{/* «Lag prøveeksamen» (fase 6): the fag-chat only — an exam
+					    session that carries its course link. */}
+					{kind === "exam" && messages.some((m) => m.parts.some((p) => p.type === "data-course-context")) && (
+						<MakeMockExamButton
+							onClick={() => {
+								if (busy) void steer(MAKE_MOCK_EXAM_TEXT);
+								else void send({ type: "text", text: MAKE_MOCK_EXAM_TEXT });
+							}}
+						/>
 					)}
 					{/* «Avslutt økt» (2026-11-23): ends the current økt — the popup
 					    offers the summary + recall quiz or just the divider; a quiz

@@ -25,11 +25,13 @@ import { findTool } from "./tools/find.ts";
 import { grepTool } from "./tools/grep.ts";
 import { healToolRecord } from "./tools/heal.ts";
 import { courseTools, type CourseToolContext } from "./tools/course.ts";
+import { mockExamTools, type MockExamToolContext } from "./tools/mock-exam.ts";
 import type { GraphStore } from "../core/ports.ts";
 
 export { jobTools };
 export type { ProbeDoneContext } from "./tools/probe.ts";
 export type { CourseToolContext } from "./tools/course.ts";
+export type { MockExamToolContext } from "./tools/mock-exam.ts";
 
 /**
  * The agent-split tool composition (docs/probe-teach-split.md §1): the
@@ -290,6 +292,9 @@ export interface ProberToolContext extends ProbeDoneContext {
 	/** The session's course link (exam mode): present = topic_status is
 	 *  registered. Absent on sessions that belong to no course. */
 	course?: CourseToolContext;
+	/** The fag-chat's prøveeksamen tools (fase 6): present only in an exam
+	 *  session linked to a course — mock_exam and grade_mock_exam. */
+	mockExam?: MockExamToolContext;
 }
 
 /** The prober's tool set: probe quiz (no nodeId) + ask + the learner-fs
@@ -347,6 +352,9 @@ export function createProberTools(
 					: {}),
 				// Exam mode: the course's topic status, only in course sessions.
 				...(ctx.course ? courseTools(ctx.course) : {}),
+				// Prøveeksamen (fase 6): the fag-chat can make and grade one in
+				// any phase — the learner may ask while still being mapped.
+				...(ctx.mockExam ? mockExamTools(ctx.mockExam) : {}),
 				...done,
 			},
 				withoutGradedTools(enabled),
@@ -411,6 +419,9 @@ export interface TeacherToolContext extends PlanToolContext {
 	/** The session's course link (exam mode): present = topic_status is
 	 *  registered. Absent on sessions that belong to no course. */
 	course?: CourseToolContext;
+	/** The fag-chat's prøveeksamen tools (fase 6): present only in an exam
+	 *  session linked to a course — mock_exam and grade_mock_exam. */
+	mockExam?: MockExamToolContext;
 }
 
 /**
@@ -475,6 +486,8 @@ export function createTeacherTools(
 			// Green needs an answered explain here (the prober's mapping has no
 			// explain, so its registry carries no gate).
 			...(ctx.course ? courseTools(ctx.course, { greenRequiresExplain: () => answeredExplainInSession(ctx) }) : {}),
+			// Prøveeksamen (fase 6): only in the fag-chat (exam session + course).
+			...(ctx.mockExam ? mockExamTools(ctx.mockExam) : {}),
 		},
 		withoutGradedTools(enabled),
 		),

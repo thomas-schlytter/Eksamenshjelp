@@ -49,6 +49,9 @@ describe("standalone JavaScript tracing exclusions and native workaround policy"
 			"src/agent/image-processing/LICENSE",
 			"node_modules/@silvia-odwyer/photon-node/**/*",
 			"node_modules/@resvg/resvg-js-*/**/*",
+			// Prøveeksamen PDFs (fase 6): KaTeX stylesheet + fonts read at print time.
+			"node_modules/katex/dist/katex.min.css",
+			"node_modules/katex/dist/fonts/**/*",
 			"node_modules/@earendil-works/pi-ai/dist/providers/data/**/*",
 			"node_modules/@earendil-works/pi-ai/dist/auth/oauth/{load,github-copilot,xai,device-code}.js",
 			"node_modules/@earendil-works/pi-ai/dist/utils/sleep.js",

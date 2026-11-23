@@ -48,6 +48,9 @@ export * from "./compaction.ts";
 // session-wrap.ts («Oppsummering», 2026-11-22): the økt scope, the quiz
 // checks and the teacher-facing wrap marker.
 export * from "./session-wrap.ts";
+// mock-exam.ts (prøveeksamen, fase 6): the exam/result contract, the public
+// projection and the pure scoring rules.
+export * from "./mock-exam.ts";
 export * from "./input-events.ts";
 export { parseFilePaths, quoteFilePath, filePathLabel } from "./file-paths.ts";
 export type { FilePathPart } from "./file-paths.ts";
