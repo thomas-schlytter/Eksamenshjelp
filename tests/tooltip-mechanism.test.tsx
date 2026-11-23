@@ -46,7 +46,7 @@ describe("subtlety round pins (owner 2026-09-25)", () => {
 
 describe("spot-pins: the dev-speak cull (owner copy review at merge)", () => {
 	it("the auto-update hint is honest user language — no stream jargon", () => {
-		assert.equal(AUTO_UPDATE_HINT, "Sjekker ved oppstart og hver 24. time. Å slå dette av stopper ikke oppdateringer som allerede er i gang eller klare til å installeres.");
+		assert.equal(AUTO_UPDATE_HINT, "Ser etter nye versjoner ved oppstart og hver 24. time.");
 		assert.ok(!AUTO_UPDATE_HINT.includes("wave"), "no stream vocabulary");
 	});
 });
