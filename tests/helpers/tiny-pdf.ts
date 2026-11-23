@@ -13,8 +13,11 @@ export interface Run {
 
 export interface TinyPage {
 	runs?: Run[];
-	/** A full-page picture: ordinary XObject, stencil mask, or inline bitmap. */
-	image?: boolean | "mask" | "inline";
+	/** A full-page picture: ordinary XObject, stencil mask, or inline bitmap;
+	 *  "logo" is a small header picture (40×20pt) instead. */
+	image?: boolean | "mask" | "inline" | "logo";
+	/** Stroked vector paths (a tablet's handwriting draws one per stroke). */
+	strokes?: number;
 }
 
 const WIDTH = 612;
@@ -35,7 +38,9 @@ function pdfString(text: string): string {
 function content(page: TinyPage): string {
 	const ops: string[] = [];
 	if (page.image === "inline") ops.push(`q ${WIDTH} 0 0 ${HEIGHT} 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x80\x40\x40\x80 EI Q`);
+	else if (page.image === "logo") ops.push("q 40 0 0 20 72 740 cm /Im1 Do Q");
 	else if (page.image) ops.push(`q ${WIDTH} 0 0 ${HEIGHT} 0 0 cm /${page.image === "mask" ? "Mask" : "Im1"} Do Q`);
+	for (let i = 0; i < (page.strokes ?? 0); i++) ops.push(`${72 + (i % 40) * 10} ${100 + Math.floor(i / 40) * 20} m ${78 + (i % 40) * 10} ${110 + Math.floor(i / 40) * 20} l S`);
 	for (const run of page.runs ?? []) {
 		const matrix = run.rotated ? `0 1 -1 0 ${run.x} ${run.y}` : `1 0 0 1 ${run.x} ${run.y}`;
 		ops.push(`BT /F1 ${run.size ?? 10} Tf ${run.invisible ? 3 : 0} Tr ${matrix} Tm ${pdfString(run.text)} Tj ET`);

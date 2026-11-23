@@ -10,9 +10,12 @@ import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { after, describe, it } from "node:test";
+import { after, afterEach, describe, it } from "node:test";
 import { createCanvas } from "@napi-rs/canvas";
-import { readTool } from "../src/agent/tools/read.ts";
+import { createReadTool, PDF_IMAGE_LIMIT, PDF_PAGE_LIMIT, readTool, type ReadModel } from "../src/agent/tools/read.ts";
+import { headlessOverride, realHeadless } from "../src/agent/subagents/headless.ts";
+import { compactPageSpec } from "../src/agent/subagents/pdf-ops.ts";
+import { tinyPdf, type Run, type TinyPage } from "./helpers/tiny-pdf.ts";
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "lh-read-test-"));
 after(() => fs.rmSync(tmp, { recursive: true, force: true }));
@@ -125,5 +128,142 @@ describe("read tool — image semantics (native content parts)", () => {
 		assert.equal(result.content.length, 1);
 		assert.equal(result.content[0]!.type, "text");
 		assert.equal((result.content[0] as { type: "text"; text: string }).text, "body");
+	});
+});
+
+describe("read tool — PDFs in the same call (text per page, images where text is not enough)", () => {
+	type Part = { type: string; text?: string; data?: string; mimeType?: string };
+	const prose = (y = 700): Run[] => Array.from({ length: 6 }, (_, i) => ({
+		text: `Line ${i + 1} of ordinary typed prose, long enough to count as real text.`, x: 72, y: y - i * 14,
+	}));
+	const pdf = (name: string, pages: TinyPage[]) => {
+		const file = path.join(tmp, name);
+		fs.writeFileSync(file, tinyPdf(pages));
+		return file;
+	};
+	const read = async (args: { path: string; pages?: string }, tool = readTool) => {
+		const result = await tool.execute!("test", args);
+		const parts = result.content as Part[];
+		assert.equal(parts[0]!.type, "text", "the text part leads; images follow it");
+		return { text: parts[0]!.text!, images: parts.slice(1), details: result.details };
+	};
+	/** Count renders without painting real pages (budget tests). */
+	const fakeRenders = () => {
+		const calls: number[][] = [];
+		const dot = createCanvas(1, 1);
+		dot.getContext("2d").fillRect(0, 0, 1, 1);
+		headlessOverride.current = {
+			...realHeadless,
+			async renderPdfPages(_path, pages) {
+				calls.push(pages);
+				return pages.map((page) => ({ page, png: dot.toBuffer("image/png") }));
+			},
+		};
+		return calls;
+	};
+	afterEach(() => { headlessOverride.current = undefined; });
+
+	it("a typed PDF returns every page's text under its page number, with no images", async () => {
+		const file = pdf("typed.pdf", [{ runs: prose() }, { runs: [{ text: "Oppgave 2", x: 72, y: 720, size: 18 }, ...prose(690)] }]);
+		const { text, images, details } = await read({ path: file });
+		assert.equal(images.length, 0);
+		assert.match(text, /^PDF: .*typed\.pdf \(2 pages\)\. Showing pages 1-2\./);
+		assert.match(text, /--- Page 1 ---\nLine 1 of ordinary typed prose/);
+		assert.match(text, /--- Page 2 ---\n# Oppgave 2/);
+		assert.doesNotMatch(text, /more page/);
+		assert.deepEqual(details, { text, images: [] });
+	});
+
+	it("a scanned answer (no text layer) comes back as a rendered page image in the same result", async () => {
+		const file = pdf("scan.pdf", [{ image: true }, { runs: prose() }]);
+		const { text, images, details } = await read({ path: file });
+		assert.equal(images.length, 1, "only the scanned page is rendered");
+		assert.equal(images[0]!.type, "image");
+		assert.match(images[0]!.mimeType!, /^image\//);
+		assert.match(images[0]!.data!, /^[A-Za-z0-9+/]+={0,2}$/);
+		assert.match(text, /Page images follow after this text, in page order: p1\./);
+		assert.match(text, /--- Page 1 --- \[no text layer: scan, handwriting or drawing; page image attached\]\n\[no extractable text\]/);
+		assert.match(text, /--- Page 2 ---\nLine 1/);
+		assert.deepEqual((details as { images: unknown[] }).images, [{ page: 1 }]);
+	});
+
+	it("decides per page: a scan under OCR text, thin text and drawn strokes are seen; a logo and a blank page are not", async () => {
+		const calls = fakeRenders();
+		const file = pdf("mixed.pdf", [
+			{ image: true, runs: [{ text: "OCR words over the scan", x: 72, y: 720, invisible: true }, ...prose(680)] },
+			{ runs: [{ text: "Oppgave 3", x: 72, y: 700 }] },
+			{ strokes: 150 },
+			{ runs: prose(), strokes: 150 },
+			{ image: "logo", runs: prose() },
+			{},
+		]);
+		const { text, images } = await read({ path: file });
+		assert.deepEqual(calls, [[1, 2, 3, 4]]);
+		assert.equal(images.length, 4);
+		assert.match(text, /--- Page 1 --- \[scanned or pictured content; page image attached\]\nOCR words over the scan/);
+		assert.match(text, /--- Page 2 --- \[little text; page image attached\]\nOppgave 3/);
+		assert.match(text, /--- Page 3 --- \[no text layer: scan, handwriting or drawing; page image attached\]/);
+		assert.match(text, /--- Page 4 --- \[drawn figure or handwriting; page image attached\]/);
+		assert.match(text, /--- Page 5 ---\nLine 1/);
+		assert.match(text, /--- Page 6 ---\n\[blank page\]/);
+	});
+
+	it("pages selects a range; a spec that matches nothing is an error naming the page count", async () => {
+		const file = pdf("three.pdf", [1, 2, 3].map((n) => ({ runs: [{ text: `Side ${n}`, x: 72, y: 720, size: 18 }, ...prose(690)] })));
+		const { text } = await read({ path: file, pages: "2-3" });
+		assert.match(text, /\(3 pages\)\. Showing pages 2-3\./);
+		assert.doesNotMatch(text, /--- Page 1 ---/);
+		assert.match(text, /--- Page 2 ---\n# Side 2/);
+		assert.match(text, /--- Page 3 ---\n# Side 3/);
+		assert.match((await read({ path: file, pages: "3" })).text, /Showing page 3\./);
+		await assert.rejects(() => read({ path: file, pages: "9" }), /No pages selected: pages="9" matched nothing \(the PDF has 3 pages\)/);
+	});
+
+	it(`stops at ${PDF_PAGE_LIMIT} pages and says how to read the rest`, async () => {
+		const file = pdf("long.pdf", Array.from({ length: 25 }, () => ({ runs: prose() })));
+		const { text } = await read({ path: file });
+		assert.match(text, /\(25 pages\)\. Showing pages 1-20\./);
+		assert.match(text, /--- Page 20 ---/);
+		assert.doesNotMatch(text, /--- Page 21 ---/);
+		assert.match(text, /\[5 more pages \(21-25\)\. Use pages="21-25" to continue\.\]$/);
+	});
+
+	it(`stops before page image number ${PDF_IMAGE_LIMIT + 1}, ending on a whole page`, async () => {
+		const calls = fakeRenders();
+		const file = pdf("scans.pdf", Array.from({ length: 10 }, () => ({ image: true })));
+		const { text, images } = await read({ path: file, pages: "1-10" });
+		assert.equal(images.length, PDF_IMAGE_LIMIT);
+		assert.deepEqual(calls, [[1, 2, 3, 4, 5, 6, 7, 8]]);
+		assert.match(text, /Showing pages 1-8\./);
+		assert.match(text, /\[2 more pages \(9-10\)\. Use pages="9-10" to continue\.\]$/);
+	});
+
+	it("a model without image input gets the text and an honest omission note, no renders", async () => {
+		const calls = fakeRenders();
+		const file = pdf("blind.pdf", [{ image: true }, { runs: prose() }]);
+		const tool = createReadTool({ input: ["text"] } as ReadModel);
+		const { text, images } = await read({ path: file }, tool);
+		assert.equal(images.length, 0);
+		assert.deepEqual(calls, []);
+		assert.match(text, /\[Current model does not support images\. Page images are omitted/);
+		assert.match(text, /--- Page 1 --- \[no text layer: scan, handwriting or drawing; page image omitted\]/);
+	});
+
+	it("a failed render keeps the text and names the failure on the page", async () => {
+		headlessOverride.current = { ...realHeadless, renderPdfPages: async () => { throw new Error("no canvas"); } };
+		const file = pdf("norender.pdf", [{ image: true }]);
+		const { text, images } = await read({ path: file });
+		assert.equal(images.length, 0);
+		assert.match(text, /page image omitted: render failed \(no canvas\)\]/);
+	});
+
+	it("a file that only claims to be a PDF is an error the model sees", async () => {
+		const file = write("broken.pdf", "%PDF-1.4\nnot really a pdf");
+		await assert.rejects(() => read({ path: file }), /Could not open the PDF/);
+	});
+
+	it("compactPageSpec writes the continuation spec in ranges", () => {
+		assert.equal(compactPageSpec([1, 2, 3, 5, 7, 8]), "1-3,5,7-8");
+		assert.equal(compactPageSpec([4]), "4");
 	});
 });
