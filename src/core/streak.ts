@@ -49,10 +49,13 @@ export function answerTimestamps(messages: readonly LhMessage[]): number[] {
 	for (const m of messages) {
 		if (m.role === "toolResult") {
 			if (m.isError) continue;
-			const details = m.details as { answeredAt?: unknown; dismissed?: unknown } | null | undefined;
+			const details = m.details as { answeredAt?: unknown; dismissed?: unknown; dontKnow?: unknown } | null | undefined;
 			if (!details || typeof details !== "object" || typeof details.answeredAt !== "string") continue;
 			// skipped, onHold and sessionEnded are always paired with dismissed.
 			if (details.dismissed === true) continue;
+			// «Ett løst spørsmål» (owner, 2026-11-23): an attempt — right or
+			// wrong — keeps the flame; «Vet ikke» is not an attempt.
+			if (details.dontKnow === true) continue;
 			const at = Date.parse(details.answeredAt);
 			out.push(Number.isFinite(at) ? at : m.timestamp);
 		} else if (m.role === "custom") {

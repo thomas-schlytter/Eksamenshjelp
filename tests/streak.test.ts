@@ -79,8 +79,8 @@ describe("which answers count", () => {
 		assert.deepEqual(answerTimestamps(msgs), [Date.parse("2026-11-20T10:00:00Z")]);
 	});
 
-	it("«Vet ikke» is an honest answer and counts", () => {
-		assert.equal(answerTimestamps([answer("2026-11-20T10:00:00Z", { dontKnow: true })]).length, 1);
+	it("«Vet ikke» is not an attempt and does not count", () => {
+		assert.equal(answerTimestamps([answer("2026-11-20T10:00:00Z", { dontKnow: true })]).length, 0);
 	});
 
 	it("other tool results (no answeredAt) do not count", () => {

@@ -20,6 +20,10 @@
  * Pure and browser-safe: no IO here. Persistence is src/store/mock-exams.ts.
  */
 
+/** What «Lag prøveeksamen» sends: the request the agent answers with mock_exam.
+ *  Lives here (not in the card) so the course page needn't pull in the chat. */
+export const MAKE_MOCK_EXAM_TEXT = "Lag en prøveeksamen for meg.";
+
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 export type MockExamScoring = "points" | "percent";

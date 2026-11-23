@@ -10,7 +10,7 @@ import { useServerEvent, useServerResync } from "@/components/server-events";
 import { TopBar } from "@/components/top-bar";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
-import { MAKE_MOCK_EXAM_TEXT } from "@/components/artifacts/mock-exam-card";
+import { MAKE_MOCK_EXAM_TEXT } from "@/src/core/mock-exam";
 import { FlameCard } from "@/components/streak/flame-card";
 import { cn } from "@/lib/utils";
 import { courseVerdict, groupChatsByCourse, VERDICT_RULE, type CourseVerdict, type MockExamResult } from "@/src/core";

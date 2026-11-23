@@ -40,8 +40,7 @@ export function MockGradeDispatchCard({ part }: ArtifactPartProps) {
 	return <DispatchCard toolCallId={part.toolCallId} kind="mockGrade" />;
 }
 
-/** What «Lag prøveeksamen» sends: the request the agent answers with mock_exam. */
-export const MAKE_MOCK_EXAM_TEXT = "Lag en prøveeksamen for meg.";
+export { MAKE_MOCK_EXAM_TEXT } from "@/src/core/mock-exam";
 
 /** «Lag prøveeksamen» in the fag-chat's top bar. */
 export function MakeMockExamButton({ onClick }: { onClick: () => void }) {
