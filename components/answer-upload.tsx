@@ -141,7 +141,7 @@ export function AnswerUploadButton({
 					disabled={busy}
 					onClick={() => picker.current?.click()}
 					className={cn(
-						"flex size-10 shrink-0 items-center justify-center rounded-[10px] text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40",
+						"flex size-10 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground disabled:opacity-40",
 						className,
 					)}
 				>

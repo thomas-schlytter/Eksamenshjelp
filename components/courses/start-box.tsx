@@ -133,7 +133,7 @@ export function StartBox({
 					type="submit"
 					aria-label={submitLabel}
 					disabled={(!text.trim() && !dictation.active) || launcher.busy}
-					className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
+					className="flex size-10 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground transition-colors hover:opacity-90 disabled:opacity-40"
 				>
 					<CornerDownLeftIcon className="size-5" aria-hidden="true" />
 				</button>

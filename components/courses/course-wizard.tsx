@@ -84,7 +84,7 @@ export function CourseWizard({ course, actions, initialStep = 0, examSession = n
 			className="mx-auto w-full max-w-2xl rounded-2xl border bg-card p-5 shadow-xs sm:p-7"
 		>
 			<StepIndicator step={step} />
-			<h2 id={headingId} className="mt-3 font-ui text-xl font-semibold tracking-tight">{STEPS[step]}</h2>
+			<h2 id={headingId} className="mt-3 font-title text-xl tracking-tight">{STEPS[step]}</h2>
 
 			{step === 0 && (
 				<form

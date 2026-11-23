@@ -45,7 +45,7 @@ describe("stats bar", () => {
 		assert.match(html, /data-testid="stats-thinking"[^>]*>\s*<span[^>]*>—<\/span>/);
 		assert.ok(!html.includes("aria-hidden>·"), "no dot between the controls");
 		// the control reads as a button: pill border + dropdown chevron
-		assert.match(html, /data-testid="stats-model"[^>]*rounded-full[^>]*>/);
+		assert.match(html, /data-testid="stats-model"[^>]*rounded-md[^>]*>/);
 		assert.match(html, /▾/);
 	});
 

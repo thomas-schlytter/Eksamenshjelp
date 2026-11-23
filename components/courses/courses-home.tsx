@@ -114,7 +114,7 @@ export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, 
 		return (
 			<section className="flex min-h-full flex-col justify-center py-10 text-center" data-testid="courses-empty">
 				{failure}
-				<h1 className="font-ui text-3xl font-semibold tracking-tight text-balance">Hvilket fag skal du ha eksamen i?</h1>
+				<h1 className="font-title text-3xl tracking-tight text-balance">Hvilket fag skal du ha eksamen i?</h1>
 				<p className="mx-auto mt-3 max-w-lg font-ui text-base text-muted-foreground text-pretty">
 					Skriv fagkoden eller navnet. Eksamenshjelp henter emnesiden fra NTNU og hjelper deg å lage en plan fram mot eksamen.
 				</p>
@@ -127,7 +127,7 @@ export function CoursesOverview({ courses, error, adding, onToggleAdd, onRetry, 
 	return (
 		<section data-testid="courses-overview">
 			<div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-				<h1 className="font-ui text-2xl font-semibold tracking-tight">Mine fag</h1>
+				<h1 className="font-title text-2xl tracking-tight">Mine fag</h1>
 				<Button
 					variant={adding ? "outline" : "default"}
 					onClick={onToggleAdd}

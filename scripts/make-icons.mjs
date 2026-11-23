@@ -1,6 +1,6 @@
 // Regenerate the Windows/Linux icon set from the flat design source
-// (build/icon-flat.svg — the owner's Affinity export, rounded squircle
-// with baked transparency, owner ruling 2026-10-13).
+// (build/icon-flat.svg — the Eksamenshjelp logo, profile D 2026-11-23:
+// the components/lh-mark.tsx drawing at 1024, transparent corners).
 //
 //   build/icon.ico  — Windows (.ico with 16/24/32/48/64/128/256 PNG entries)
 //   build/icon.png  — Linux (512×512; AppImage/deb/desktop entry)

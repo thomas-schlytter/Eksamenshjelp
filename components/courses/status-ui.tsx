@@ -11,6 +11,14 @@ const STATUS_ICON: Record<TopicStatus, typeof CheckIcon> = {
 	unknown: CircleDashedIcon,
 };
 
+/** The glyph colour ON each disc: the status token's own foreground. */
+const STATUS_ICON_INK: Record<TopicStatus, string> = {
+	green: "text-status-green-foreground",
+	yellow: "text-status-yellow-foreground",
+	red: "text-status-red-foreground",
+	unknown: "text-background",
+};
+
 /** A status marker: coloured disc with the status glyph inside, plus the
  *  label for screen readers (or visibly, with `withLabel`). */
 export function StatusDot({ status, withLabel = false, className }: { status: TopicStatus; withLabel?: boolean; className?: string }) {
@@ -18,7 +26,7 @@ export function StatusDot({ status, withLabel = false, className }: { status: To
 	return (
 		<span className={cn("inline-flex items-center gap-1.5", className)} data-status={status}>
 			<span className={cn("flex size-4 shrink-0 items-center justify-center rounded-full", STATUS_STYLE[status].dot)} aria-hidden="true">
-				<Icon className={cn("size-2.5", status === "unknown" ? "text-background" : status === "yellow" ? "text-amber-950" : "text-white dark:text-black")} strokeWidth={3} />
+				<Icon className={cn("size-2.5", STATUS_ICON_INK[status])} strokeWidth={3} />
 			</span>
 			<span className={withLabel ? cn("font-ui text-xs", STATUS_STYLE[status].text) : "sr-only"}>{TOPIC_STATUS_LABEL[status]}</span>
 		</span>

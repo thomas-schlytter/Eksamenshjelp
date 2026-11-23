@@ -373,9 +373,9 @@ describe("exam plan map: columns per emne", () => {
 		assert.match(html, /<title>Usikker: usikker<\/title>/);
 		assert.match(html, /<title>Kan dette: full utregning<\/title>/);
 		assert.match(html, /<title>Ikke kartlagt<\/title>/);
-		assert.match(html, /fill-red-600\/15 stroke-red-600/);
+		assert.match(html, /fill-status-red\/15 stroke-status-red/);
 		assert.match(html, /data-testid="plan-current-outline"/);
-		assert.doesNotMatch(html, /fill-yellow-400\/25/);
+		assert.doesNotMatch(html, /fill-gold\/25/);
 		assert.match(html, /data-testid="plan-column-komplekse-tall"/);
 		assert.match(html, /KOMPLEKSE TALL · 0\/3/);
 		assert.match(html, /LINEÆR ALGEBRA · 1\/2/);
@@ -402,7 +402,7 @@ describe("exam plan map: columns per emne", () => {
 		assert.doesNotMatch(html, /Eksamenskart/);
 		assert.doesNotMatch(html, /plan-mastery-summary/);
 		assert.doesNotMatch(html, /data-mastery=/);
-		assert.match(html, /fill-yellow-400\/25/);
+		assert.match(html, /fill-gold\/25/);
 	});
 
 	it("marginalia colors in exam sessions; the in-chat block stays monochrome but uses columns", () => {
@@ -444,12 +444,10 @@ describe("exam map speaks the fag page's language", () => {
 		assert.equal(MASTERY_SWATCH.unassessed, STATUS_STYLE.unknown.dot);
 	});
 
-	it("the node boxes use the same hue steps as the topic colors, in light and dark", () => {
-		for (const [status, hue] of [["red", "red"], ["yellow", "amber"], ["green", "emerald"]] as const) {
-			const light = STATUS_STYLE[status].dot.match(new RegExp(`bg-(${hue}-\\d+)`))![1]!;
-			const dark = STATUS_STYLE[status].dot.match(new RegExp(`dark:bg-(${hue}-\\d+)`))![1]!;
-			assert.ok(MASTERY_BOX[status].includes(`stroke-${light}`), `${status}: light stroke ${light}`);
-			assert.ok(MASTERY_BOX[status].includes(`dark:stroke-${dark}`), `${status}: dark stroke ${dark}`);
+	it("the node boxes use the same status token as the topic colors (light and dark come from the token)", () => {
+		for (const status of ["red", "yellow", "green"] as const) {
+			const token = STATUS_STYLE[status].dot.match(/^bg-(status-[a-z]+)$/)![1]!;
+			assert.ok(MASTERY_BOX[status].includes(`stroke-${token}`), `${status}: stroke ${token}`);
 		}
 	});
 

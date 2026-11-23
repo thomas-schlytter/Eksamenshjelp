@@ -225,7 +225,7 @@ export function QuestionDock({
 								if (!isDictationActive()) onHold("");
 								else void finishDictation().then(() => onHold(""));
 							}}
-							className="h-7 rounded-[6px] px-2 text-xs font-normal text-muted-foreground"
+							className="h-7 rounded-md px-2 text-xs font-normal text-muted-foreground"
 						>
 							<MessageCircleQuestionIcon aria-hidden />
 							Spør agenten
@@ -243,7 +243,7 @@ export function QuestionDock({
 								if (!isDictationActive()) onSkip();
 								else void finishDictation().then(onSkip);
 							}}
-							className="h-7 rounded-[6px] px-2 text-xs font-normal text-muted-foreground"
+							className="h-7 rounded-md px-2 text-xs font-normal text-muted-foreground"
 						>
 							Hopp over
 						</Button>
@@ -370,7 +370,7 @@ export function QuestionParkedBar({ question, onUnpark }: { question: string; on
 					variant="ghost"
 					data-testid="question-unpark"
 					onClick={onUnpark}
-					className="h-7 shrink-0 rounded-[6px] px-2 text-xs font-medium"
+					className="h-7 shrink-0 rounded-md px-2 text-xs font-medium"
 				>
 					Tilbake til spørsmålet
 				</Button>
@@ -1059,7 +1059,7 @@ function QuestionDockForm({
 					data-tour={needsExplanation ? "question-explain" : undefined}
 					data-explanation-required={needsExplanation ? "true" : undefined}
 					className={cn(
-						"rounded-[10px] border bg-background/60 transition-colors focus-within:border-primary/50",
+						"rounded-md border bg-background/60 transition-colors focus-within:border-primary/50",
 						explainNudge && explanationMissing ? "border-primary/60" : "border-border/70",
 					)}
 				>
@@ -1183,7 +1183,7 @@ function QuestionDockForm({
 							{qd.mode === "text" && (
 								<AnswerUploadButton
 									testId="question-answer-upload"
-									className="size-9 rounded-[6px]"
+									className="size-9 rounded-md"
 									onPaths={(paths) => {
 										const v = withAnswerPaths(answerTextRef.current, paths);
 										answerTextRef.current = v;
@@ -1206,7 +1206,7 @@ function QuestionDockForm({
 									data-tour={active ? "question-hold" : undefined}
 									title="Sett spørsmålet på vent og skriv til agenten"
 									onClick={hold}
-									className="h-9 rounded-[6px] px-2.5 text-sm font-normal text-muted-foreground"
+									className="h-9 rounded-md px-2.5 text-sm font-normal text-muted-foreground"
 								>
 									<MessageCircleQuestionIcon aria-hidden />
 									Spør agenten
@@ -1224,7 +1224,7 @@ function QuestionDockForm({
 									// refused while the posing turn is still settling.
 									disabled={compactionRunning || turnSettling}
 									onClick={onSkip}
-									className="h-9 rounded-[6px] px-2.5 text-sm font-normal text-muted-foreground"
+									className="h-9 rounded-md px-2.5 text-sm font-normal text-muted-foreground"
 								>
 									Hopp over
 								</Button>
@@ -1233,7 +1233,7 @@ function QuestionDockForm({
 								type="submit"
 								disabled={!canSubmit || compactionRunning || turnSettling}
 								title={answerChosen && explanationMissing ? "Skriv en kort forklaring først" : undefined}
-								className="h-9 rounded-[6px] px-3.5 text-sm font-medium"
+								className="h-9 rounded-md px-3.5 text-sm font-medium"
 							>
 								Send svar
 							</Button>

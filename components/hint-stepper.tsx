@@ -51,9 +51,9 @@ export function HintStepper({
 	};
 	const nextIsNew = shown + 1 >= revealed;
 	return (
-		<div data-testid="hint-stepper" className="rounded-lg border border-border/70 bg-background/60 px-3 py-2 text-sm">
+		<div data-testid="hint-stepper" className="rounded-lg border border-gold/50 bg-gold-soft/30 px-3 py-2 text-sm">
 			<div className="flex items-center gap-2 text-xs text-muted-foreground">
-				<LightbulbIcon className="size-3.5 shrink-0" aria-hidden />
+				<LightbulbIcon className="size-3.5 shrink-0 text-gold-ink" aria-hidden />
 				<span data-testid="hint-position" aria-live="polite" className="font-medium uppercase tracking-wide">
 					Hint {shown + 1} av {hints.length}
 				</span>

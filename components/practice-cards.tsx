@@ -86,10 +86,10 @@ const OUTCOME_LABEL: Record<string, string> = {
  * cost), surrendered red (the problem beat the learner), moved on muted
  * (the agent's call, not a verdict against him). */
 const OUTCOME_CHIP: Record<string, string> = {
-	solved: "bg-green-500/15 text-green-500",
-	solvedWithHints: "bg-amber-500/15 text-amber-500",
+	solved: "bg-status-green-soft text-status-green-ink",
+	solvedWithHints: "bg-status-yellow-soft text-status-yellow-ink",
 	movedOn: "bg-muted text-muted-foreground",
-	surrendered: "bg-red-500/15 text-red-500",
+	surrendered: "bg-status-red-soft text-status-red-ink",
 	dismissed: "bg-muted text-muted-foreground",
 };
 
@@ -124,7 +124,7 @@ export function ConcludeCard({ part }: ArtifactPartProps) {
 			<div className="mb-1 flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
 				Avsluttet
 				{(OUTCOME_LABEL[outcome] ?? "") !== "" && outcome !== "dismissed" && (
-					<span className={cn("rounded px-1.5 py-0.5", OUTCOME_CHIP[outcome] ?? OUTCOME_CHIP.movedOn)}>
+					<span className={cn("rounded-sm px-1.5 py-0.5", OUTCOME_CHIP[outcome] ?? OUTCOME_CHIP.movedOn)}>
 						{OUTCOME_LABEL[outcome]}
 					</span>
 				)}
