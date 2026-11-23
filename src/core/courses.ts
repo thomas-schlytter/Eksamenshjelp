@@ -610,7 +610,7 @@ const MODE_INSTRUCTION: Record<NonNullable<ChatCourseLink["mode"]>, string> = {
 	exam:
 		"Mode: EXAM SESSION. This is one continuous exam session for the whole course, with no single focus topic. The sources " +
 		"listed below are the pensum basis: the earlier exam papers, solutions and notes among them are where the emner and the " +
-		"recurring task types come from. Read them yourself (`ls`/`find` the folders, the `pdf` tool for PDF files) before you " +
+		"recurring task types come from. Read them yourself (`ls`/`find` the folders, `read` opens PDF files directly) before you " +
 		"probe, instead of asking the learner where the material is; ask only when the list holds no exam papers. The exam facts " +
 		"above (date, form, permitted aids) are already known, so do not ask for them again. The course topics listed above are " +
 		"a starting point for the emner of the plan map, but the past exams decide. Two status tools do two different things: " +

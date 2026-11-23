@@ -360,8 +360,8 @@ export function removeCourse(rawCode: string): { ok: true } | CourseFailure {
 
 // ─── Sources ─────────────────────────────────────────────────────────────────
 
-/** What the agent's read tools can open: text and images via `read`,
- *  PDFs via the `pdf` tool. Office formats are not readable yet. */
+/** What the agent's read tools can open: text, images and PDFs via
+ *  `read`. Office formats are not readable yet. */
 const TEXT_EXTENSIONS = new Set([
 	"md", "markdown", "txt", "tex", "rst", "org", "csv", "tsv", "json", "yaml", "yml", "html", "htm", "xml",
 	"py", "m", "jl", "r", "c", "h", "cpp", "hpp", "java", "js", "ts", "ipynb",
