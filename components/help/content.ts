@@ -298,22 +298,19 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 
 	// ── Økter: lære og øve ──────────────────────────────────────────────────
 	{
-		id: "les-av-skjermbilde",
+		id: "legg-inn-besvarelse",
 		category: "okter",
 		question: "Hvordan får jeg håndskrevne utregninger inn i økta?",
 		answer: [
-			"Med «Les av skjermbilde» skriver appen av et bilde av utregningen din til LaTeX. Et vindu viser bildet ved siden av den ferdig formaterte matematikken, så du kan gå over at alt ble riktig før noe havner i skrivefeltet.",
-			"Bildet skrives av ordrett, også det som er feil, slik at agenten ser arbeidet ditt som det er. Krysser du av for «Fiks opplagte feil», leses bildet på nytt med retting, og vinduet lister opp hva som ble endret. Steder som ikke lot seg lese, merkes [uleselig].",
-			"Bildet sendes til modellen som leser det av, og lagres ikke i appen. Avleseren bruker bilde-modellen din, eller en egen modell du velger på raden «Avleser» under Innstillinger → Agent.",
+			"Med «Legg inn besvarelse» gir du agenten utregningen din som fil: en PDF eller et bilde, gjerne flere på en gang. Agenten leser filene selv, side for side, og ser håndskrift og figurer som bilder. Modellen du bruker i økta, må da kunne lese bilder.",
+			"Filene blir liggende der de er. Skrivefeltet får en lenke til hver fil, og du sender selv. Et skjermbilde du limer inn, lagres i appens datamappe.",
 		],
 		steps: [
-			"Åpne en økt.",
-			"Lim inn et skjermbilde i skrivefeltet (Cmd+V), slipp en bildefil på økta, eller trykk på avlesningsknappen ved skrivefeltet.",
-			"Sammenlign bildet med visningen, og rett i LaTeX-feltet om noe ble feil.",
-			"Trykk «Sett inn». Teksten legges i skrivefeltet, og du sender den selv.",
+			"Åpne en økt, eller svar på en oppgave fra agenten.",
+			"Trykk på «Legg inn besvarelse» ved skrivefeltet eller svarfeltet, og velg filene. Du kan også dra filene inn i økta eller lime inn et skjermbilde (Cmd+V).",
+			"Skriv gjerne noen ord til, og send.",
 		],
-		keywords: ["skjermbilde", "screenshot", "latex", "håndskrift", "håndskrevet", "bilde", "avlesning", "les av", "ocr", "formel", "lim inn", "utregning"],
-		actions: [{ label: "Velg modell for Avleser", action: { kind: "settings", section: "agent" } }],
+		keywords: ["besvarelse", "legg inn", "last opp", "pdf", "bilde", "skjermbilde", "screenshot", "håndskrift", "håndskrevet", "utregning", "lim inn", "skann"],
 	},
 	{
 		id: "hva-er-en-okt",

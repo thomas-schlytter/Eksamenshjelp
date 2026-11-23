@@ -58,8 +58,8 @@ export { customProviderGet, customProviderMutation } from "./custom-provider-htt
 export * from "./courses.ts";
 // «Oppsummering»: the /api/chats/[id]/wrap service (summary + recall quiz).
 export * from "./session-wrap.ts";
-// Screenshot → LaTeX: the /api/transcribe service.
-export * from "./transcribe.ts";
+// «Legg inn besvarelse»: the /api/attachments service (pasted images → files).
+export * from "./attachments.ts";
 export { NtnuUnreachableError, createNtnuClient, parseNtnuCoursePage } from "./ntnu.ts";
 // "Importer fra LearnHarness": additive import of another data folder.
 export {

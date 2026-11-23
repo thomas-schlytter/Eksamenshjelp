@@ -112,11 +112,11 @@ export const FEATURES: readonly FeatureEntry[] = [
 		action: { kind: "settings", section: "agent" },
 	},
 	{
-		id: "les-av-skjermbilde",
-		title: "Les av skjermbilde til LaTeX",
-		description: "Lim inn et bilde av utregningen din i en økt, og få den som LaTeX du kan gå over.",
-		keywords: ["skjermbilde", "screenshot", "latex", "håndskrift", "håndskrevet", "bilde", "avleser", "les av", "ocr", "formel", "lim inn"],
-		action: { kind: "article", id: "les-av-skjermbilde" },
+		id: "legg-inn-besvarelse",
+		title: "Legg inn besvarelse",
+		description: "Gi agenten utregningen din som PDF eller bilde, så leser den arbeidet selv.",
+		keywords: ["besvarelse", "legg inn", "last opp", "pdf", "bilde", "skjermbilde", "screenshot", "håndskrift", "håndskrevet", "lim inn", "skann"],
+		action: { kind: "article", id: "legg-inn-besvarelse" },
 	},
 	{
 		id: "innstillinger-diktering",

@@ -5,7 +5,6 @@ import { FileSymlinkIcon, XIcon } from "lucide-react";
 import { quoteFilePath } from "@/src/core";
 import { appendToPrimaryInput } from "@/components/dictation";
 import { INSERT_FILE_PATHS_EVENT } from "@/components/path-input";
-import { openTranscribe } from "@/components/transcribe/transcribe-event";
 
 const BROWSER_NOTICE = "Lokale filstier kan bare legges ved i skrivebordsappen. Du kan lime inn en full sti i stedet.";
 
@@ -61,50 +60,37 @@ export function FilePathDropZone({ children, className }: { children: React.Reac
 				event.stopPropagation();
 				clearDrag();
 				const dropped = Array.from(event.dataTransfer.files);
-				// Read now: drag items are dead once the event returns, and the
-				// attach route may run later (from the reader's window).
+				const resolve = window.lh?.getPathForFile;
+				// Every dropped file, images and PDFs alike, becomes a quoted path
+				// chip in the focused or primary input: the agent reads it itself.
+				if (!resolve) { setNotice(BROWSER_NOTICE); return; }
+				// Directories are not file references. This check uses drag metadata,
+				// never a server request or a new filesystem capability.
 				const directories = Array.from(event.dataTransfer.items)
 					.filter((item) => item.kind === "file")
 					.map((item) => item.webkitGetAsEntry?.()?.isDirectory === true);
-				const target = event.currentTarget;
-				const resolve = window.lh?.getPathForFile;
-				/** Existing behaviour: quoted path chips into the focused or primary input. */
-				const attachPaths = (): void => {
-					if (!resolve) { setNotice(BROWSER_NOTICE); return; }
-					// Directories are not file references. This check uses drag metadata,
-					// never a server request or a new filesystem capability.
-					const paths: string[] = [];
-					let skipped = 0;
-					for (const [index, file] of dropped.entries()) {
-						try {
-							if (directories[index]) { skipped++; continue; }
-							const path = resolve(file);
-							quoteFilePath(path); // Same rooted-path validity rule as typed chips.
-							paths.push(path);
-						} catch { skipped++; }
-					}
-					if (paths.length === 0) {
-						setNotice("Fant ingen lokale filstier. Slipp filer som finnes på maskinen din.");
-						return;
-					}
-					const focused = document.activeElement?.closest<HTMLElement>("[data-file-path-input]");
-					if (focused && target.contains(focused)) {
-						focused.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: paths }));
-					} else if (!appendToPrimaryInput(paths.map(quoteFilePath).join(" "))) {
-						setNotice("Åpne en økt for å legge ved filstier.");
-						return;
-					}
-					setNotice(skipped ? "Noen av elementene du slapp, hadde ingen filsti." : "");
-				};
-				// One image dropped on an open session's composer: read it to LaTeX
-				// («Les av skjermbilde»). The window keeps «Legg ved som fil i
-				// stedet», so the path-chip route stays one click away.
-				const only = dropped.length === 1 ? dropped[0] : undefined;
-				if (only?.type.startsWith("image/") && target.querySelector('[data-testid="transcribe-button"]')) {
-					openTranscribe({ image: only, ...(resolve ? { attachAsFile: attachPaths } : {}) });
+				const paths: string[] = [];
+				let skipped = 0;
+				for (const [index, file] of dropped.entries()) {
+					try {
+						if (directories[index]) { skipped++; continue; }
+						const path = resolve(file);
+						quoteFilePath(path); // Same rooted-path validity rule as typed chips.
+						paths.push(path);
+					} catch { skipped++; }
+				}
+				if (paths.length === 0) {
+					setNotice("Fant ingen lokale filstier. Slipp filer som finnes på maskinen din.");
 					return;
 				}
-				attachPaths();
+				const focused = document.activeElement?.closest<HTMLElement>("[data-file-path-input]");
+				if (focused && event.currentTarget.contains(focused)) {
+					focused.dispatchEvent(new CustomEvent(INSERT_FILE_PATHS_EVENT, { detail: paths }));
+				} else if (!appendToPrimaryInput(paths.map(quoteFilePath).join(" "))) {
+					setNotice("Åpne en økt for å legge ved filstier.");
+					return;
+				}
+				setNotice(skipped ? "Noen av elementene du slapp, hadde ingen filsti." : "");
 			}}
 		>
 			{children}

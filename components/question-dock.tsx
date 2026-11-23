@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
 import { useEnterSubmits } from "@/components/enter-submits";
 import { PathInput } from "@/components/path-input";
+import { AnswerUploadButton, withAnswerPaths } from "@/components/answer-upload";
 import { MalformedQuestion } from "@/components/malformed-question";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
@@ -1098,6 +1099,18 @@ function QuestionDockForm({
 									: "↵ sender · ⇧↵ ny linje"}
 						</span>
 						<div className="ml-auto flex items-center gap-1">
+							{/* «Legg inn besvarelse»: a task answered with files (PDF/images). */}
+							{qd.mode === "text" && (
+								<AnswerUploadButton
+									testId="question-answer-upload"
+									className="size-9 rounded-[6px]"
+									onPaths={(paths) => {
+										const v = withAnswerPaths(answerTextRef.current, paths);
+										answerTextRef.current = v;
+										setText(v);
+									}}
+								/>
+							)}
 							{/* The two ways OUT that are not answers (2026-11, owner: "man
 							    skal kunne velge å ikke svare, eller sette det på vent").
 							    Quiet ghost buttons beside the primary: always visible,
