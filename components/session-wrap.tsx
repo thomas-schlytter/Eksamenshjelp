@@ -55,7 +55,7 @@ export function EndSessionButton({ state, onClick }: { state: EndSessionState; o
 				className={cn("lh-no-drag shrink-0", disabled && "cursor-default opacity-50 hover:bg-primary")}
 			>
 				<FlagIcon aria-hidden />
-				Avslutt økt
+				{state === "resume" ? "Fortsett quizen" : "Avslutt økt"}
 			</Button>
 		</Hint>
 	);

@@ -25,10 +25,10 @@ const wrap = {
 };
 
 describe("the Avslutt økt button", () => {
-	it("reads Avslutt økt in every state, as a primary button", () => {
+	it("reads Avslutt økt (Fortsett quizen with a draft), as a primary button", () => {
 		for (const state of ["ready", "resume", "empty"] as const) {
 			const html = renderToStaticMarkup(<EndSessionButton state={state} onClick={() => {}} />);
-			assert.match(html, /Avslutt økt/);
+			assert.match(html, state === "resume" ? /Fortsett quizen/ : /Avslutt økt/);
 			assert.match(html, /bg-primary/);
 		}
 		assert.doesNotMatch(renderToStaticMarkup(<EndSessionButton state="ready" onClick={() => {}} />), /Oppsummering/);
