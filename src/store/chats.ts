@@ -186,6 +186,20 @@ function renameChat(id: string, title: string): ChatRecord {
 	return record;
 }
 
+/** «Flytt til fag» (fase 2): the course link and the messages (the new
+ *  course-context marker included) land in one write. Like a rename it
+ *  is not conversation activity: updatedAt stays put. It changes which
+ *  group the session lists under, so it announces chats-changed. */
+function linkCourse(id: string, course: ChatCourseLink, messages: LhMessage[]): ChatRecord {
+	const record = getChat(id);
+	if (!record) throw new Error(`Chat not found: ${id}`);
+	record.course = course;
+	record.messages = messages;
+	writeChat(record);
+	emit("chats-changed", {});
+	return record;
+}
+
 /** Delete the session record file entirely (session-deletion wave 6,
  *  owner 2026-09-22). False when the id is unknown — the route turns that
  *  into a 404. The record's graph traces and jobs are the route's
@@ -229,6 +243,7 @@ export const chatStore: ChatStore = {
 	saveWrapDraft,
 	saveSettings,
 	renameChat,
+	linkCourse,
 	deleteChat,
 	appendTurnUsage,
 	appendExtractionUsage,

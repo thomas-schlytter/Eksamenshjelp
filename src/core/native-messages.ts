@@ -316,14 +316,20 @@ export function newGraphContextMessage(picks: readonly GraphContextPick[], chain
  *  reads `content` (course facts, topic list with status, focus topic,
  *  mode and the learner's sources — core/courses.ts courseContextText);
  *  `details` feeds the transcript's compact course card. Written once at
- *  session creation, so it is a snapshot: later status changes reach the
- *  model through its own topic_status calls, not through this marker. */
-export function newCourseContextMessage(course: Course, link: ChatCourseLink, todayIso: string): LhMarkerMessage {
+ *  session creation (or when «Flytt til fag» links a loose session), so it
+ *  is a snapshot: later status changes reach the model through its own
+ *  topic_status calls, not through this marker. */
+export function newCourseContextMessage(
+	course: Course,
+	link: ChatCourseLink,
+	todayIso: string,
+	opts: { kind?: "teach" | "practice" | "exam" } = {},
+): LhMarkerMessage {
 	return {
 		id: newMessageId(),
 		role: "custom",
 		customType: "course-context",
-		content: courseContextText(course, link, todayIso),
+		content: courseContextText(course, link, todayIso, opts),
 		display: true,
 		details: courseContextDetails(course, link),
 		timestamp: Date.now(),

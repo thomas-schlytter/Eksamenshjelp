@@ -19,15 +19,19 @@ export interface CourseContextData {
 	name: string;
 	topicId?: string;
 	topicTitle?: string;
-	mode?: "learn" | "practice" | "mapping" | "exam";
+	mode?: "learn" | "practice" | "mapping" | "exam" | "sub";
 	sourceCount: number;
 }
 
+/** Fase 2 (one chat per fag): the fag's main chat reads «Fag-chat», every
+ *  other linked chat «Underchat» — the retired Lær/Øv/Kartlegging starts
+ *  on old records included, so those words are gone from the UI. */
 const MODE_LABEL: Record<NonNullable<CourseContextData["mode"]>, string> = {
-	learn: "Lær",
-	practice: "Øv",
-	mapping: "Kartlegging",
-	exam: "Eksamensøkt",
+	learn: "Underchat",
+	practice: "Underchat",
+	mapping: "Underchat",
+	sub: "Underchat",
+	exam: "Fag-chat",
 };
 
 /** Parse, don't cast: the fields the line needs, or null. */
@@ -35,7 +39,7 @@ export function parseCourseContext(data: unknown): CourseContextData | null {
 	if (typeof data !== "object" || data === null) return null;
 	const d = data as Record<string, unknown>;
 	if (typeof d.code !== "string" || d.code.trim().length === 0) return null;
-	const mode = d.mode === "learn" || d.mode === "practice" || d.mode === "mapping" || d.mode === "exam" ? d.mode : undefined;
+	const mode = d.mode === "learn" || d.mode === "practice" || d.mode === "mapping" || d.mode === "exam" || d.mode === "sub" ? d.mode : undefined;
 	return {
 		code: d.code.trim(),
 		name: typeof d.name === "string" ? d.name.trim() : "",

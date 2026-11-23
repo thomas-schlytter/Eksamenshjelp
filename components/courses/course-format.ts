@@ -1,11 +1,12 @@
 import type {
-	ChatCourseLink, CourseSummary, CourseTopic, ExamPlanItem, PlanActivity, TopicStatus,
+	CourseSummary, CourseTopic, ExamPlanItem, PlanActivity, TopicStatus,
 } from "./course-types";
 
 /**
- * Pure presentation helpers for the course UI: labels, dates, sorting and
- * the session each "Start"-button creates. No React, no fetch: the render
- * and unit tests pin these directly.
+ * Pure presentation helpers for the course UI: labels, dates and sorting.
+ * No React, no fetch: the render and unit tests pin these directly. (The
+ * Lær/Øv/Prøveeksamen/Kartlegging start bodies left with fase 2: a fag's
+ * work happens in its fag-chat, components/courses/course-chats.ts.)
  */
 
 /** Left-to-right order in the progress line: what you know first. */
@@ -167,96 +168,8 @@ export function sortTopicsForBoard<T extends Pick<CourseTopic, "status" | "weigh
 		|| a.title.localeCompare(b.title, "nb"));
 }
 
-/** What one "Start"-button creates: the POST /api/chats body plus the
- *  learner's opening message (delivered as the session's first turn). */
-export interface CourseSessionStart {
-	title: string;
-	kind?: "practice" | "exam";
-	course: ChatCourseLink;
-	openingText: string;
-}
-
-type CourseRef = { code: string; name: string };
-
-export function learnSession(course: CourseRef, topic: Pick<CourseTopic, "id" | "title">): CourseSessionStart {
-	return {
-		title: `Lær: ${topic.title}`,
-		course: { code: course.code, topicId: topic.id, mode: "learn" },
-		openingText: `Lær meg ${topic.title} i ${course.code} fram mot eksamen.`,
-	};
-}
-
-export function practiceSession(course: CourseRef, topic: Pick<CourseTopic, "id" | "title">): CourseSessionStart {
-	return {
-		title: `Øv: ${topic.title}`,
-		kind: "practice",
-		course: { code: course.code, topicId: topic.id, mode: "practice" },
-		openingText: `Gi meg eksamensoppgaver om ${topic.title} i ${course.code}.`,
-	};
-}
-
-export function mockExamSession(course: CourseRef): CourseSessionStart {
-	return {
-		title: `Prøveeksamen ${course.code}`,
-		kind: "practice",
-		course: { code: course.code, mode: "practice" },
-		openingText: `Gi meg et prøveeksamenssett i ${course.code}.`,
-	};
-}
-
-export function mappingSession(course: CourseRef): CourseSessionStart {
-	return {
-		title: `Kartlegging ${course.code}`,
-		course: { code: course.code, mode: "mapping" },
-		openingText: `Kartlegg hva jeg kan i ${course.code} ${course.name}.`,
-	};
-}
-
-/** Eksamensøkt: one continuous session for the whole fag (kind "exam").
- *  The agent maps the pensum from the fag's sources and follows the
- *  student on a colored map; no single tema. */
-export function examSession(course: CourseRef): CourseSessionStart {
-	return {
-		title: `Eksamensøkt ${course.code}`,
-		kind: "exam",
-		course: { code: course.code, mode: "exam" },
-		openingText: `Jeg skal ha eksamen i ${course.code} ${course.name}. Kartlegg pensum og lag et eksamenskart.`,
-	};
-}
-
 /** What a plan item is ABOUT: the topic's title when it still exists,
  *  else the item's own title without its «Lær: »-style activity prefix. */
 export function planItemSubject(item: Pick<ExamPlanItem, "title">, topic?: Pick<CourseTopic, "title">): string {
 	return topic?.title ?? item.title.replace(/^(Lær|Øv|Repeter):\s*/, "");
-}
-
-/** Plan item → session: learn/review teach, practice/mock drill. A plan
- *  item without a topic (a mock exam, or a topic since deleted) falls
- *  back to the course-wide variant of the same activity. */
-export function sessionForPlanItem(
-	course: CourseRef & { topics: readonly Pick<CourseTopic, "id" | "title">[] },
-	item: Pick<ExamPlanItem, "activity" | "topicId" | "title">,
-): CourseSessionStart {
-	const topic = item.topicId ? course.topics.find((t) => t.id === item.topicId) : undefined;
-	if (item.activity === "mock") return mockExamSession(course);
-	const subject = planItemSubject(item, topic);
-	if (item.activity === "practice") {
-		return topic ? practiceSession(course, topic) : {
-			title: `Øv: ${subject}`,
-			kind: "practice",
-			course: { code: course.code, mode: "practice" },
-			openingText: `Gi meg eksamensoppgaver om ${subject} i ${course.code}.`,
-		};
-	}
-	if (topic) {
-		const start = learnSession(course, topic);
-		return item.activity === "review"
-			? { ...start, title: `Repeter: ${topic.title}`, openingText: `Repeter ${topic.title} i ${course.code} med meg fram mot eksamen.` }
-			: start;
-	}
-	return {
-		title: `${ACTIVITY_LABEL[item.activity]}: ${subject}`,
-		course: { code: course.code, mode: "learn" },
-		openingText: `Lær meg ${subject} i ${course.code} fram mot eksamen.`,
-	};
 }

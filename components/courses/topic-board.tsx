@@ -1,25 +1,21 @@
 "use client";
 
 import { useId, useMemo, useRef, useState } from "react";
-import { BookOpenIcon, DumbbellIcon, LoaderCircleIcon, PencilIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
+import { LoaderCircleIcon, PencilIcon, PlusIcon, RefreshCwIcon, Trash2Icon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { TopicDraft } from "./course-api";
-import {
-	learnSession, practiceSession, sortTopicsForBoard, STATUS_STYLE, WEIGHT_LABEL, type CourseSessionStart, type SelfStatus,
-} from "./course-format";
+import { sortTopicsForBoard, STATUS_STYLE, WEIGHT_LABEL, type SelfStatus } from "./course-format";
 import { MAX_COURSE_TOPICS, TOPIC_STATUS_LABEL, type Course, type CourseTopic } from "./course-types";
 import { StatusButtons, StatusDot } from "./status-ui";
 
 export interface TopicBoardActions {
 	onStatus: (topicId: string, status: SelfStatus) => void;
-	onStart: (session: CourseSessionStart) => void;
 	/** Replace the whole list (manual edit). Resolves true when saved. */
 	onSaveTopics: (topics: TopicDraft[]) => Promise<boolean>;
 	/** «Lag temaliste på nytt»: the page confirms, then regenerates. */
 	onRegenerate: () => void;
-	starting: boolean;
 	regenerating: boolean;
 }
 
@@ -37,11 +33,11 @@ export function WeightMark({ weight }: { weight: 1 | 2 | 3 }) {
 	);
 }
 
-/** One topic: what it is, how well you know it, and the two ways to work on it. */
-export function TopicRow({ course, topic, actions }: {
-	course: Pick<Course, "code" | "name">;
+/** One topic: what it is and how well you know it. (Fase 2: the Lær/Øv
+ *  starts are gone; the work happens in the fag-chat.) */
+export function TopicRow({ topic, actions }: {
 	topic: CourseTopic;
-	actions: Pick<TopicBoardActions, "onStatus" | "onStart" | "starting">;
+	actions: Pick<TopicBoardActions, "onStatus">;
 }) {
 	return (
 		<li data-testid="topic-row" data-status={topic.status} className="grid gap-3 py-4 sm:grid-cols-[1fr_auto] sm:items-center sm:gap-x-6">
@@ -70,28 +66,6 @@ export function TopicRow({ course, topic, actions }: {
 			    wrap (never clip) if a larger font needs more. */}
 			<div className="flex flex-col gap-2 sm:w-[22.5rem]">
 				<StatusButtons value={topic.status} topicTitle={topic.title} onChange={(status) => actions.onStatus(topic.id, status)} />
-				<div className="grid grid-cols-2 gap-1">
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={actions.starting}
-						onClick={() => actions.onStart(learnSession(course, topic))}
-						aria-label={`Lær: ${topic.title}`}
-					>
-						<BookOpenIcon aria-hidden="true" />
-						Lær
-					</Button>
-					<Button
-						variant="outline"
-						size="sm"
-						disabled={actions.starting}
-						onClick={() => actions.onStart(practiceSession(course, topic))}
-						aria-label={`Øv: ${topic.title}`}
-					>
-						<DumbbellIcon aria-hidden="true" />
-						Øv
-					</Button>
-				</div>
 			</div>
 		</li>
 	);
@@ -216,8 +190,8 @@ function TopicListEditor({ topics, onSave, onCancel }: {
 }
 
 /**
- * TEMAER: every topic with its colour, the three status buttons always at
- * hand, and «Lær» / «Øv» per topic.
+ * TEMAER: every topic with its colour and the three status buttons always
+ * at hand.
  *
  * The order is "needs work first" AS OF WHEN THE TAB OPENED and then held
  * still: a topic does not jump away under the cursor the moment its status
@@ -240,11 +214,6 @@ export function TopicBoard({ course, actions, onOpenWizard }: {
 
 	return (
 		<section data-tour="topic-board" data-testid="topic-board" aria-label="Temaer" className="flex flex-col gap-4">
-			<p className="rounded-xl border bg-card/60 px-4 py-3 font-ui text-sm leading-relaxed text-muted-foreground">
-				<strong className="font-semibold text-foreground">Lær</strong> = forstå temaet steg for steg.{" "}
-				<strong className="font-semibold text-foreground">Øv</strong> = løs oppgaver slik de kommer på eksamen.
-			</p>
-
 			{course.topics.length === 0 && !editing ? (
 				<div className="rounded-2xl border border-dashed bg-card/50 px-6 py-10 text-center">
 					<p className="font-ui text-base font-semibold">Ingen temaer ennå</p>
@@ -279,7 +248,7 @@ export function TopicBoard({ course, actions, onOpenWizard }: {
 						</div>
 					</div>
 					<ul className="divide-y divide-border/60 rounded-2xl border bg-card px-4">
-						{ordered.map((topic) => <TopicRow key={topic.id} course={course} topic={topic} actions={actions} />)}
+						{ordered.map((topic) => <TopicRow key={topic.id} topic={topic} actions={actions} />)}
 					</ul>
 				</>
 			)}

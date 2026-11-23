@@ -28,6 +28,7 @@ export function StartBox({
 	launcher,
 	placeholder,
 	buildSession,
+	send,
 	picker,
 	leadingSlot,
 	tourId,
@@ -40,6 +41,9 @@ export function StartBox({
 	placeholder: string;
 	/** The create body for this draft. Default: a free session titled by the text. */
 	buildSession?: (text: string) => SessionCreation;
+	/** Instead of creating a session: hand the draft elsewhere (the fag
+	 *  page sends it into the fag-chat). The caller owns the guards. */
+	send?: (text: string) => void;
 	/** Leads the action row above the box (the node picker on the map). */
 	picker?: ReactNode;
 	/** The stats row's left edge (the fag chip). */
@@ -83,6 +87,10 @@ export function StartBox({
 	const begin = () => {
 		const draft = mirror.current.trim();
 		if (!draft) return;
+		if (send) {
+			send(draft);
+			return;
+		}
 		void launcher.launch(buildSession ? buildSession(draft) : { title: draft });
 	};
 	// FINISH DICTATION FIRST: let the last spoken words land, then send.

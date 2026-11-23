@@ -141,12 +141,12 @@ describe("timeAgo", () => {
 	});
 });
 
-describe("SessionRow practice badge (practice sessions, 2026-10-04)", () => {
-	it("a practice row carries the dumbbell badge and the unified Working meta while busy (owner, 2026-10-10)", () => {
+describe("SessionRow and practice sessions (fase 2: no Læring/Øving badge)", () => {
+	it("a practice row has no badge any more, and the unified Working meta while busy (owner, 2026-10-10)", () => {
 		const html = render(item({ kind: "practice", busy: true }));
 		assert.match(html, /Arbeider…/);
 		assert.doesNotMatch(html, /Practicing…/);
-		assert.match(html, /aria-label="Øvingsøkt"/);
+		assert.doesNotMatch(html, /Øvingsøkt/);
 	});
 
 	it("a teaching row carries neither", () => {

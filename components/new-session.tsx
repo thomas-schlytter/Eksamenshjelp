@@ -182,16 +182,14 @@ export function DraftShell({
 						<Conversation className="h-full min-w-0 flex-1" initial="instant">
 							<ConversationContent className="min-h-full gap-0 p-0">
 								<ConversationEmptyState
-									title={mode === "practice" ? "Ny øvingsøkt" : mode === "exam" ? "Ny eksamensøkt" : "Ny økt"}
+									title={course ? "Ny underchat" : mode === "practice" ? "Ny øvingsøkt" : mode === "exam" ? "Ny eksamensøkt" : "Ny økt"}
 									description={
-										mode === "practice"
-											? "Velg noder fra kunnskapskartet, beskriv hva du vil øve på, eller ta med din egen oppgave."
-											: mode === "exam"
-												? course
-													? `Økta kobles til ${course.code}. Læreren kartlegger pensum fra kildene i faget, finner ut hva du kan, og lager et eksamenskart med farger.`
-													: "Si hvilken eksamen det gjelder, og hvor du har tidligere eksamener og PDF-er. Læreren kartlegger pensum, finner ut hva du kan, og lager et eksamenskart med farger."
-												: course
-													? `Økta kobles til ${course.code}. Læreren starter med å kartlegge hva du kan fra før.`
+										course
+											? `En egen chat i ${course.code}, ved siden av fag-chatten. Skriv hva du vil jobbe med.`
+											: mode === "practice"
+												? "Velg noder fra kunnskapskartet, beskriv hva du vil øve på, eller ta med din egen oppgave."
+												: mode === "exam"
+													? "Si hvilken eksamen det gjelder, og hvor du har tidligere eksamener og PDF-er. Læreren kartlegger pensum, finner ut hva du kan, og lager et eksamenskart med farger."
 													: "Læreren starter med å kartlegge hva du kan fra før."
 									}
 								/>
@@ -227,7 +225,7 @@ export function DraftShell({
 										// input (owner refinement round, 2026-09-24) — no lesson has
 										// started yet, so the composer must not read like one is in
 										// flight.
-										placeholder={mode === "practice" ? "Hva vil du øve på?" : mode === "exam" ? "Hvilken eksamen forbereder du deg til?" : "Hva vil du lære?"}
+										placeholder={course ? "Hva vil du jobbe med?" : mode === "practice" ? "Hva vil du øve på?" : mode === "exam" ? "Hvilken eksamen forbereder du deg til?" : "Hva vil du lære?"}
 									/>
 								</div>
 								<StatsBar

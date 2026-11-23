@@ -264,7 +264,8 @@ describe("the practice draft (?mode=practice, 2026-10-04)", () => {
 		);
 		assert.match(linked, /data-testid="course-link-chip"/);
 		assert.match(linked, /href="\/fag\/TTK4100"/);
-		assert.ok(linked.includes("Økta kobles til TTK4100."));
+		assert.ok(linked.includes("Ny underchat"), "fase 2: a fag-linked draft is an underchat");
+		assert.ok(linked.includes("En egen chat i TTK4100"));
 		const free = renderToStaticMarkup(<DraftShell busy={false} text="" onChange={() => {}} onSend={() => {}} />);
 		assert.ok(!free.includes('data-testid="course-link-chip"'));
 	});

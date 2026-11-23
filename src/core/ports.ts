@@ -65,6 +65,11 @@ export interface ChatStore {
 	 * Like saveSettings: a rename is NOT conversation activity — updatedAt
 	 * stays put, so sidebar order never churns on a rename. */
 	renameChat(id: string, title: string): ChatRecord;
+	/** «Flytt til fag» (fase 2): link a session to a fag after birth — the
+	 *  course link and the message list (with the course-context marker
+	 *  already in place) in ONE write. A list-shape change: announces
+	 *  chats-changed (the sidebar regroups). */
+	linkCourse(id: string, course: ChatCourseLink, messages: LhMessage[]): ChatRecord;
 	/** Delete the session record entirely (session-deletion wave 6, owner
 	 *  2026-09-22). False when the id is unknown. The graph-ledger purge and
 	 *  job cleanup are the caller's choreography (core/graph-deletion.ts +

@@ -1,6 +1,6 @@
 import { chainsForSelection, formatChainLine } from "@/src/core";
 import { newGraphContextMessage, type GraphContextPick } from "@/src/core";
-import { compactionInFlight, courseContextMessageFor, createChat, isTurnRunning, listChats, parseChatCourseLink, readSettingsRecord, stores, titleFromPrompt } from "@/src/server";
+import { compactionInFlight, courseContextMessageFor, createChat, isTurnRunning, listChats, parseChatCourseLink, stampNewSessionSettings, stores, titleFromPrompt } from "@/src/server";
 import type { ChatListItem, LhMessage } from "@/src/core";
 
 /** The session picker's list: record-derived summaries (phase, pending
@@ -41,13 +41,7 @@ export async function POST(req: Request) {
 	// (PUT /api/chats/:id/settings). No strong slot configured (fresh BYOK
 	// boot) → no stamp; the turn gate's 503 models_not_configured envelope
 	// refuses honestly until the setup flow fills the slot.
-	const strong = readSettingsRecord()?.models?.strong;
-	if (strong?.model) {
-		stores.chatStore.saveSettings(chat.id, {
-			model: { provider: strong.model.provider, id: strong.model.id },
-			thinkingLevel: strong.thinkingLevel,
-		});
-	}
+	stampNewSessionSettings(chat.id);
 	// The session's map context (owner, 2026-10-04): the picked
 	// propositions ride the CREATION — message[0] is a graph-context
 	// marker (a separate custom message BEFORE the learner's first user
@@ -71,7 +65,7 @@ export async function POST(req: Request) {
 	// session is for), then the map picks. Both are separate custom
 	// messages BEFORE the learner's first message.
 	const opening: LhMessage[] = [];
-	const courseContext = course ? courseContextMessageFor(course) : null;
+	const courseContext = course ? courseContextMessageFor(course, { kind: kind ?? "teach" }) : null;
 	if (courseContext) opening.push(courseContext);
 	if (picks.length > 0) {
 		const byId = new Map(stores.graphStore.readNodes().map((n) => [n.id, n]));

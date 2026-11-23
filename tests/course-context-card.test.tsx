@@ -24,10 +24,11 @@ describe("CourseContextCard", () => {
 		assert.match(html, /12 kilder/);
 	});
 
-	it("names the mode, counts honestly, and survives a course without topic or name", () => {
-		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", name: "Matematikk 1", mode: "practice", sourceCount: 1 })!), ["Øv", "1 kilde"]);
-		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", name: "Matematikk 1", mode: "mapping", sourceCount: 0 })!), ["Kartlegging", "Ingen kilder"]);
-		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", mode: "learn" })!), ["Lær", "Ingen kilder"]);
+	it("names the chat (fase 2: old Lær/Øv/Kartlegging read «Underchat»), counts honestly, and survives a course without topic or name", () => {
+		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", name: "Matematikk 1", mode: "practice", sourceCount: 1 })!), ["Underchat", "1 kilde"]);
+		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", name: "Matematikk 1", mode: "mapping", sourceCount: 0 })!), ["Underchat", "Ingen kilder"]);
+		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", mode: "learn" })!), ["Underchat", "Ingen kilder"]);
+		assert.deepEqual(courseContextSegments(parseCourseContext({ code: "TMA4100", mode: "sub" })!), ["Underchat", "Ingen kilder"]);
 		const html = renderToStaticMarkup(<CourseContextCard data={{ code: "ÆØÅ-1", sourceCount: 2 }} />);
 		assert.match(html, /href="\/fag\/%C3%86%C3%98%C3%85-1"/, "the code is encoded into the path");
 	});
@@ -40,10 +41,10 @@ describe("CourseContextCard", () => {
 		assert.equal(parseCourseContext({ code: "TTK4100", mode: "cram", sourceCount: "many", topicTitle: 3 })?.mode, undefined, "unknown fields degrade, never throw");
 	});
 
-	it("an eksamensøkt's marker says so on the line", () => {
+	it("the fag-chat's marker says so on the line", () => {
 		const data = parseCourseContext({ code: "TTK4100", name: "Kybernetikk, introduksjon", mode: "exam", sourceCount: 2 });
 		assert.equal(data?.mode, "exam");
-		assert.deepEqual(courseContextSegments(data!), ["Eksamensøkt", "2 kilder"]);
+		assert.deepEqual(courseContextSegments(data!), ["Fag-chat", "2 kilder"]);
 	});
 
 	it("the marker projects into the data-course-context part this card consumes", () => {

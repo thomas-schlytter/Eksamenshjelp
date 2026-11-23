@@ -123,7 +123,7 @@ describe("question search (the help centre field)", () => {
 		assert.equal(first("hvor lagres dataene mine"), "hvor-lagres-data");
 		assert.equal(first("canvas"), "canvas-og-blackboard");
 		assert.equal(first("vet ikke"), "vet-ikke");
-		assert.equal(first("forskjellen på lær og øv"), "laer-eller-ov");
+		assert.equal(first("forskjellen på lær og øv"), "fag-chat-og-underchats");
 	});
 
 	it("tours are searchable too", () => {

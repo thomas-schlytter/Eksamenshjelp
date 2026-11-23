@@ -81,14 +81,14 @@ function summary(overrides: Partial<CourseSummary> = {}): CourseSummary {
 }
 
 const planActions: ExamPlanActions = {
-	onToggleDone: () => {}, onStart: () => {}, onMinutesPerDay: () => {}, onOpenWizard: () => {}, onEditExamDate: () => {}, starting: false,
+	onToggleDone: () => {}, onMinutesPerDay: () => {}, onOpenWizard: () => {}, onEditExamDate: () => {},
 };
 const boardActions: TopicBoardActions = {
-	onStatus: () => {}, onStart: () => {}, onSaveTopics: async () => true, onRegenerate: () => {}, starting: false, regenerating: false,
+	onStatus: () => {}, onSaveTopics: async () => true, onRegenerate: () => {}, regenerating: false,
 };
 const wizardActions: WizardActions = {
 	onExamDate: async () => true, onAddSource: async () => null, onRemoveSource: () => {}, onGenerate: async () => "ai",
-	onStatus: () => {}, onStart: () => {}, onOpenSetup: () => {}, onDone: () => {}, starting: false,
+	onStatus: () => {}, onOpenSetup: () => {}, onDone: () => {},
 };
 
 describe("status is never colour alone", () => {
@@ -300,7 +300,7 @@ describe("fag page: header, tabs, not found", () => {
 });
 
 describe("Eksamensplan", () => {
-	it("anchored; today is open with its items, each with status, activity, minutes, a checkbox and Start", () => {
+	it("anchored; today is open with its items, each with status, activity, minutes and a checkbox (fase 2: no Start)", () => {
 		const c = course();
 		const plan = buildExamPlan(c, TODAY);
 		assert.ok(plan.days[0]!.items.length > 0, "fixture sanity: the planner schedules today");
@@ -315,7 +315,7 @@ describe("Eksamensplan", () => {
 			const item = plan.days[0]!.items[index]!;
 			const box = row.querySelector('input[type="checkbox"]')!;
 			assert.match(box.getAttribute("aria-label")!, /^Marker som ferdig: (Lær|Øv|Repeter|Prøveeksamen), /);
-			assert.match(row.querySelector('[data-testid="plan-item-start"]')!.getAttribute("aria-label")!, /^Start: /);
+			assert.equal(row.querySelector('[data-testid="plan-item-start"]'), null);
 			if (item.topicId) assert.ok(row.querySelector("[data-status] .sr-only"), "the topic's status is in words too");
 			assert.match(row.textContent!, /\d+ (min|t)/);
 		}
@@ -323,7 +323,7 @@ describe("Eksamensplan", () => {
 		assert.equal(section.querySelector('[data-testid="minutes-per-day"] option[selected]')!.textContent, "2 t");
 	});
 
-	it("a ticked item reads as done and stays startable", () => {
+	it("a ticked item reads as done", () => {
 		const c = course();
 		const plan = buildExamPlan(c, TODAY);
 		const first = plan.days[0]!.items[0]!;
@@ -357,13 +357,13 @@ describe("Eksamensplan", () => {
 		assert.match(today.querySelector('[data-testid="plan-message"]')!.textContent!, /Eksamen er i dag\. Lykke til!/);
 	});
 
-	it("(nearly) nothing mapped: a friendly nudge on top with «Kartlegg nå» and «La AI-en teste meg»; gone once it no longer applies", () => {
+	it("(nearly) nothing mapped: a friendly nudge on top with «Kartlegg nå»; gone once it no longer applies", () => {
 		const unknown = (n: number) => Array.from({ length: n }, (_, i) => topic(`u${i}`, `Ukjent ${i}`, "unknown"));
 		const unmapped = course({ topics: unknown(10) });
 		const document = dom(<ExamPlanView course={unmapped} plan={buildExamPlan(unmapped, TODAY)} today={TODAY} actions={{ ...planActions, onMapTopics: () => {} }} />);
 		const nudge = document.querySelector('[data-testid="plan-mapping-nudge"]')!;
 		assert.match(nudge.textContent!, /Planen blir bedre når du har kartlagt temaene\. Det tar ett minutt\./);
-		assert.deepEqual(Array.from(nudge.querySelectorAll("button")).map((b) => b.textContent), ["Kartlegg nå", "La AI-en teste meg"]);
+		assert.deepEqual(Array.from(nudge.querySelectorAll("button")).map((b) => b.textContent), ["Kartlegg nå"]);
 		assert.equal(document.querySelector('[data-tour="exam-plan"]')!.firstElementChild, nudge, "at the very top of the plan");
 
 		// 7 of 10 unknown (70 %) still nudges; 6 of 10 does not.
@@ -375,9 +375,9 @@ describe("Eksamensplan", () => {
 		assert.equal(at(6), null);
 		assert.equal(planNeedsMapping([]), false, "an empty list has its own message");
 
-		// Without a Temaer handler only the AI session is offered; exam day never nudges.
+		// Without a Temaer handler the nudge has no button; exam day never nudges.
 		const bare = dom(<ExamPlanView course={unmapped} plan={buildExamPlan(unmapped, TODAY)} today={TODAY} actions={planActions} />);
-		assert.deepEqual(Array.from(bare.querySelectorAll('[data-testid="plan-mapping-nudge"] button')).map((b) => b.textContent), ["La AI-en teste meg"]);
+		assert.deepEqual(Array.from(bare.querySelectorAll('[data-testid="plan-mapping-nudge"] button')).map((b) => b.textContent), []);
 		const examDay = course({ topics: unknown(10), exam: { date: TODAY } });
 		assert.equal(dom(<ExamPlanView course={examDay} plan={buildExamPlan(examDay, TODAY)} today={TODAY} actions={planActions} />).querySelector('[data-testid="plan-mapping-nudge"]'), null);
 	});
@@ -389,28 +389,22 @@ describe("Eksamensplan", () => {
 		assert.ok(document.querySelector('[data-testid="plan-today"]'));
 	});
 
-	it("while a session is being created every Start waits", () => {
-		const c = course();
-		const document = dom(<ExamPlanView course={c} plan={buildExamPlan(c, TODAY)} today={TODAY} actions={{ ...planActions, starting: true }} />);
-		const starts = Array.from(document.querySelectorAll('[data-testid="plan-item-start"]'));
-		assert.ok(starts.length > 0 && starts.every((b) => b.hasAttribute("disabled")));
-	});
 });
 
 describe("Temaer", () => {
-	it("anchored, explains Lær and Øv in one line, and lists what needs work first", () => {
+	it("anchored, no Lær/Øv explainer any more, and lists what needs work first", () => {
 		const document = dom(<TopicBoard course={course()} actions={boardActions} onOpenWizard={() => {}} />);
 		const board = document.querySelector('[data-tour="topic-board"]')!;
-		assert.match(board.textContent!, /Lær = forstå temaet steg for steg\. Øv = løs oppgaver slik de kommer på eksamen\./);
+		assert.doesNotMatch(board.textContent!, /Lær =|Øv =/);
 		const rows = Array.from(board.querySelectorAll('[data-testid="topic-row"]'));
 		assert.deepEqual(rows.map((r) => r.getAttribute("data-status")), ["red", "yellow", "unknown", "green"]);
 		assert.match(board.textContent!, /Rediger temaliste/);
 		assert.match(board.textContent!, /Lag temaliste på nytt/);
 	});
 
-	it("a topic row: status in words, importance in words, the AI's note, three status buttons, Lær and Øv", () => {
+	it("a topic row: status in words, importance in words, the AI's note, three status buttons, no Lær/Øv starts", () => {
 		const c = course();
-		const document = dom(<ul><TopicRow course={c} topic={c.topics[1]!} actions={boardActions} /></ul>);
+		const document = dom(<ul><TopicRow topic={c.topics[1]!} actions={boardActions} /></ul>);
 		const row = document.querySelector('[data-testid="topic-row"]')!;
 		assert.match(row.textContent!, /Bodediagram/);
 		assert.match(row.textContent!, /Usikker/);
@@ -418,12 +412,12 @@ describe("Temaer", () => {
 		assert.equal(row.querySelector('[data-testid="topic-status-note"]')!.textContent, "Sist vurdert av AI: Blandet fase og forsterkning.");
 		assert.equal(row.querySelectorAll('[data-testid="status-buttons"] button').length, 3);
 		const actions = Array.from(row.querySelectorAll("button[aria-label]")).map((b) => b.getAttribute("aria-label"));
-		assert.deepEqual(actions, ["Lær: Bodediagram", "Øv: Bodediagram"]);
+		assert.equal(actions.some((label) => /^(Lær|Øv): /.test(label ?? "")), false);
 	});
 
 	it("a self-assessed topic shows no AI note; the weight mark always has its word", () => {
 		const c = course();
-		const row = dom(<ul><TopicRow course={c} topic={{ ...c.topics[1]!, statusSource: "self" }} actions={boardActions} /></ul>);
+		const row = dom(<ul><TopicRow topic={{ ...c.topics[1]!, statusSource: "self" }} actions={boardActions} /></ul>);
 		assert.equal(row.querySelector('[data-testid="topic-status-note"]'), null);
 		assert.equal(dom(<WeightMark weight={3} />).body.textContent, "Svært viktig");
 		assert.equal(dom(<WeightMark weight={1} />).body.textContent, "Mindre viktig");
@@ -510,12 +504,12 @@ describe("the first-run wizard", () => {
 		assert.equal(document.querySelector('[data-testid="wizard-topic"]'), null);
 	});
 
-	it("step 3 with topics: three big buttons per topic, the AI alternative, and progress in words", () => {
+	it("step 3 with topics: three big buttons per topic and progress in words (no mapping start)", () => {
 		const document = dom(<CourseWizard course={course()} actions={wizardActions} initialStep={2} />);
 		const topics = Array.from(document.querySelectorAll('[data-testid="wizard-topic"]'));
 		assert.equal(topics.length, 4);
 		assert.ok(topics.every((t) => t.querySelectorAll('[data-testid="status-buttons"] button').length === 3));
-		assert.equal(document.querySelector('[data-testid="start-mapping"]')!.textContent, "La AI-en teste meg i stedet");
+		assert.equal(document.querySelector('[data-testid="start-mapping"]'), null);
 		assert.match(document.body.textContent!, /3 av 4 temaer vurdert/);
 		assert.equal(document.querySelector('[data-testid="wizard-done"]')!.textContent, "Ferdig, vis planen");
 		assert.equal(document.querySelector('[data-testid="fallback-note"]'), null);
@@ -530,41 +524,51 @@ describe("the first-run wizard", () => {
 });
 
 describe("fag in the chrome: sidebar section, session rows, chips", () => {
-	it("the sidebar lists fag as links, nearest exam first, with progress and days in words", () => {
+	const sidebarProps = {
+		groups: new Map(),
+		expanded: () => false,
+		onToggle: () => {},
+		onOpenCourse: () => {},
+		onOpenMainChat: () => {},
+		renderChat: () => null,
+	};
+
+	it("the sidebar lists fag as rows that open the fag-chat, nearest exam first, with progress and days in words", () => {
 		const document = dom(
 			<SidebarCourses
+				{...sidebarProps}
 				courses={[summary({ code: "TMA4100", name: "Matematikk 1", daysLeft: 40 }), summary({ daysLeft: 3 })]}
 				activeCode="TTK4100"
 			/>,
 		);
 		const nav = document.querySelector('[data-tour="sidebar-courses"]')!;
 		assert.equal(nav.getAttribute("aria-label"), "Fag");
-		const links = Array.from(nav.querySelectorAll('[data-testid="sidebar-course"]'));
-		assert.deepEqual(links.map((l) => l.getAttribute("href")), ["/fag/TTK4100", "/fag/TMA4100"]);
-		assert.equal(links[0]!.getAttribute("aria-current"), "page");
-		assert.equal(links[1]!.getAttribute("aria-current"), null);
-		assert.match(links[0]!.querySelector(".sr-only")!.textContent!, /Kybernetikk introduksjon\. 3 dager til eksamen\./);
-		assert.ok(links[0]!.querySelector('[role="img"]'));
+		const rows = Array.from(nav.querySelectorAll('[data-testid="sidebar-course"]'));
+		assert.deepEqual(rows.map((l) => l.tagName), ["BUTTON", "BUTTON"]);
+		assert.deepEqual(rows.map((l) => l.textContent!.slice(0, 7)), ["TTK4100", "TMA4100"]);
+		assert.equal(rows[0]!.getAttribute("aria-current"), "page");
+		assert.equal(rows[1]!.getAttribute("aria-current"), null);
+		assert.match(rows[0]!.querySelector(".sr-only")!.textContent!, /Kybernetikk introduksjon\. 3 dager til eksamen\./);
+		assert.ok(rows[0]!.querySelector('[role="img"]'));
 		const add = nav.querySelector('[data-testid="sidebar-add-course"]')!;
-		assert.equal(add.textContent, "Legg til fag");
+		assert.equal(add.getAttribute("aria-label"), "Legg til fag");
 		assert.equal(add.getAttribute("href"), "/?leggtil=1");
 	});
 
 	it("no fag yet: the section still offers «Legg til fag»", () => {
-		const document = dom(<SidebarCourses courses={[]} />);
+		const document = dom(<SidebarCourses {...sidebarProps} courses={[]} />);
 		assert.equal(document.querySelectorAll('[data-testid="sidebar-course"]').length, 0);
 		assert.ok(document.querySelector('[data-testid="sidebar-add-course"]'));
 	});
 
-	it("a session started from a fag carries its fagkode; a free session carries none", () => {
+	it("a loose session row carries no fag chip (a fag's sessions list under the fag)", () => {
 		const item = (overrides: Partial<ChatListItem>): ChatListItem => ({
-			id: "c1", title: "Lær: Laplace", kind: "teach", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z",
+			id: "c1", title: "Laplace", kind: "teach", createdAt: "2026-01-01T00:00:00.000Z", updatedAt: "2026-01-02T00:00:00.000Z",
 			messageCount: 2, phase: "probe", pendingQuestion: false, pendingProblem: false, busy: false, compacting: false, ...overrides,
 		});
-		const linked = dom(<SessionRow chat={item({ course: { code: "TTK4100", topicId: "laplace", mode: "learn" } })} active={false} onOpen={() => {}} />);
-		assert.equal(linked.querySelector('[data-testid="session-course"]')!.textContent, "Fag: TTK4100");
 		const free = dom(<SessionRow chat={item({})} active={false} onOpen={() => {}} />);
 		assert.equal(free.querySelector('[data-testid="session-course"]'), null);
+		assert.match(free.body.textContent!, /Laplace/);
 	});
 
 	it("the fag chip links to the fag page; the selector lists Ingen plus every fag, and hides with none", () => {
