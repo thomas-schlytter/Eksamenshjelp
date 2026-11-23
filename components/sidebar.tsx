@@ -459,7 +459,7 @@ export function matchesKindFilter(kind: ChatListItem["kind"] | undefined, filter
 /** The window event that opens «Legg til fag» on the home screen. */
 export const ADD_COURSE_EVENT = "lh:add-course";
 
-const CREDIT_LINK = "rounded-sm underline-offset-2 outline-none hover:text-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50";
+const CREDIT_LINK = "rounded-sm underline-offset-2 outline-none hover:text-muted-foreground hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/50";
 /** The panel's slide (duration-200 on .sidebar-slide); the list refetch
  *  on open waits this long so it never lands mid-animation. */
 const SIDEBAR_SLIDE_MS = 200;
@@ -1039,7 +1039,7 @@ function SessionsSidebar() {
 					{/* Credits (owner 2026-11-23): small and quiet, under the two
 					    bottom rows. External links open in the system browser
 					    (the shell routes target=_blank to shell.openExternal). */}
-					<p data-testid="sidebar-credits" className="px-5 pt-1 pb-3 font-ui text-xs leading-relaxed text-muted-foreground/70">
+					<p data-testid="sidebar-credits" className="px-5 pt-0.5 pb-2.5 font-ui text-[10px] leading-snug text-muted-foreground/45">
 						Laget av{" "}
 						<a href={AUTHOR_URL} target="_blank" rel="noopener noreferrer" className={CREDIT_LINK}>{AUTHOR_NAME}</a>
 						<br />
