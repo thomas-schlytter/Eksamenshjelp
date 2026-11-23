@@ -1,8 +1,9 @@
 /**
- * «Oppsummering» (2026-11-22).
+ * «Avslutt økt» → «Oppsummering med quiz» (2026-11-22; 2026-11-23).
  *
- * POST  — generate the økt's summary + 10-question recall quiz with the
- *         chat's own model (or return the draft already in progress).
+ * POST  — stop a running turn and close an open question, then generate
+ *         the økt's summary + 3-10 question recall quiz with the chat's
+ *         own model (or return the draft already in progress).
  * PATCH — `{ index, choice }`: record one quiz answer on the draft.
  *
  * See src/server/session-wrap.ts for the gates and the record writes.

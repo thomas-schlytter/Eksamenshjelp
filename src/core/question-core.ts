@@ -489,6 +489,10 @@ export interface QuestionAnswerData {
 	 *  nothing wakes); the agent re-poses the question afterwards. Always
 	 *  paired with `dismissed: true`. */
 	onHold?: boolean;
+	/** «Avslutt økt» (2026-11-23): the learner ended the økt while the
+	 *  question was open; the end flow closed it unanswered. Always paired
+	 *  with `dismissed: true` (a dismissal pause: nothing wakes). */
+	sessionEnded?: boolean;
 	/** Graded multiple choice (quiz/probe, never "I don't know") required a
 	 *  written explanation before submit (2026-11): the client verdict only
 	 *  grades the OPTION; the agent approves the answer on the explanation. */
@@ -822,8 +826,9 @@ export function dismissedAnswer(
 	/** How the question was left (2026-11): "skipped" = Hopp over (sent as
 	 *  an ordinary answer, the agent moves on), "onHold" = Spør agenten
 	 *  (silent route, the agent re-poses later). Absent = the plain Esc
-	 *  dismissal. `tool` keeps the card's label (Kartlegging/Gjenkalling). */
-	how?: { reason?: "skipped" | "onHold"; tool?: string },
+	 *  dismissal. "sessionEnded" = «Avslutt økt» closed it (silent, like the
+	 *  Esc dismissal). `tool` keeps the card's label (Kartlegging/Gjenkalling). */
+	how?: { reason?: "skipped" | "onHold" | "sessionEnded"; tool?: string },
 ): QuestionAnswerData {
 	return {
 		kind,
@@ -834,6 +839,7 @@ export function dismissedAnswer(
 		dismissed: true,
 		...(how?.reason === "skipped" ? { skipped: true } : {}),
 		...(how?.reason === "onHold" ? { onHold: true } : {}),
+		...(how?.reason === "sessionEnded" ? { sessionEnded: true } : {}),
 		answeredAt: new Date().toISOString(),
 	};
 }
@@ -848,6 +854,7 @@ export function compactAnswerForModel(ad: QuestionAnswerData): Record<string, un
 			dismissed: true,
 			...(ad.skipped === true ? { skipped: true } : {}),
 			...(ad.onHold === true ? { onHold: true } : {}),
+			...(ad.sessionEnded === true ? { sessionEnded: true } : {}),
 		};
 	}
 	const out: Record<string, unknown> = { kind: ad.kind };

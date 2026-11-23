@@ -1,67 +1,177 @@
 "use client";
 
 /**
- * «Oppsummering» (owner, 2026-11-22): the top-bar chip, the summary + quiz
- * window and the «Økt avsluttet» divider in the transcript.
+ * «Avslutt økt» (owner, 2026-11-22; the end flow 2026-11-23): the top-bar
+ * button, its choice popup, the summary + quiz window and the «Økt
+ * avsluttet» divider in the transcript.
  *
- * The learner keeps one chat per course. The chip wraps the current økt:
- * the server writes a summary and ten multiple-choice questions on what
- * happened since the previous divider; the window shows the summary, then
- * the quiz with feedback right after each answer, then the score. «Avslutt
- * økta» turns it into the divider (and a note for the teacher). Closing
- * the window only pauses: the draft lives on the record, so the chip says
- * «Fortsett quizen» until the økt is ended.
+ * The learner keeps one chat per course. The button ends the current økt
+ * and works at any time, also while the teacher writes or a question
+ * waits: the server stops the turn and closes the question itself. The
+ * popup offers «Oppsummering med quiz» (a summary and 3-10 multiple-choice
+ * questions on what happened since the previous divider; an option is
+ * chosen first and sent with «Send svar», then feedback) or «Bare avslutt»
+ * (the divider straight away). Closing the quiz window only pauses: the
+ * draft lives on the record, so the button resumes it until the økt ends.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import useEmblaCarousel from "embla-carousel-react";
-import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, ClipboardCheckIcon, XIcon } from "lucide-react";
+import { CheckIcon, ChevronLeftIcon, ChevronRightIcon, FlagIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Hint } from "@/components/ui/hint";
 import { BrailleSpinner } from "@/components/braille-spinner";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
 import { cn } from "@/lib/utils";
-import { readWrap, wrapCardMarkdown, wrapPointOf, wrapScore, type SessionWrapDetails, type SessionWrapDraft } from "@/src/core";
+import { isBareWrap, readWrap, wrapCardMarkdown, wrapPointOf, wrapScore, type SessionWrapDetails, type SessionWrapDraft } from "@/src/core";
 
 const LETTERS = ["A", "B", "C", "D", "E", "F"];
 
-// ─── The chip ────────────────────────────────────────────────────────────────
+// ─── The button ──────────────────────────────────────────────────────────────
 
-export type WrapChipState = "ready" | "resume" | "busy" | "empty";
+/** ready = something to end; resume = a quiz draft waits; empty = nothing
+ *  since the last divider. Busy is no state: ending stops the teacher. */
+export type EndSessionState = "ready" | "resume" | "empty";
 
-const CHIP_HINT: Record<WrapChipState, string> = {
-	ready: "Oppsummer økta og ta en quiz på 10 spørsmål",
-	resume: "Du har en quiz som ikke er ferdig",
-	busy: "Vent til læreren er ferdig, eller svar på spørsmålet som venter",
-	empty: "Ingenting å oppsummere ennå i denne økta",
+const BUTTON_HINT: Record<EndSessionState, string> = {
+	ready: "Avslutt økta, med eller uten quiz",
+	resume: "Fortsett quizen du startet",
+	empty: "Ingenting å avslutte ennå",
 };
 
-export function SessionWrapChip({ state, onClick }: { state: WrapChipState; onClick: () => void }) {
-	const disabled = state === "busy" || state === "empty";
+export function EndSessionButton({ state, onClick }: { state: EndSessionState; onClick: () => void }) {
+	const disabled = state === "empty";
 	return (
-		<Hint label={CHIP_HINT[state]} side="bottom">
-			<button
+		<Hint label={BUTTON_HINT[state]} side="bottom">
+			<Button
 				type="button"
-				data-testid="session-wrap-chip"
+				data-testid="end-session-button"
 				data-state={state}
 				aria-disabled={disabled}
 				onClick={() => {
 					if (!disabled) onClick();
 				}}
-				className={cn(
-					"lh-no-drag flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-0.5 text-xs font-medium uppercase tracking-wide transition-colors",
-					disabled
-						? "cursor-default border-border/50 text-muted-foreground/50"
-						: state === "resume"
-							? "cursor-pointer border-primary/60 text-foreground hover:border-primary"
-							: "cursor-pointer border-border/80 text-muted-foreground hover:border-border hover:text-foreground",
-				)}
+				className={cn("lh-no-drag shrink-0", disabled && "cursor-default opacity-50 hover:bg-primary")}
 			>
-				<ClipboardCheckIcon className={cn("size-3.5", disabled ? "" : "text-primary")} aria-hidden />
-				{state === "resume" ? "Fortsett quizen" : "Oppsummering"}
-			</button>
+				<FlagIcon aria-hidden />
+				Avslutt økt
+			</Button>
 		</Hint>
+	);
+}
+
+/** «Bare avslutt»: the server stops what runs and writes the divider.
+ *  Returns the error text, or null when the økt ended. */
+export async function endSessionNow(chatId: string): Promise<string | null> {
+	try {
+		const res = await fetch(`/api/chats/${chatId}/wrap/complete`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ mode: "end" }),
+		});
+		if (res.ok) return null;
+		const body = (await res.json().catch(() => ({}))) as { error?: string };
+		return body.error ?? `Klarte ikke å avslutte økta (${res.status}).`;
+	} catch {
+		return "Klarte ikke å avslutte økta på grunn av en nettverksfeil. Prøv igjen.";
+	}
+}
+
+// ─── The choice popup ────────────────────────────────────────────────────────
+
+const INTERRUPT_LINE = {
+	turn: "Læreren stoppes.",
+	question: "Spørsmålet som venter, lukkes.",
+	both: "Læreren stoppes, og spørsmålet som venter, lukkes.",
+} as const;
+
+export function EndSessionDialog({
+	open,
+	interrupting,
+	onQuiz,
+	onEnd,
+	onClose,
+}: {
+	open: boolean;
+	/** What ending will stop: the teacher's turn, a waiting question, both. */
+	interrupting: keyof typeof INTERRUPT_LINE | null;
+	onQuiz: () => void;
+	/** «Bare avslutt»; resolves to an error text, or null when done. */
+	onEnd: () => Promise<string | null>;
+	onClose: () => void;
+}) {
+	const [ending, setEnding] = useState(false);
+	const [error, setError] = useState<string | null>(null);
+
+	useEffect(() => {
+		if (!open) return;
+		setEnding(false);
+		setError(null);
+	}, [open]);
+
+	const backdropDismiss = useBackdropDismiss(() => {
+		if (!ending) onClose();
+	});
+
+	// Esc closes (claimed: a dialog Esc must not also abort a turn).
+	useEffect(() => {
+		if (!open) return;
+		const onKeyDown = (e: KeyboardEvent) => {
+			if (e.key !== "Escape") return;
+			e.preventDefault();
+			e.stopPropagation();
+			if (!ending) onClose();
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [open, ending, onClose]);
+
+	if (!open) return null;
+
+	const end = async () => {
+		setEnding(true);
+		setError(null);
+		const failure = await onEnd();
+		setEnding(false);
+		if (failure) setError(failure);
+	};
+
+	return createPortal(
+		<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80" {...backdropDismiss}>
+			<div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="end-session-title"
+				data-testid="end-session-dialog"
+				onClick={(e) => e.stopPropagation()}
+				className="flex w-[24rem] max-w-[calc(100vw-2rem)] flex-col gap-4 rounded-xl border bg-card p-5 shadow-xl"
+			>
+				<div className="flex flex-col gap-1">
+					<h2 id="end-session-title" className="text-base font-semibold">
+						Avslutt økt
+					</h2>
+					{interrupting && <p className="text-sm text-muted-foreground">{INTERRUPT_LINE[interrupting]}</p>}
+				</div>
+				{error && (
+					<p role="alert" className="text-sm text-destructive">
+						{error}
+					</p>
+				)}
+				<div className="flex flex-col gap-2">
+					<Button data-testid="end-session-quiz" autoFocus onClick={onQuiz} disabled={ending}>
+						Oppsummering med quiz
+					</Button>
+					<Button data-testid="end-session-end" variant="outline" onClick={() => void end()} disabled={ending}>
+						{ending ? "Avslutter …" : "Bare avslutt"}
+					</Button>
+					<Button data-testid="end-session-cancel" variant="ghost" onClick={onClose} disabled={ending}>
+						Avbryt
+					</Button>
+				</div>
+			</div>
+		</div>,
+		document.body,
 	);
 }
 
@@ -71,25 +181,31 @@ export function SessionWrapDivider({ data, onOpen }: { data: unknown; onOpen: (w
 	const wrap = readWrap(data) as SessionWrapDetails | null;
 	if (!wrap) return null;
 	const score = wrapScore(wrap);
+	const bare = isBareWrap(wrap);
 	return (
 		<div data-testid="session-wrap-divider" className="my-6 flex w-full flex-col items-center gap-2">
 			<div className="flex w-full items-center gap-3">
 				<span className="h-0 flex-1 border-t-2 border-dotted border-border/60" aria-hidden />
 				<span className="rounded-full border border-border/80 px-2.5 py-0.5 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-					Økt avsluttet · {score.correct}/{score.total} riktige
+					{bare ? "Økt avsluttet" : `Økt avsluttet · ${score.correct}/${score.total} riktige`}
 				</span>
 				<span className="h-0 flex-1 border-t-2 border-dotted border-border/60" aria-hidden />
 			</div>
 			<p className="text-center text-sm text-muted-foreground">
-				Skriv i chatten for å starte en ny økt.{" "}
-				<button
-					type="button"
-					data-testid="session-wrap-open"
-					onClick={() => onOpen(wrap)}
-					className="cursor-pointer font-medium text-primary underline-offset-4 hover:underline"
-				>
-					Se oppsummering
-				</button>
+				Skriv i chatten for å starte en ny økt.
+				{!bare && (
+					<>
+						{" "}
+						<button
+							type="button"
+							data-testid="session-wrap-open"
+							onClick={() => onOpen(wrap)}
+							className="cursor-pointer font-medium text-primary underline-offset-4 hover:underline"
+						>
+							Se oppsummering
+						</button>
+					</>
+				)}
 			</p>
 		</div>
 	);
@@ -119,6 +235,7 @@ export function SessionWrapDialog({
 	onClose,
 	onDraft,
 	onCompleted,
+	onSettled,
 }: {
 	chatId: string;
 	open: boolean;
@@ -130,6 +247,9 @@ export function SessionWrapDialog({
 	onDraft: (draft: SessionWrapDraft | null) => void;
 	/** The økt ended: the transcript should fetch its new divider. */
 	onCompleted: () => void;
+	/** Generation stopped the teacher / closed a question first: the
+	 *  transcript should fetch the settled record. */
+	onSettled: () => void;
 }) {
 	const [draft, setDraft] = useState<SessionWrapDraft | null>(initialDraft);
 	const [step, setStep] = useState<Step>(() => (initialDraft ? firstStep(initialDraft) : "summary"));
@@ -157,8 +277,11 @@ export function SessionWrapDialog({
 			setError("Klarte ikke å lage oppsummeringen på grunn av en nettverksfeil. Prøv igjen.");
 		} finally {
 			setLoading(false);
+			// Success or not, the server may have stopped the teacher and
+			// closed a question before it generated.
+			onSettled();
 		}
-	}, [chatId, onDraft]);
+	}, [chatId, onDraft, onSettled]);
 
 	// Opening the live window: resume the record's draft, or generate one.
 	useEffect(() => {
@@ -193,11 +316,15 @@ export function SessionWrapDialog({
 		[chatId, draft, onDraft],
 	);
 
-	const finish = useCallback(async () => {
+	const finish = useCallback(async (bare = false) => {
 		setFinishing(true);
 		setError(null);
 		try {
-			const res = await fetch(`/api/chats/${chatId}/wrap/complete`, { method: "POST" });
+			const res = await fetch(`/api/chats/${chatId}/wrap/complete`, {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(bare ? { mode: "end" } : {}),
+			});
 			const body = (await res.json().catch(() => ({}))) as { error?: string };
 			if (!res.ok) {
 				setError(body.error ?? `Klarte ikke å avslutte økta (${res.status}).`);
@@ -246,7 +373,7 @@ export function SessionWrapDialog({
 			>
 				<div className="flex items-center justify-between gap-3 border-b px-5 py-3">
 					<h2 className="text-sm font-semibold">
-						{review ? "Oppsummering av økta" : typeof step === "number" ? `Quiz · spørsmål ${step + 1} av ${wrap?.questions.length ?? 10}` : step === "result" ? "Resultat" : "Oppsummering"}
+						{review ? "Oppsummering av økta" : typeof step === "number" && wrap ? `Quiz · spørsmål ${step + 1} av ${wrap.questions.length}` : step === "result" ? "Resultat" : "Oppsummering"}
 					</h2>
 					<Button variant="ghost" size="icon-sm" aria-label="Lukk" onClick={onClose} disabled={finishing}>
 						<XIcon />
@@ -258,14 +385,19 @@ export function SessionWrapDialog({
 						loading ? (
 							<div className="flex flex-col items-center gap-3 py-10 text-sm text-muted-foreground">
 								<BrailleSpinner label="Lager oppsummering" />
-								<span>Leser gjennom økta og lager 10 spørsmål …</span>
+								<span>Leser gjennom økta og lager spørsmål …</span>
 							</div>
 						) : (
 							<div className="flex flex-col items-center gap-3 py-8 text-center text-sm">
 								<p role="alert" className="text-destructive">{error ?? "Noe gikk galt."}</p>
-								<Button variant="outline" size="sm" onClick={() => void generate()}>
-									Prøv igjen
-								</Button>
+								<div className="flex gap-2">
+									<Button variant="outline" size="sm" onClick={() => void generate()} disabled={finishing}>
+										Prøv igjen
+									</Button>
+									<Button data-testid="session-wrap-end-bare" size="sm" onClick={() => void finish(true)} disabled={finishing}>
+										{finishing ? "Avslutter …" : "Bare avslutt"}
+									</Button>
+								</div>
 							</div>
 						)
 					) : review ? (
@@ -295,7 +427,7 @@ export function SessionWrapDialog({
 									Fortsett quizen
 								</Button>
 								<Button size="sm" onClick={() => void finish()} disabled={finishing}>
-									{finishing ? "Avslutter …" : "Avslutt økta"}
+									{finishing ? "Avslutter …" : "Avslutt økt"}
 								</Button>
 							</div>
 						) : step === "summary" ? (
@@ -324,7 +456,7 @@ export function SessionWrapDialog({
 						) : step === "result" ? (
 							<div className="flex items-center justify-end gap-2">
 								<Button data-testid="session-wrap-finish" size="sm" onClick={() => void finish()} disabled={finishing}>
-									{finishing ? "Avslutter …" : "Avslutt økta"}
+									{finishing ? "Avslutter …" : "Avslutt økt"}
 								</Button>
 							</div>
 						) : (
@@ -498,14 +630,22 @@ export function SummaryCards({
 	);
 }
 
-function optionTone(i: number, correct: number, chosen: number | null): string {
-	if (chosen === null) return "border-border hover:border-primary/60 hover:bg-accent cursor-pointer";
+function optionTone(i: number, correct: number, chosen: number | null, selected: number | null): string {
+	if (chosen === null) {
+		return i === selected
+			? "border-primary bg-primary/5 ring-1 ring-primary cursor-pointer"
+			: "border-border hover:border-primary/60 hover:bg-accent cursor-pointer";
+	}
 	if (i === correct) return "border-emerald-600 bg-emerald-600/10 dark:border-emerald-400 dark:bg-emerald-400/10";
 	if (i === chosen) return "border-destructive bg-destructive/10";
 	return "border-border/50 opacity-60";
 }
 
-function QuestionBody({
+/** One question (owner, 2026-11-23): clicking an option (or 1-4 / A-D)
+ *  only selects it, and the selection can change; «Send svar» (or Enter)
+ *  sends it. Then the feedback and «Neste» (Enter moves on). Exported for
+ *  the tests. */
+export function QuestionBody({
 	index,
 	wrap,
 	onAnswer,
@@ -520,29 +660,36 @@ function QuestionBody({
 	const stored = wrap.answers[index];
 	const chosen = stored === null || stored === undefined ? null : stored;
 	const last = index === wrap.questions.length - 1;
+	// The pick before «Send svar» (local: the window keys this per question).
+	const [selected, setSelected] = useState<number | null>(null);
 
-	// 1–4 / A–D pick an option, Enter moves on once answered.
+	// 1–4 / A–D select an option, Enter sends it; once answered, Enter
+	// moves on. Enter's default is cancelled so a focused option button is
+	// not also clicked.
 	useEffect(() => {
 		const onKeyDown = (e: KeyboardEvent) => {
 			if (e.metaKey || e.ctrlKey || e.altKey) return;
 			const target = e.target as HTMLElement | null;
 			if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) return;
-			if (chosen === null) {
-				const key = e.key.toUpperCase();
-				const pick = /^[1-9]$/.test(key) ? Number(key) - 1 : LETTERS.indexOf(key);
-				if (pick >= 0 && pick < q.options.length) {
-					e.preventDefault();
-					onAnswer(pick);
-				}
-			} else if (e.key === "Enter") {
+			if (e.key === "Enter") {
+				if (chosen === null && selected === null) return;
 				e.preventDefault();
 				e.stopPropagation();
-				onNext();
+				if (chosen === null) onAnswer(selected!);
+				else onNext();
+				return;
+			}
+			if (chosen !== null) return;
+			const key = e.key.toUpperCase();
+			const pick = /^[1-9]$/.test(key) ? Number(key) - 1 : LETTERS.indexOf(key);
+			if (pick >= 0 && pick < q.options.length) {
+				e.preventDefault();
+				setSelected(pick);
 			}
 		};
 		document.addEventListener("keydown", onKeyDown);
 		return () => document.removeEventListener("keydown", onKeyDown);
-	}, [chosen, q.options.length, onAnswer, onNext]);
+	}, [chosen, selected, q.options.length, onAnswer, onNext]);
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -568,19 +715,31 @@ function QuestionBody({
 						key={i}
 						type="button"
 						role="radio"
-						aria-checked={chosen === i}
+						aria-checked={(chosen ?? selected) === i}
 						data-testid={`session-wrap-option-${i}`}
 						disabled={chosen !== null}
-						onClick={() => onAnswer(i)}
-						className={cn("flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-default", optionTone(i, q.correctIndex, chosen))}
+						onClick={() => setSelected(i)}
+						className={cn("flex items-start gap-3 rounded-lg border px-3 py-2.5 text-left text-sm transition-colors disabled:cursor-default", optionTone(i, q.correctIndex, chosen, selected))}
 					>
-						<span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold">
+						<span
+							className={cn(
+								"mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold",
+								chosen === null && selected === i && "border-primary bg-primary text-primary-foreground",
+							)}
+						>
 							{chosen !== null && i === q.correctIndex ? <CheckIcon className="size-3" /> : chosen === i ? <XIcon className="size-3" /> : LETTERS[i]}
 						</span>
 						<ToolContentResponse className="lh-prose min-w-0 flex-1">{option}</ToolContentResponse>
 					</button>
 				))}
 			</div>
+			{chosen === null && (
+				<div className="flex justify-end">
+					<Button data-testid="session-wrap-submit" size="sm" disabled={selected === null} onClick={() => selected !== null && onAnswer(selected)}>
+						Send svar
+					</Button>
+				</div>
+			)}
 			{chosen !== null && (
 				<div data-testid="session-wrap-feedback" className="flex flex-col gap-3">
 					<div className={cn("rounded-lg px-3 py-2.5 text-sm", chosen === q.correctIndex ? "bg-emerald-600/10 dark:bg-emerald-400/10" : "bg-destructive/10")}>
@@ -647,7 +806,7 @@ function ResultBody({ wrap }: { wrap: SessionWrapDraft | SessionWrapDetails }) {
 			</div>
 			<MissedList wrap={wrap} />
 			<p className="text-sm text-muted-foreground">
-				«Avslutt økta» setter et skille i chatten. Neste gang du skriver, starter en ny økt.
+				«Avslutt økt» setter et skille i chatten. Neste gang du skriver, starter en ny økt.
 			</p>
 		</div>
 	);

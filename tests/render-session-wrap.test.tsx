@@ -1,7 +1,8 @@
 /**
- * «Oppsummering» — SSR render pins for the top-bar chip and the
- * «Økt avsluttet» divider: the labels per state, the score on the
- * divider, the invitation to start a new økt, and the review door.
+ * «Avslutt økt» — SSR render pins for the top-bar button and the
+ * «Økt avsluttet» divider: the label, the disabled empty state, the score
+ * on the divider (none after «Bare avslutt»), the invitation to start a
+ * new økt, and the review door.
  */
 
 import React from "react";
@@ -10,7 +11,7 @@ import React from "react";
 import assert from "node:assert/strict";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, it } from "node:test";
-import { SessionWrapChip, SessionWrapDivider, SummaryCards } from "../components/session-wrap.tsx";
+import { EndSessionButton, SessionWrapDivider, SummaryCards } from "../components/session-wrap.tsx";
 
 const wrap = {
 	id: "w",
@@ -23,14 +24,19 @@ const wrap = {
 	answers: [0, 0, 0, 0, 0, 0, 0, 0, 1, null],
 };
 
-describe("the Oppsummering chip", () => {
-	it("reads Oppsummering, or Fortsett quizen while a quiz waits", () => {
-		assert.match(renderToStaticMarkup(<SessionWrapChip state="ready" onClick={() => {}} />), /Oppsummering/);
-		assert.match(renderToStaticMarkup(<SessionWrapChip state="resume" onClick={() => {}} />), /Fortsett quizen/);
+describe("the Avslutt økt button", () => {
+	it("reads Avslutt økt in every state, as a primary button", () => {
+		for (const state of ["ready", "resume", "empty"] as const) {
+			const html = renderToStaticMarkup(<EndSessionButton state={state} onClick={() => {}} />);
+			assert.match(html, /Avslutt økt/);
+			assert.match(html, /bg-primary/);
+		}
+		assert.doesNotMatch(renderToStaticMarkup(<EndSessionButton state="ready" onClick={() => {}} />), /Oppsummering/);
 	});
-	it("is marked disabled while the chat is busy or empty", () => {
-		assert.match(renderToStaticMarkup(<SessionWrapChip state="busy" onClick={() => {}} />), /aria-disabled="true"/);
-		assert.match(renderToStaticMarkup(<SessionWrapChip state="empty" onClick={() => {}} />), /aria-disabled="true"/);
+	it("is marked disabled only when there is nothing to end", () => {
+		assert.match(renderToStaticMarkup(<EndSessionButton state="empty" onClick={() => {}} />), /aria-disabled="true"/);
+		assert.match(renderToStaticMarkup(<EndSessionButton state="ready" onClick={() => {}} />), /aria-disabled="false"/);
+		assert.match(renderToStaticMarkup(<EndSessionButton state="resume" onClick={() => {}} />), /aria-disabled="false"/);
 	});
 });
 
@@ -40,6 +46,14 @@ describe("the Økt avsluttet divider", () => {
 		assert.match(html, /Økt avsluttet · 8\/10 riktige/);
 		assert.match(html, /Skriv i chatten for å starte en ny økt\./);
 		assert.match(html, /Se oppsummering/);
+	});
+	it("after «Bare avslutt»: no score and no review door", () => {
+		const bare = { ...wrap, summary: [], questions: [], answers: [] };
+		const html = renderToStaticMarkup(<SessionWrapDivider data={bare} onOpen={() => {}} />);
+		assert.match(html, /Økt avsluttet/);
+		assert.doesNotMatch(html, /riktige/);
+		assert.match(html, /Skriv i chatten for å starte en ny økt\./);
+		assert.doesNotMatch(html, /Se oppsummering/);
 	});
 	it("renders nothing for an unreadable payload", () => {
 		assert.equal(renderToStaticMarkup(<SessionWrapDivider data={{ nope: true }} onOpen={() => {}} />), "");
