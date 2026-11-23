@@ -56,8 +56,10 @@ export * from "./custom-provider.ts";
 export { customProviderGet, customProviderMutation } from "./custom-provider-http.ts";
 // Courses ("fag", exam mode): the /api/courses service + the NTNU fetch.
 export * from "./courses.ts";
-// «Oppsummering»: the /api/chats/[id]/wrap service (summary + recall quiz).
+// «Avslutt økt»: the /api/chats/[id]/wrap service (end the økt, summary +
+// recall quiz) and the course-topic update that follows it.
 export * from "./session-wrap.ts";
+export * from "./session-topics.ts";
 // Screenshot → LaTeX: the /api/transcribe service.
 export * from "./transcribe.ts";
 export { NtnuUnreachableError, createNtnuClient, parseNtnuCoursePage } from "./ntnu.ts";

@@ -1,36 +1,62 @@
 /**
- * «Oppsummering» — the session wrap service (owner, 2026-11-22).
+ * «Avslutt økt» — the session wrap service (owner, 2026-11-22; the end
+ * flow 2026-11-23).
  *
- *   POST  /api/chats/[id]/wrap           generate (or return) the draft
+ *   POST  /api/chats/[id]/wrap           end the økt with a quiz: settle,
+ *                                        then generate (or return) the draft
  *   PATCH /api/chats/[id]/wrap           record one quiz answer
- *   POST  /api/chats/[id]/wrap/complete  turn the draft into the marker
+ *   POST  /api/chats/[id]/wrap/complete  write the marker: from the draft,
+ *                                        or `{ mode: "end" }` = «Bare avslutt»
+ *
+ * ENDING NEVER WAITS ON THE LEARNER (owner, 2026-11-23: «Avslutt økt skal
+ * gjøre alt det for deg»). Both writes used to 409 while a turn ran, a
+ * compaction ran or a question waited. They now SETTLE the chat first, on
+ * the server, in one operation (settleThen):
+ *   1. a running turn is aborted (abortTurn — the same kill as the Stop
+ *      button) and we poll until it has settled: its onFinish persists the
+ *      partial, applies any parked dismissal and only then ends the turn,
+ *      so "not running" means the record is durable truth. A wake turn
+ *      that starts meanwhile is aborted the same way;
+ *   2. a running compaction is awaited (it rewrites the record's tail; a
+ *      marker must not interleave with it);
+ *   3. then, SYNCHRONOUSLY in the same tick (no await between the check
+ *      and the writes, so no turn can begin in between): the open question
+ *      calls are closed with sessionEnded dismissals, an active practice
+ *      problem is dismissed (wrapClosingAppends), and the caller's own
+ *      write runs (the marker, or the coversThroughId of a new draft).
+ * Done on the server rather than by the client chaining abort + dismiss:
+ * the client's dismiss would race the turn's settle (a parked 202 that
+ * lands later), and the marker could land before it.
  *
  * Generation is one submit call on the chat's OWN conversation model (the
  * compaction precedent: the session's model knows the session best). The
  * draft is stored on the record so a reload resumes the quiz; completion
- * appends the session-wrap marker at the tail and logs the call's usage
- * on it. Both writes refuse while a turn or a compaction holds the chat,
- * and while a question waits for its answer (a marker may not land
- * between a tool call and its result).
+ * appends the session-wrap marker at the tail, logs the call's usage on it
+ * and starts the course-topic update in the background (session-topics.ts).
  */
 import { Type } from "typebox";
 import {
-	hasDanglingToolCall,
+	closedQuestionCount,
 	hasWrapContent,
+	mergeInterruption,
+	newSessionEndMarker,
 	newSessionWrapMarker,
 	planTreeToText,
 	serializeForSummary,
 	shuffleWrapOptions,
+	wrapClosingAppends,
 	wrapScope,
 	wrapSubmissionProblem,
 	WRAP_OPTION_COUNT,
-	WRAP_QUESTION_COUNT,
+	WRAP_QUESTION_MAX,
+	WRAP_QUESTION_MIN,
 	WRAP_SUMMARY_MAX,
 	WRAP_SUMMARY_MIN,
 	WRAP_TEXT_MAX,
 	WRAP_TITLE_MAX,
 	type ChatRecord,
 	type SessionWrapDraft,
+	type WrapInterruption,
 	type WrapSubmission,
 	type WrapUsageStep,
 } from "../core/index.ts";
@@ -41,7 +67,9 @@ import { runSubmitAgent } from "../agent/subagents/submit-agent.ts";
 import { effectiveSettings, stores } from "./stores.ts";
 import { providerKeyPresent } from "./keys.ts";
 import { isTurnRunning } from "./turn-liveness.ts";
-import { compactionInFlight } from "./compaction.ts";
+import { abortTurn } from "./turn-runs.ts";
+import { awaitCompaction, compactionInFlight } from "./compaction.ts";
+import { updateTopicsAfterWrap } from "./session-topics.ts";
 
 export interface WrapFailure {
 	ok: false;
@@ -86,7 +114,11 @@ const wrapSchema = Type.Object({
 			correctIndex: Type.Integer({ minimum: 0, maximum: WRAP_OPTION_COUNT - 1, description: "0-based index of the one correct option." }),
 			explanation: Type.String({ description: "One or two sentences in Norwegian: why the correct option is right (and, if useful, the typical mistake behind the wrong ones)." }),
 		}),
-		{ minItems: WRAP_QUESTION_COUNT, maxItems: WRAP_QUESTION_COUNT },
+		{
+			minItems: WRAP_QUESTION_MIN,
+			maxItems: WRAP_QUESTION_MAX,
+			description: `${WRAP_QUESTION_MIN} to ${WRAP_QUESTION_MAX} questions: as many as the økt's material carries, no more.`,
+		},
 	),
 });
 
@@ -96,7 +128,8 @@ const WRAP_SYSTEM_PROMPT = [
 	"",
 	"Rules:",
 	`- summary: ${WRAP_SUMMARY_MIN} to ${WRAP_SUMMARY_MAX} cards, one topic per card, in the order the økt took them. The student flips through them one at a time on a small card, so each must be readable at a glance: a title of 2-6 words, and a text of 1-3 short sentences (at most ${WRAP_TEXT_MAX} characters) on what the student did, understood or got wrong, ending in the one thing to remember. At most one key formula per card, as display math with $$ alone on the line above and the line below the formula. No lists, no derivations, no long chains of numbers. Only what is in the transcript.`,
-	`- questions: exactly ${WRAP_QUESTION_COUNT} multiple-choice questions on the MOST IMPORTANT things from this økt, ordered from the økt's start to its end. Weight the points the student struggled with.`,
+	`- questions: ${WRAP_QUESTION_MIN} to ${WRAP_QUESTION_MAX} multiple-choice questions on the MOST IMPORTANT things from this økt, ordered from the økt's start to its end. Weight the points the student struggled with.`,
+	`- How many: fit the count to how much the økt actually covered. A short økt on one or two ideas gets ${WRAP_QUESTION_MIN}; a long økt across several topics gets more, up to ${WRAP_QUESTION_MAX}. Never pad with weak or repetitive questions to reach a higher number.`,
 	"- Every question must be answerable from what happened in the økt. Test understanding and use, not trivia about the conversation itself (never \"what did the tutor say first\").",
 	`- ${WRAP_OPTION_COUNT} options per question, exactly one correct. The wrong options are plausible: the mistakes a student really makes (sign errors, mixed-up definitions, the misconception the student showed). Similar length and form; no \"all of the above\".`,
 	"- Write everything in Norwegian bokmål. Use LaTeX in $...$ for every formula, symbol and number with units. Decimal commas inside math as {,}.",
@@ -130,11 +163,17 @@ export const wrapSeams: {
 	generate: (prompt: string, engine: PiEngine) => Promise<{ submission: WrapSubmission; usage: WrapUsageStep[] }>;
 	random: () => number;
 	now: () => string;
+	/** How long the end flow waits for a stopped turn / a compaction. */
+	settleTimeoutMs: number;
+	/** The course-topic update after an ended økt (fire and forget). */
+	afterEnd: (chatId: string, markerId: string) => void;
 } = {
 	engine: resolveWrapEngine,
 	generate: submitWrap,
 	random: Math.random,
 	now: () => new Date().toISOString(),
+	settleTimeoutMs: 30_000,
+	afterEnd: (chatId, markerId) => void updateTopicsAfterWrap(chatId, markerId),
 };
 
 function resolveWrapEngine(record: ChatRecord): { engine: PiEngine; modelId: string } | undefined {
@@ -156,7 +195,7 @@ async function submitWrap(prompt: string, engine: PiEngine): Promise<{ submissio
 		role: "extractor",
 		engine,
 		toolName: "submit_session_wrap",
-		toolDescription: `Submit the økt's summary (${WRAP_SUMMARY_MIN}-${WRAP_SUMMARY_MAX} cards, each a short title and 1-3 short sentences) and exactly ${WRAP_QUESTION_COUNT} multiple-choice questions.`,
+		toolDescription: `Submit the økt's summary (${WRAP_SUMMARY_MIN}-${WRAP_SUMMARY_MAX} cards, each a short title and 1-3 short sentences) and ${WRAP_QUESTION_MIN}-${WRAP_QUESTION_MAX} multiple-choice questions, as many as the økt's material carries.`,
 		parameters: wrapSchema,
 		fill: (input: WrapSubmission) => ({
 			summary: input.summary.map((p) => ({ title: p.title.trim(), text: p.text.trim() })),
@@ -186,19 +225,59 @@ async function submitWrap(prompt: string, engine: PiEngine): Promise<{ submissio
 	return { submission, usage };
 }
 
-// ─── Shared gates ────────────────────────────────────────────────────────────
+// ─── Settle: stop what runs, close what is open ──────────────────────────────
 
-/** The chat must be quiet: no turn, no compaction, no question waiting. */
-function busyFailure(chatId: string, record: ChatRecord): WrapFailure | null {
-	if (isTurnRunning(chatId)) return fail(409, "turn_in_flight", "Læreren jobber fortsatt. Vent til svaret er ferdig, og prøv igjen.");
-	if (compactionInFlight(chatId)) return fail(409, "compacting", "Økta komprimeres akkurat nå. Prøv igjen om et øyeblikk.");
-	if (hasDanglingToolCall(record.messages)) return fail(409, "question_pending", "Svar på spørsmålet som venter (eller lukk det) før du oppsummerer.");
-	return null;
+const SETTLE_POLL_MS = 50;
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Bring the chat to rest, then run `write` synchronously against the
+ * settled record (see the header: abort → await → close → write, with no
+ * await between the last check and `write`). `interrupted` says what had
+ * to be stopped or closed; undefined = the chat was already quiet.
+ */
+async function settleThen<T>(
+	chatId: string,
+	write: (record: ChatRecord, interrupted: WrapInterruption | undefined) => WrapOutcome<T>,
+): Promise<WrapOutcome<T>> {
+	const deadline = Date.now() + wrapSeams.settleTimeoutMs;
+	let turn = false;
+	for (;;) {
+		if (isTurnRunning(chatId)) {
+			// Repeated each poll: a turn registers its handle a beat after it
+			// begins, and a wake can begin a new one after the first settles.
+			if (abortTurn(chatId).ok) turn = true;
+		} else if (compactionInFlight(chatId)) {
+			await Promise.race([awaitCompaction(chatId), sleep(250)]);
+			continue;
+		} else {
+			break;
+		}
+		if (Date.now() > deadline) return fail(409, "still_busy", "Klarte ikke å stoppe læreren. Prøv igjen om et øyeblikk.");
+		await sleep(SETTLE_POLL_MS);
+	}
+	if (compactionInFlight(chatId) || isTurnRunning(chatId)) return fail(409, "still_busy", "Klarte ikke å stoppe læreren. Prøv igjen om et øyeblikk.");
+	// ── synchronous from here ──
+	const record = stores.chatStore.getChat(chatId);
+	if (!record) return fail(404, "not_found", "Fant ikke økta.");
+	const appends = wrapClosingAppends(record.messages);
+	let settled = record;
+	if (appends.length > 0) {
+		settled = { ...record, messages: [...record.messages, ...appends] };
+		stores.chatStore.saveMessages(chatId, settled.messages);
+		emit("record-changed", { chatId });
+	}
+	const questions = closedQuestionCount(appends);
+	return write(settled, turn || questions > 0 ? { turn, questions } : undefined);
 }
 
 /** One generation per chat at a time; a second click joins the first. */
-const g = globalThis as typeof globalThis & { __lhWrapInFlight?: Map<string, Promise<WrapOutcome<{ draft: SessionWrapDraft }>>> };
+const g = globalThis as typeof globalThis & {
+	__lhWrapInFlight?: Map<string, Promise<WrapOutcome<{ draft: SessionWrapDraft }>>>;
+	__lhWrapCompleting?: Map<string, Promise<WrapOutcome<{ markerId: string }>>>;
+};
 const inFlight = (g.__lhWrapInFlight ??= new Map());
+const completing = (g.__lhWrapCompleting ??= new Map());
 
 export function wrapInFlight(chatId: string): boolean {
 	return inFlight.has(chatId);
@@ -206,34 +285,43 @@ export function wrapInFlight(chatId: string): boolean {
 
 // ─── Generate ────────────────────────────────────────────────────────────────
 
+/** «Oppsummering med quiz»: settle the chat, then write the draft. */
 export async function generateSessionWrap(chatId: string): Promise<WrapOutcome<{ draft: SessionWrapDraft }>> {
 	const record = stores.chatStore.getChat(chatId);
 	if (!record) return fail(404, "not_found", "Fant ikke økta.");
 	if (record.wrapDraft) return { ok: true, draft: record.wrapDraft };
 	const running = inFlight.get(chatId);
 	if (running) return running;
-	const busy = busyFailure(chatId, record);
-	if (busy) return busy;
 	if (!hasWrapContent(record.messages)) {
-		return fail(400, "nothing_to_wrap", "Det er ingenting å oppsummere ennå. Jobb litt i økta først.");
+		return fail(400, "nothing_to_wrap", "Det er ingenting å avslutte ennå. Jobb litt i økta først.");
 	}
+	// Checked BEFORE settling: no model = nothing is stopped or closed.
 	const resolved = wrapSeams.engine(record);
 	if (!resolved) {
 		return fail(503, "models_not_configured", "Ingen modell er satt opp for denne økta. Velg en modell under Innstillinger → Agent.");
 	}
-	const coversThroughId = record.messages[record.messages.length - 1]!.id;
 	const job = (async (): Promise<WrapOutcome<{ draft: SessionWrapDraft }>> => {
+		const settled = await settleThen(chatId, (fresh, interrupted) => ({
+			ok: true as const,
+			record: fresh,
+			interrupted,
+			// The økt ends here: what is written while the quiz runs belongs
+			// to the next økt.
+			coversThroughId: fresh.messages[fresh.messages.length - 1]!.id,
+		}));
+		if (!settled.ok) return settled;
 		try {
-			const { submission, usage } = await wrapSeams.generate(wrapPrompt(record), resolved.engine);
+			const { submission, usage } = await wrapSeams.generate(wrapPrompt(settled.record), resolved.engine);
 			const draft: SessionWrapDraft = {
 				id: crypto.randomUUID(),
 				createdAt: wrapSeams.now(),
 				model: resolved.modelId,
-				coversThroughId,
+				coversThroughId: settled.coversThroughId,
 				summary: submission.summary,
 				questions: shuffleWrapOptions(submission.questions, wrapSeams.random),
 				answers: submission.questions.map(() => null),
 				usage,
+				...(settled.interrupted ? { interrupted: settled.interrupted } : {}),
 			};
 			// Re-read: the record may have moved on while the model worked.
 			if (!stores.chatStore.getChat(chatId)) return fail(404, "not_found", "Fant ikke økta.");
@@ -242,7 +330,7 @@ export async function generateSessionWrap(chatId: string): Promise<WrapOutcome<{
 			return { ok: true, draft };
 		} catch (err) {
 			console.error(`[chat ${chatId}] session wrap failed:`, err);
-			return fail(502, "wrap_failed", "Klarte ikke å lage oppsummeringen. Prøv igjen.");
+			return fail(502, "wrap_failed", "Klarte ikke å lage oppsummeringen. Prøv igjen, eller avslutt uten quiz.");
 		}
 	})();
 	inFlight.set(chatId, job);
@@ -280,28 +368,64 @@ export function answerSessionWrap(chatId: string, body: unknown): WrapOutcome<{ 
 
 // ─── Complete ────────────────────────────────────────────────────────────────
 
-export function completeSessionWrap(chatId: string): WrapOutcome<{ markerId: string }> {
+/**
+ * Write the «Økt avsluttet» marker. Default: from the quiz draft (409
+ * without one). `{ mode: "end" }` = «Bare avslutt»: the marker with no
+ * quiz (a draft that exists is completed as is, so no answers are lost).
+ * Settles first, exactly like generation; a second click joins the first.
+ */
+export async function completeSessionWrap(chatId: string, body?: unknown): Promise<WrapOutcome<{ markerId: string }>> {
 	const record = stores.chatStore.getChat(chatId);
 	if (!record) return fail(404, "not_found", "Fant ikke økta.");
-	const draft = record.wrapDraft;
-	if (!draft) return fail(409, "no_draft", "Quizen er allerede avsluttet.");
-	const busy = busyFailure(chatId, record);
-	if (busy) return busy;
-	const completedAt = wrapSeams.now();
-	const marker = newSessionWrapMarker(draft, completedAt);
-	stores.chatStore.saveMessages(chatId, [...record.messages, { ...marker }]);
-	stores.chatStore.saveWrapDraft(chatId, null);
-	// The money channel: the generating call was real spend on the
-	// session's own model — it keys to the marker, like compaction's.
-	if (draft.usage.length > 0) {
-		stores.chatStore.appendTurnUsage(chatId, {
-			id: `wrap_${draft.id}`,
-			messageId: marker.id,
-			at: completedAt,
-			model: draft.model,
-			steps: draft.usage,
-		});
+	const bare = typeof body === "object" && body !== null && (body as { mode?: unknown }).mode === "end";
+	const running = completing.get(chatId);
+	if (running) return running;
+	if (!record.wrapDraft) {
+		if (!bare) return fail(409, "no_draft", "Quizen er allerede avsluttet.");
+		if (!hasWrapContent(record.messages)) return fail(400, "nothing_to_wrap", "Det er ingenting å avslutte ennå.");
 	}
-	emit("record-changed", { chatId });
-	return { ok: true, markerId: marker.id };
+	const job = settleThen(chatId, (fresh, interrupted): WrapOutcome<{ markerId: string }> => {
+		const draft = fresh.wrapDraft;
+		if (!draft && !bare) return fail(409, "no_draft", "Quizen er allerede avsluttet.");
+		const completedAt = wrapSeams.now();
+		const marker = draft
+			? newSessionWrapMarker({ ...draft, interrupted: mergeInterruption(draft.interrupted, interrupted) }, completedAt)
+			: newSessionEndMarker({
+					id: crypto.randomUUID(),
+					coversThroughId: fresh.messages[fresh.messages.length - 1]!.id,
+					completedAt,
+					interrupted,
+				});
+		stores.chatStore.saveMessages(chatId, [...fresh.messages, { ...marker }]);
+		if (draft) stores.chatStore.saveWrapDraft(chatId, null);
+		// The money channel: the generating call was real spend on the
+		// session's own model — it keys to the marker, like compaction's.
+		if (draft && draft.usage.length > 0) {
+			stores.chatStore.appendTurnUsage(chatId, {
+				id: `wrap_${draft.id}`,
+				messageId: marker.id,
+				at: completedAt,
+				model: draft.model,
+				steps: draft.usage,
+			});
+		}
+		emit("record-changed", { chatId });
+		return { ok: true, markerId: marker.id };
+	});
+	completing.set(chatId, job);
+	try {
+		const outcome = await job;
+		// The course page follows the ended økt — in the background, never
+		// in the way of the end itself.
+		if (outcome.ok) {
+			try {
+				wrapSeams.afterEnd(chatId, outcome.markerId);
+			} catch (err) {
+				console.error(`[chat ${chatId}] topic update could not start:`, err);
+			}
+		}
+		return outcome;
+	} finally {
+		completing.delete(chatId);
+	}
 }

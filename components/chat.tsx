@@ -52,7 +52,7 @@ import {
 	hasWrapContent,
 	hasDanglingToolCall,
 } from "@/src/core";
-import { SessionWrapChip, SessionWrapDialog, SessionWrapDivider, type WrapChipState } from "@/components/session-wrap";
+import { EndSessionButton, EndSessionDialog, SessionWrapDialog, SessionWrapDivider, endSessionNow, type EndSessionState } from "@/components/session-wrap";
 import { PlanBlock, PlanPopup, latestTree } from "@/components/plan-block";
 import { PlanMarginalia, planExists } from "@/components/plan-window";
 import { MermaidOverlay, SessionMermaidContext } from "@/components/session-overlay";
@@ -927,9 +927,11 @@ export function Chat({
 	// The live plan popup (wave 4): opened by any transcript plan block, the
 	// top-bar plan chip, and the dock band's marginalia.
 	const [planOpen, setPlanOpen] = useState(false);
-	// «Oppsummering» (2026-11-22): the draft on the record (quiz in
-	// progress), the live window, and the read-only review a divider opens.
+	// «Avslutt økt» (2026-11-22; 2026-11-23): the draft on the record (quiz
+	// in progress), the choice popup, the live window, and the read-only
+	// review a divider opens.
 	const [wrapDraft, setWrapDraft] = useState<SessionWrapDraft | null>(initialWrapDraft);
+	const [endAsk, setEndAsk] = useState(false);
 	const [wrapOpen, setWrapOpen] = useState(false);
 	const [wrapReview, setWrapReview] = useState<SessionWrapDetails | null>(null);
 	const closeWrap = useCallback(() => {
@@ -937,13 +939,8 @@ export function Chat({
 		setWrapReview(null);
 	}, []);
 	const wrapHasContent = useMemo(() => hasWrapContent(nativeMessages), [nativeMessages]);
-	const wrapChipState: WrapChipState = wrapDraft
-		? "resume"
-		: busy || compacting || pending !== null || hasDanglingToolCall(nativeMessages)
-			? "busy"
-			: wrapHasContent
-				? "ready"
-				: "empty";
+	// Busy is no reason to wait: ending stops the teacher (server-side).
+	const endState: EndSessionState = wrapDraft ? "resume" : wrapHasContent ? "ready" : "empty";
 	// Real plan presence — gates the marginalia's clickable flank. A JSX
 	// element is always truthy; gating on the node alone mounted a phantom
 	// (invisible, clickable) button in the bottom-right whenever a question
@@ -1483,13 +1480,15 @@ export function Chat({
 						</button>
 </Hint>
 					)}
-					{/* «Oppsummering» (2026-11-22): wraps the current økt — summary +
-					    10-question recall quiz, then the «Økt avsluttet» divider. */}
-					<SessionWrapChip
-						state={wrapChipState}
+					{/* «Avslutt økt» (2026-11-23): ends the current økt — the popup
+					    offers the summary + recall quiz or just the divider; a quiz
+					    already started resumes directly. */}
+					<EndSessionButton
+						state={endState}
 						onClick={() => {
 							setWrapReview(null);
-							setWrapOpen(true);
+							if (wrapDraft) setWrapOpen(true);
+							else setEndAsk(true);
 						}}
 					/>
 					{/* The extraction ring (owner-locked redesign, 2026-09-24): fills
@@ -1932,6 +1931,32 @@ export function Chat({
 					onClose={closeWrap}
 					onDraft={setWrapDraft}
 					onCompleted={() => void syncFromServer()}
+					onSettled={() => void syncFromServer()}
+				/>
+				<EndSessionDialog
+					open={endAsk}
+					interrupting={
+						busy && (pending !== null || hasDanglingToolCall(nativeMessages)) ? "both" : busy ? "turn" : pending !== null || hasDanglingToolCall(nativeMessages) ? "question" : null
+					}
+					onClose={() => setEndAsk(false)}
+					onQuiz={() => {
+						// The local view detaches at once; the server stops the
+						// turn and closes the question itself before generating.
+						if (busyRef.current) abortInFlightTurn();
+						setEndAsk(false);
+						setWrapReview(null);
+						setWrapOpen(true);
+					}}
+					onEnd={async () => {
+						if (busyRef.current) abortInFlightTurn();
+						const failure = await endSessionNow(chatId);
+						if (!failure) {
+							setEndAsk(false);
+							setWrapDraft(null);
+						}
+						void syncFromServer();
+						return failure;
+					}}
 				/>
 				{planOpen && <PlanPopup messages={messages} onClose={() => setPlanOpen(false)} exam={kind === "exam"} />}
 				<AbortTurnDialog mode={abortAsk} onClose={() => setAbortAsk(null)} onConfirm={confirmAbort} busy={busy} />
