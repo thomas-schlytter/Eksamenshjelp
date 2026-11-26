@@ -15,7 +15,7 @@ import {
 import { filterEnabledTools, type EnabledTools } from "../core/pending.ts";
 import { explainAnsweredNodesLh, type JobRecord } from "../core/contracts.ts";
 import type { JobStore } from "../core/ports.ts";
-import { jobTools, type DemoInput, type PdfInput, type ResearchInput, type VisualInput } from "./tools/jobs.ts";
+import { jobTools, waitForTurnJobs, type DemoInput, type JobToolContext, type PdfInput, type ResearchInput, type VisualInput } from "./tools/jobs.ts";
 import { planTools, type PlanToolContext } from "./tools/plan.ts";
 import { probeDoneTool, type ProbeDoneContext } from "./tools/probe.ts";
 import { proberGraphTools } from "./tools/graph.ts";
@@ -457,10 +457,28 @@ function answeredExplainInSession(ctx: Pick<PlanToolContext, "chatId" | "chatSto
 	return record ? explainAnsweredNodesLh(record.messages).size > 0 : false;
 }
 
+/** A question posed while a figure or demo from the SAME turn is still
+ *  being made waits for it (jobs.ts waitForTurnJobs) — after validation, so
+ *  a malformed question still bounces at once. `since` is the turn's start:
+ *  the registry is built per request. */
+export function waitsForTurnJobs<T extends AgentTool<any>>(tool: T, ctx: Pick<JobToolContext, "chatId" | "jobStore">, since: number): T {
+	const inner = tool.execute;
+	return {
+		...tool,
+		execute: async (toolCallId, input, signal, onUpdate) => {
+			const result = await inner(toolCallId, input, signal, onUpdate);
+			if ((result as { isError?: boolean }).isError) return result;
+			await waitForTurnJobs(ctx, since, toolCallId, signal);
+			return result;
+		},
+	};
+}
+
 export function createTeacherTools(
 	ctx: TeacherToolContext,
 	enabled?: EnabledTools,
 ): Record<string, AgentTool<any>> {
+	const turnStarted = Date.now();
 	// BOTH graded tools, always (owner 2026-11-14): `quiz` (multiple
 	// choice) carries the lesson's predictions and checks, `explain` (free
 	// text) approves a node. The split is doctrine (the teacher prompts);
@@ -469,8 +487,8 @@ export function createTeacherTools(
 	return healToolRecord(
 		filterEnabledTools(
 			{
-			quiz: teachQuizToolFor(ctx),
-			explain: teachExplainToolFor(ctx),
+			quiz: waitsForTurnJobs(teachQuizToolFor(ctx), ctx, turnStarted),
+			explain: waitsForTurnJobs(teachExplainToolFor(ctx), ctx, turnStarted),
 			ask_user_question: askUserQuestionTool,
 			// The learner-filesystem set is always-on (user-decided 2026-09,
 			// sources v1): the teacher locates and reads learner-referenced

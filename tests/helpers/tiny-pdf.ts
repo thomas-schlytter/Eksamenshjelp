@@ -18,6 +18,9 @@ export interface TinyPage {
 	image?: boolean | "mask" | "inline" | "logo";
 	/** Stroked vector paths (a tablet's handwriting draws one per stroke). */
 	strokes?: number;
+	/** Page size in points (default US Letter, 612 × 792): a tall strip is
+	 *  how a tablet exports a whole handwritten answer as one page. */
+	size?: [width: number, height: number];
 }
 
 const WIDTH = 612;
@@ -37,9 +40,10 @@ function pdfString(text: string): string {
 
 function content(page: TinyPage): string {
 	const ops: string[] = [];
-	if (page.image === "inline") ops.push(`q ${WIDTH} 0 0 ${HEIGHT} 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x80\x40\x40\x80 EI Q`);
+	const [width, height] = page.size ?? [WIDTH, HEIGHT];
+	if (page.image === "inline") ops.push(`q ${width} 0 0 ${height} 0 0 cm BI /W 2 /H 2 /CS /G /BPC 8 ID \x80\x40\x40\x80 EI Q`);
 	else if (page.image === "logo") ops.push("q 40 0 0 20 72 740 cm /Im1 Do Q");
-	else if (page.image) ops.push(`q ${WIDTH} 0 0 ${HEIGHT} 0 0 cm /${page.image === "mask" ? "Mask" : "Im1"} Do Q`);
+	else if (page.image) ops.push(`q ${width} 0 0 ${height} 0 0 cm /${page.image === "mask" ? "Mask" : "Im1"} Do Q`);
 	for (let i = 0; i < (page.strokes ?? 0); i++) ops.push(`${72 + (i % 40) * 10} ${100 + Math.floor(i / 40) * 20} m ${78 + (i % 40) * 10} ${110 + Math.floor(i / 40) * 20} l S`);
 	for (const run of page.runs ?? []) {
 		const matrix = run.rotated ? `0 1 -1 0 ${run.x} ${run.y}` : `1 0 0 1 ${run.x} ${run.y}`;
@@ -65,7 +69,7 @@ export function tinyPdf(pages: readonly TinyPage[]): Uint8Array<ArrayBuffer> {
 	for (const [i, page] of pages.entries()) {
 		const stream = content(page);
 		objects.push(
-			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${WIDTH} ${HEIGHT}] /Resources << /Font << /F1 3 0 R >> /XObject << /Im1 4 0 R /Mask ${maskId} 0 R >> >> /Contents ${7 + i * 2} 0 R >>`,
+			`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.size?.[0] ?? WIDTH} ${page.size?.[1] ?? HEIGHT}] /Resources << /Font << /F1 3 0 R >> /XObject << /Im1 4 0 R /Mask ${maskId} 0 R >> >> /Contents ${7 + i * 2} 0 R >>`,
 			`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`,
 		);
 	}

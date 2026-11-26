@@ -230,12 +230,12 @@ describe("read tool — PDFs in the same call (text per page, images where text 
 
 	it(`stops before page image number ${PDF_IMAGE_LIMIT + 1}, ending on a whole page`, async () => {
 		const calls = fakeRenders();
-		const file = pdf("scans.pdf", Array.from({ length: 10 }, () => ({ image: true })));
-		const { text, images } = await read({ path: file, pages: "1-10" });
+		const file = pdf("scans.pdf", Array.from({ length: 14 }, () => ({ image: true })));
+		const { text, images } = await read({ path: file, pages: "1-14" });
 		assert.equal(images.length, PDF_IMAGE_LIMIT);
-		assert.deepEqual(calls, [[1, 2, 3, 4, 5, 6, 7, 8]]);
-		assert.match(text, /Showing pages 1-8\./);
-		assert.match(text, /\[2 more pages \(9-10\)\. Use pages="9-10" to continue\.\]$/);
+		assert.deepEqual(calls, [Array.from({ length: PDF_IMAGE_LIMIT }, (_, i) => i + 1)]);
+		assert.match(text, /Showing pages 1-12\./);
+		assert.match(text, /\[2 more pages \(13-14\)\. Use pages="13-14" to continue\.\]$/);
 	});
 
 	it("a model without image input gets the text and an honest omission note, no renders", async () => {

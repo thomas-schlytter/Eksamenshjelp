@@ -144,7 +144,10 @@ export function invalidInputResult(
  */
 export interface ImageFileResult {
 	text: string;
-	images?: { data: string; mimeType: string }[];
+	/** `label` (a tile's place, e.g. "[Page 1, part 2 of 5 (top → bottom)]")
+	 *  rides as its own text part right before that image, so the order
+	 *  holds wherever the parts travel (MCP, replay). */
+	images?: { data: string; mimeType: string; label?: string }[];
 	/** The record-facing result (client rendering / persistence). */
 	details?: unknown;
 }
@@ -167,11 +170,10 @@ export function toToolResult(result: unknown): AgentToolResult<unknown> {
 		return {
 			content: [
 				{ type: "text", text: result.text },
-				...(result.images ?? []).map((img) => ({
-					type: "image" as const,
-					data: img.data,
-					mimeType: img.mimeType,
-				})),
+				...(result.images ?? []).flatMap((img) => [
+					...(img.label ? [{ type: "text" as const, text: img.label }] : []),
+					{ type: "image" as const, data: img.data, mimeType: img.mimeType },
+				]),
 			],
 			details: result.details ?? null,
 		};

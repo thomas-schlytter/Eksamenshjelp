@@ -36,6 +36,11 @@ export interface JobRecord {
 	updatedAt: string;
 	/** The sub-agent's result (steer-artifact payload). */
 	result?: unknown;
+	/** A figure or demo the teacher posed a question right after (2026-11):
+	 * the question call (toolCallId) that waits for this job, and — once the
+	 * job is done — shows its figure / sits under its demo. The finished
+	 * result then renders at the dispatch card instead of a later steer. */
+	forQuestion?: string;
 	error?: string;
 	/** Money channel (observability, 2026-09): accumulated token usage of
 	 * the sub-agent's run, written by the runner as steps complete. Cost is

@@ -8,6 +8,7 @@ import { Toggle } from "@/components/settings/controls";
 import { useSessionMermaid } from "@/components/session-overlay";
 import { downloadFile } from "@/components/artifacts/download";
 import { DispatchCard } from "@/components/artifacts/dispatch-card";
+import { JobsContext } from "@/components/jobs-context";
 import { SvgImage } from "@/components/artifacts/svg-image";
 import type { ArtifactPartProps, VisualResult } from "@/src/core";
 
@@ -36,11 +37,15 @@ export function svgNaturalWidth(svg: string): number | null {
 }
 
 export function VisualCard({ part }: ArtifactPartProps) {
+	const job = useContext(JobsContext).find((j) => j.toolCallId === part.toolCallId);
 	if (part.state !== "output-available") return null;
 	// A WAITED visual (fase 4, wait: true): the figure IS this call's result,
 	// so it renders right here, where the call was made — before the task.
 	const output = (part as { output?: unknown }).output as { inline?: unknown; result?: unknown } | null | undefined;
 	if (output?.inline === true) return <VisualOutputCard output={output.result} />;
+	// A figure a question waited for (2026-11): claimed from the runner, so
+	// it renders here, before the question, instead of in a later steer.
+	if (job?.forQuestion && job.status === "done" && job.result !== undefined) return <VisualOutputCard output={job.result} />;
 	return <DispatchCard toolCallId={part.toolCallId} kind="visual" />;
 }
 

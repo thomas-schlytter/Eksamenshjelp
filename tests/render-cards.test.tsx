@@ -161,6 +161,28 @@ describe("DispatchCard — the BYOK refusal tone (owner, 2026-09-22)", () => {
 		const html = renderToStaticMarkup(inJobs([job({ status: "done", error: undefined })]));
 		assert.ok(html.includes("ferdig"));
 	});
+
+	it("while a question waits for its figure or demo, the card says what the teacher decided — no job name (2026-11)", () => {
+		const waiting = (kind: "visual" | "demo") => renderToStaticMarkup(
+			<JobsContext.Provider value={[job({ kind, status: "running", error: undefined, forQuestion: "q1" })]}>
+				<DispatchCard toolCallId="t1" kind={kind} />
+			</JobsContext.Provider>,
+		);
+		const visual = waiting("visual");
+		assert.ok(visual.includes('data-testid="question-job-waiting"'));
+		assert.ok(visual.includes("Læreren genererer figurer til oppgaven …"));
+		assert.ok(!visual.includes("Visualiseringsagent"));
+		const demo = waiting("demo");
+		assert.ok(demo.includes("Læreren har bestemt at du skal se en interaktiv demo"));
+		assert.ok(!demo.includes("Demo-agent"));
+		// A job nobody waits for keeps its ordinary activity card.
+		const plain = renderToStaticMarkup(
+			<JobsContext.Provider value={[job({ kind: "visual", status: "running", error: undefined })]}>
+				<DispatchCard toolCallId="t1" kind="visual" />
+			</JobsContext.Provider>,
+		);
+		assert.ok(plain.includes('data-testid="dispatch-card"'));
+	});
 });
 
 describe("render smoke tests", () => {

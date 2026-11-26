@@ -9,7 +9,7 @@ import test from "node:test";
 
 import type { AssistantMessage, Message, SystemMessage, Tool, ToolResultMessage, UserMessage } from "@earendil-works/pi-ai";
 
-import { toClaudeInput, toStreamJsonLine } from "../src/agent/claude-code/transcript.ts";
+import { rememberReplaySegment, replaySegmentsFor, toClaudeInput, toStreamJsonLine } from "../src/agent/claude-code/transcript.ts";
 
 const READ_TOOL: Tool = { name: "read", description: "Read a file", parameters: { type: "object", properties: {} } };
 const WRITE_TOOL: Tool = { name: "write", description: "Write a file", parameters: { type: "object", properties: {} } };
@@ -158,4 +158,57 @@ test('toStreamJsonLine emits {"type":"user","message":{"role":"user","content":[
 		type: "user",
 		message: { role: "user", content: [{ type: "text", text: "hi" }] },
 	});
+});
+
+test("a tool's per-image captions stay right before their images (tiled PDF pages)", () => {
+	const messages: Message[] = [
+		user("read my answer"),
+		assistant([{ type: "toolCall", id: "read-1", name: "read", arguments: { path: "svar.pdf" } }]),
+		toolResult("read", [
+			{ type: "text", text: "PDF: svar.pdf (1 page)." },
+			{ type: "text", text: "[Page 1, part 1 of 2 (top → bottom)]" },
+			{ type: "image", data: "AAAA", mimeType: "image/png" },
+			{ type: "text", text: "[Page 1, part 2 of 2 (top → bottom)]" },
+			{ type: "image", data: "BBBB", mimeType: "image/png" },
+		]),
+		user("what do you see?"),
+	];
+	assert.deepEqual(toClaudeInput(messages).userContent, [
+		{ type: "text", text: '[user]\nread my answer\n\n[tool call read] {"path":"svar.pdf"}\n\n[tool result read]\nPDF: svar.pdf (1 page).\n[Page 1, part 1 of 2 (top → bottom)]' },
+		{ type: "image", source: { type: "base64", media_type: "image/png", data: "AAAA" } },
+		{ type: "text", text: "[Page 1, part 2 of 2 (top → bottom)]" },
+		{ type: "image", source: { type: "base64", media_type: "image/png", data: "BBBB" } },
+		{ type: "text", text: "[user]\nwhat do you see?" },
+	]);
+});
+
+test("cache-stable replay: an earlier replay's blocks come back unchanged as the prefix of the next one", () => {
+	const turn1: Message[] = [
+		user("explain TCP"),
+		assistant([{ type: "text", text: "TCP is a byte stream." }]),
+		user("and the handshake?"),
+	];
+	const turn2: Message[] = [
+		...turn1,
+		assistant([{ type: "text", text: "SYN, SYN-ACK, ACK." }]),
+		user("why three?"),
+	];
+	const first = toClaudeInput(turn1);
+	assert.equal(first.conversationLength, 3);
+	const merged = toClaudeInput(turn2).userContent;
+	assert.equal(merged.length, 1, "without segments the old shape: one merged block");
+	const next = toClaudeInput(turn2, [first.conversationLength]).userContent;
+	assert.deepEqual(next.slice(0, first.userContent.length), first.userContent, "byte-identical prefix");
+	assert.deepEqual(next.slice(first.userContent.length), [{ type: "text", text: "[assistant]\nSYN, SYN-ACK, ACK.\n\n[user]\nwhy three?" }]);
+});
+
+test("replay segments are remembered per session and dropped past a shorter history", () => {
+	rememberReplaySegment("chat-seg", 3);
+	rememberReplaySegment("chat-seg", 7);
+	assert.deepEqual(replaySegmentsFor("chat-seg"), [3, 7]);
+	rememberReplaySegment("chat-seg", 5);
+	assert.deepEqual(replaySegmentsFor("chat-seg"), [3, 5], "a compacted history keeps only boundaries inside it");
+	assert.deepEqual(replaySegmentsFor(undefined), []);
+	rememberReplaySegment(undefined, 4);
+	assert.deepEqual(replaySegmentsFor("other-chat"), []);
 });

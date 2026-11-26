@@ -44,6 +44,7 @@ import {
 	THINKING_LABEL,
 } from "./contracts/chat.ts";
 import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.ts";
+import type { JobRecord } from "./contracts/jobs.ts";
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
 import { parseQuestionInput } from "./tool-parts.ts";
 import { courseContextDetails, courseContextText, type ChatCourseLink, type Course } from "./courses.ts";
@@ -554,6 +555,31 @@ export function figureSvgOf(messages: readonly LhMessage[], figureId: string | u
 		return typeof svg === "string" && svg.length > 0 ? svg : null;
 	}
 	return null;
+}
+
+/**
+ * The question's figure when the teacher named none (2026-11): a question
+ * posed right after a `visual` waited for it (tools/jobs.ts
+ * waitForTurnJobs), and the job records which question it was made for.
+ * The newest finished one wins; undefined when there is none.
+ */
+export function attachedFigureId(jobs: readonly JobRecord[], questionToolCallId: string | undefined): string | undefined {
+	if (!questionToolCallId) return undefined;
+	let best: JobRecord | undefined;
+	for (const job of jobs) {
+		if (job.kind !== "visual" || job.forQuestion !== questionToolCallId || job.status !== "done") continue;
+		if (!best || job.createdAt > best.createdAt) best = job;
+	}
+	return best?.id;
+}
+
+/** A figure's svg from the jobs feed: a figure a question waited for is
+ *  claimed from the runner, so it never arrives as a steer message. */
+export function jobFigureSvg(jobs: readonly JobRecord[], figureId: string | undefined): string | null {
+	if (!figureId) return null;
+	const job = jobs.find((j) => j.id === figureId && j.kind === "visual");
+	const svg = (job?.result as { svg?: unknown } | null | undefined)?.svg;
+	return typeof svg === "string" && svg.length > 0 ? svg : null;
 }
 
 /** The active-problem fold (the conclude-before-next-problem gate): the
