@@ -30,6 +30,8 @@ import { ExamPlanView } from "./exam-plan";
 import { LauncherSetupDialog, usePageTabCycle, useSessionLauncher, type LaunchOutcome } from "./session-launcher";
 import { beginNavigation } from "@/components/navigation-progress";
 import { TopicBoard } from "./topic-board";
+import { flashcardApi, flashcardErrorMessage, useFlashcards } from "@/components/flashcards/flashcard-api";
+import { FlashcardsCard } from "@/components/flashcards/flashcards-card";
 
 /** The collapsed sections at the bottom of the fag page (fase 7b). */
 export type CourseSectionId = "chats" | "topics" | "plan" | "sources";
@@ -611,6 +613,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 		[chats, code],
 	);
 	const results = useMockExamResults(code);
+	const flashcards = useFlashcards(code);
 	const [data, setData] = useState(initial);
 	const [gone, setGone] = useState(false);
 	const [notice, setNotice] = useState<string | null>(null);
@@ -803,6 +806,16 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 			if (outcome !== "started") setMakingExam(false);
 		});
 	};
+	// «Lag spørsmålskort»: the server starts the job and answers at once;
+	// the card shows the waiting state until `flashcards-changed`.
+	const [startingCards, setStartingCards] = useState(false);
+	const makeFlashcards = () => {
+		setStartingCards(true);
+		flashcardApi.generate(code, "new")
+			.then((view) => flashcards.setView(view))
+			.catch((err) => setNotice(`Kunne ikke lage spørsmålskort. ${flashcardErrorMessage(err)}`))
+			.finally(() => setStartingCards(false));
+	};
 	const showWizard = () => {
 		setWizard(true);
 		root.current?.querySelector("[data-scroll-root]")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -847,7 +860,8 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 
 	const counts = useMemo(() => topicCounts(course.topics), [course.topics]);
 	const verdict = useMemo(() => courseVerdict(plan.daysLeft, counts), [plan.daysLeft, counts]);
-	const workNow = useMemo(() => workNowTopics(course.topics), [course.topics]);
+	const cardMisses = flashcards.view?.weakTopics;
+	const workNow = useMemo(() => workNowTopics(course.topics, 3, cardMisses), [course.topics, cardMisses]);
 	const points = useMemo(() => mockExamPoints(results ?? []), [results]);
 	const hasPlan = plan.days.some((day) => day.items.length > 0);
 	const chatCount = chatGroup ? (chatGroup.main ? 1 : 0) + chatGroup.subs.length : 0;
@@ -941,7 +955,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 						<FlameCard />
 					</div>
 
-					<div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]">
 						<WorkNowCard
 							topics={course.topics}
 							items={workNow}
@@ -950,6 +964,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 							onMakeTopics={showWizard}
 						/>
 						<MockExamsCard points={points} loaded={results !== null} busy={launcher.busy} pending={makingExam} onMake={makeMockExam} />
+						<FlashcardsCard code={code} view={flashcards.view} starting={startingCards} onMake={makeFlashcards} />
 					</div>
 
 					{/* The rest, collapsed. `course-tabs` keeps the help center's

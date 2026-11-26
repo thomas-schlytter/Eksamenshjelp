@@ -68,6 +68,10 @@ export interface ServerEvents {
 	 *  the fag page's score curve refetches). `chatId` is not sent; it is
 	 *  declared so consumers that filter the union on it still type-check. */
 	"mock-exams-changed": { code: string; chatId?: string };
+	/** A course's spørsmålskort changed (a generation started or finished,
+	 *  an answer, a reset): the fag page's card, the practice page and the
+	 *  flame refetch. `chatId` is never sent (declared for union filters). */
+	"flashcards-changed": { code: string; chatId?: string };
 	/** A subscription reported new usage-limit numbers (the 5-hour and
 	 *  weekly windows, 2026-11-26). Open sidebars refetch
 	 *  GET /api/usage-limits. */
@@ -93,6 +97,7 @@ export const SERVER_EVENT_TYPES = [
 	"map-changed",
 	"streak-changed",
 	"mock-exams-changed",
+	"flashcards-changed",
 	"usage-limits-changed",
 ] as const satisfies readonly ServerEventType[];
 

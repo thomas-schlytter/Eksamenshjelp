@@ -14,6 +14,11 @@
  * The watcher listens on the bus for the events that follow an answer
  * landing on disk (turn-settled, record-changed, chats-changed), refreshes,
  * and emits `streak-changed` only when the summary actually moved.
+ *
+ * Spørsmålskort (2026-11-26): a right card (never «Vet ikke») is a solved
+ * question too. Those days live on the decks themselves (one instant per
+ * day, core/flashcards.ts) and join the chat answers here; the chat rules
+ * are untouched. `flashcards-changed` wakes the watcher.
  */
 
 import * as fs from "node:fs";
@@ -30,6 +35,7 @@ import {
 	streakSummary,
 	type StreakSummary,
 } from "../core/streak.ts";
+import { listFlashcardDecks } from "../store/flashcards.ts";
 import { stores } from "./stores.ts";
 
 const CACHE_VERSION = 1;
@@ -128,7 +134,9 @@ function refreshChats(cache: StreakCache): boolean {
 
 function summarize(cache: StreakCache): StreakSummary {
 	const zone = streakSeams.timeZone;
-	const days = answerDays(Object.values(cache.chats).flatMap((c) => c.answers), zone);
+	const chatAnswers = Object.values(cache.chats).flatMap((c) => c.answers);
+	const cardAnswers = listFlashcardDecks().flatMap((deck) => deck.solvedAt);
+	const days = answerDays([...chatAnswers, ...cardAnswers], zone);
 	return streakSummary(days, dayKey(now(), zone), cache.best, cache.celebratedRank);
 }
 
@@ -187,7 +195,7 @@ export function checkStreakChange(): void {
 	}
 }
 
-const WATCHED: ReadonlySet<ServerEvent["type"]> = new Set(["turn-settled", "record-changed", "chats-changed"]);
+const WATCHED: ReadonlySet<ServerEvent["type"]> = new Set(["turn-settled", "record-changed", "chats-changed", "flashcards-changed"]);
 
 /** Install the bus listener once per process (globalThis: every Next
  *  module entry shares it). Idempotent. */

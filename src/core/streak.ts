@@ -5,7 +5,9 @@
  * a question answered (not «Hopp over», not dismissed, not parked with
  * «Spør agenten», not closed by «Avslutt økt»), a thinking submission on a
  * practice task, or a recall quiz at the end of an økt with at least one
- * answer. The day is the answer's local calendar day.
+ * answer. The day is the answer's local calendar day. A right spørsmålskort
+ * (never «Vet ikke») counts too; those days come from the decks
+ * (core/flashcards.ts) and are joined on the server.
  *
  * The streak counts consecutive days backwards from today. When today has
  * no answer yet, it counts from yesterday (today reads «ikke gjort ennå»);

@@ -1,4 +1,4 @@
-import type { MockExamResult } from "@/src/core";
+import { flashcardMissReason, type FlashcardTopicMiss, type MockExamResult } from "@/src/core";
 import type { CourseTopic } from "./course-types";
 
 /**
@@ -33,14 +33,23 @@ export interface WorkNowTopic {
 	reason: string;
 }
 
-/** «Jobb med dette nå»: the most important red, then yellow, topics. */
-export function workNowTopics(topics: readonly CourseTopic[], limit = 3): WorkNowTopic[] {
-	const rank = (t: CourseTopic) => (t.status === "red" ? 0 : 1);
+/** «Jobb med dette nå»: the most important red topics, then the topics he
+ *  misses a lot on the spørsmålskort (most missed first, whatever their
+ *  colour — the cards never change it), then the yellow ones. */
+export function workNowTopics(topics: readonly CourseTopic[], limit = 3, cardMisses: readonly FlashcardTopicMiss[] = []): WorkNowTopic[] {
+	const missed = new Map(cardMisses.map((m) => [m.topicId, m.missed]));
+	const rank = (t: CourseTopic) => (t.status === "red" ? 0 : missed.has(t.id) ? 1 : 2);
+	const misses = (t: CourseTopic) => (rank(t) === 1 ? missed.get(t.id)! : 0);
 	return topics
-		.filter((t) => t.status === "red" || t.status === "yellow")
-		.sort((a, b) => rank(a) - rank(b) || b.weight - a.weight || a.title.localeCompare(b.title, "nb"))
+		.filter((t) => t.status === "red" || t.status === "yellow" || missed.has(t.id))
+		.sort((a, b) => rank(a) - rank(b) || misses(b) - misses(a) || b.weight - a.weight || a.title.localeCompare(b.title, "nb"))
 		.slice(0, limit)
-		.map((topic) => ({ topic, reason: topic.statusNote?.trim() || "ikke øvd ennå" }));
+		.map((topic) => {
+			const note = topic.statusNote?.trim();
+			const cards = missed.has(topic.id) ? flashcardMissReason(missed.get(topic.id)!) : null;
+			const reason = topic.status === "red" ? note || cards : cards || note;
+			return { topic, reason: reason || "ikke øvd ennå" };
+		});
 }
 
 /** What a click on a topic sends into the fag-chat. */
