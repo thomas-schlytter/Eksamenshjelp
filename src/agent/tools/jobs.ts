@@ -240,6 +240,20 @@ export const questionJobWaitMs = { current: 5 * 60_000 };
 /** The kinds a question waits for: what the learner must SEE before it. */
 const SHOWN_BEFORE_QUESTION: ReadonlySet<JobRecord["kind"]> = new Set(["visual", "demo"]);
 
+/** The figure and demo jobs a question posed now would wait for: started
+ *  at or after `since` (the turn's start) and still running. */
+function runningTurnJobs(ctx: Pick<JobToolContext, "chatId" | "jobStore">, since: number): JobRecord[] {
+	return ctx.jobStore
+		.listJobs(ctx.chatId)
+		.filter((job) => SHOWN_BEFORE_QUESTION.has(job.kind) && job.status === "running" && Date.parse(job.createdAt) >= since);
+}
+
+/** Would a question posed now wait (waitForTurnJobs)? The held-question
+ *  re-pose (server/chat-handler) asks before it holds the turn open. */
+export function turnJobsRunning(ctx: Pick<JobToolContext, "chatId" | "jobStore">, since: number): boolean {
+	return runningTurnJobs(ctx, since).length > 0;
+}
+
 /**
  * THE QUESTION WAIT (owner, 2026-11 — «figurene genereres før spørsmålet»):
  * a question posed while a `visual` or `demo` job dispatched in the SAME
@@ -263,9 +277,7 @@ export async function waitForTurnJobs(
 	questionToolCallId: string,
 	signal: AbortSignal | undefined,
 ): Promise<void> {
-	const pending = ctx.jobStore
-		.listJobs(ctx.chatId)
-		.filter((job) => SHOWN_BEFORE_QUESTION.has(job.kind) && job.status === "running" && Date.parse(job.createdAt) >= since);
+	const pending = runningTurnJobs(ctx, since);
 	if (pending.length === 0) return;
 	const waiters = new Map(pending.map((job) => {
 		ctx.jobStore.updateJob(job.id, { forQuestion: questionToolCallId });

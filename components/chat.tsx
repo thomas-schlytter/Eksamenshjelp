@@ -86,10 +86,7 @@ import {
 	malformedQuestionsOf,
 	dismissedAnswer,
 	endsInFailedTurn,
-	figureSvgOf,
-	attachedFigureId,
-	jobFigureSvg,
-	normalizeFigureId,
+	questionFigureSvg,
 	findPendingToolCall,
 	phaseAt3,
 	phaseTimeline,
@@ -1845,7 +1842,8 @@ export function Chat({
 														// transcript; answered ones render as graded records.
 														if (part.state === "output-available") {
 															return (
-																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input} />
+																<AnsweredCard key={pi} answer={part.output as QuestionAnswerData} input={part.input}
+																	figureSvg={questionFigureSvg(part.input, part.toolCallId, nativeMessages, jobs)} />
 															);
 														}
 														return null;
@@ -2014,11 +2012,8 @@ export function Chat({
 					onHoldQuestion={holdQuestion}
 					parked={parked}
 					onUnpark={() => setParkedKey(null)}
-					figureSvg={(() => {
-						// The named figure, else the one the question waited for (2026-11).
-						const figureId = normalizeFigureId((pending?.input as { figure?: unknown } | null | undefined)?.figure) ?? attachedFigureId(jobs, pending?.toolCallId);
-						return figureSvgOf(nativeMessages, figureId) ?? jobFigureSvg(jobs, figureId);
-					})()}
+					// The drawn figure, else the named one, else the one the question waited for (2026-11).
+					figureSvg={questionFigureSvg(pending?.input, pending?.toolCallId, nativeMessages, jobs)}
 				/>
 				</Conversation>
 

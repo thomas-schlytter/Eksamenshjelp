@@ -43,7 +43,8 @@ import {
 	NEXT_PROBLEM_TEXT,
 	THINKING_LABEL,
 } from "./contracts/chat.ts";
-import { compactAnswerForModel, type QuestionAnswerData } from "./question-core.ts";
+import { compactAnswerForModel, normalizeFigureId, type QuestionAnswerData } from "./question-core.ts";
+import { normalizeFigureSvg } from "./figure-svg.ts";
 import type { JobRecord } from "./contracts/jobs.ts";
 import { activeCompactionOf, keptIndexFor } from "./compaction.ts";
 import { parseQuestionInput } from "./tool-parts.ts";
@@ -447,6 +448,11 @@ export function concludedByDismissalPair(
 /** The synthetic re-pose's model stamp (heldQuestionRepose). */
 export const REPOSE_MODEL = "synthetic-repose";
 
+/** A fresh call id for a re-posed question (heldQuestionRepose). */
+export function newReposeCallId(): string {
+	return `call_repose_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`;
+}
+
 /** Is this an app-authored assistant message (a deferred conclude, a
  *  re-posed question) rather than a model generation? */
 export function isSyntheticAssistant(m: LhMessage): boolean {
@@ -470,9 +476,11 @@ export function isSyntheticAssistant(m: LhMessage): boolean {
  * - the record ends on a COMPLETED reply (stopReason "stop"): a failed or
  *   aborted reply leaves the Retry banner / the learner's stop in charge,
  *   and the next completed reply re-poses instead.
- * Pure; returns the message to append, or null.
+ * Pure; returns the message to append, or null. `callId` names the
+ * re-posed call when the caller minted it ahead (a re-pose that waited for
+ * its figure carries the id its job was marked with); default: a fresh one.
  */
-export function heldQuestionRepose(messages: readonly LhMessage[]): (LhMessage & AssistantMessage) | null {
+export function heldQuestionRepose(messages: readonly LhMessage[], callId: string = newReposeCallId()): (LhMessage & AssistantMessage) | null {
 	// Plan blocks are UI-only markers the settle may append after the reply.
 	let end = messages.length - 1;
 	while (end >= 0 && messages[end]!.role === "custom" && (messages[end] as LhMarkerMessage).customType === "plan-block") end--;
@@ -509,7 +517,7 @@ export function heldQuestionRepose(messages: readonly LhMessage[]): (LhMessage &
 	return {
 		id: newMessageId(),
 		role: "assistant",
-		content: [{ type: "toolCall", id: `call_repose_${crypto.randomUUID().replaceAll("-", "").slice(0, 16)}`, name: call.name, arguments: structuredClone(call.arguments) }],
+		content: [{ type: "toolCall", id: callId, name: call.name, arguments: structuredClone(call.arguments) }],
 		timestamp: Date.now(),
 		api: "faux",
 		provider: "synthetic",
@@ -580,6 +588,25 @@ export function jobFigureSvg(jobs: readonly JobRecord[], figureId: string | unde
 	const job = jobs.find((j) => j.id === figureId && j.kind === "visual");
 	const svg = (job?.result as { svg?: unknown } | null | undefined)?.svg;
 	return typeof svg === "string" && svg.length > 0 ? svg : null;
+}
+
+/**
+ * THE question's figure, one resolution for the dock and the answered card
+ * (2026-11): the figure the teacher drew into the call (`figureSvg`, shown
+ * only when it passes the figure rules), else the figure id he named, else
+ * the visual the question waited for. Null when the question has none.
+ */
+export function questionFigureSvg(
+	input: unknown,
+	questionToolCallId: string | undefined,
+	messages: readonly LhMessage[],
+	jobs: readonly JobRecord[],
+): string | null {
+	const fields = input as { figureSvg?: unknown; figure?: unknown } | null | undefined;
+	const drawn = normalizeFigureSvg(fields?.figureSvg);
+	if (drawn) return drawn;
+	const figureId = normalizeFigureId(fields?.figure) ?? attachedFigureId(jobs, questionToolCallId);
+	return figureSvgOf(messages, figureId) ?? jobFigureSvg(jobs, figureId);
 }
 
 /** The active-problem fold (the conclude-before-next-problem gate): the

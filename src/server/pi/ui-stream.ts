@@ -83,8 +83,11 @@ export interface PiTurnSpec {
 	onSettleFailure?: (error: unknown, reportedErrorText?: string) => void;
 	/** The canonical end-of-turn seam: persist + usage + extraction + endTurn.
 	 *  Receives the agent's FULL final state (native messages) — the caller
-	 *  persists the slice past its own base count. */
-	onFinish: (messages: AgentMessage[], isAborted: boolean) => void;
+	 *  persists the slice past its own base count. It may return a promise
+	 *  (the held-question re-pose waiting for its figure, 2026-11): the views
+	 *  stay open and the handle stays abortable until it settles; `signal`
+	 *  aborts with the handle's abort(). */
+	onFinish: (messages: AgentMessage[], isAborted: boolean, signal: AbortSignal) => void | Promise<void>;
 	/** Tool-call ids already used in this chat's record (THE LACAN FIX,
 	 *  owner-approved 2026-10-04): when present, a ToolCallIdUniquifier
 	 *  sits at this boundary — providers that reset ids every response
@@ -125,8 +128,13 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 	const uniquifier = usedToolCallIds ? new ToolCallIdUniquifier(usedToolCallIds) : undefined;
 
 	let settled = false;
+	// The settle seam has started (it may still be awaiting): no event or
+	// second agent_end starts it again.
+	let settling = false;
 	let sawAbort = false;
 	let reportedErrorText: string | undefined;
+	// Aborts an awaiting settle seam (the re-pose's figure wait).
+	const settleAbort = new AbortController();
 
 	// THE PER-TURN STATE LOG (memory-only — the settle-only disk writes
 	// are unchanged). COMPACTION LAW (owner, 2026-10-09, supersedes the
@@ -223,23 +231,37 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 	// suppressing the fresh per-turn re-seed). Our app mints no system
 	// messages of its own (the prompt is composed per turn), so dropping
 	// the role wholesale is exact; revisit if prompt-updates ever land.
-	const settleWith = () => {
+	const settleFailed = (err: unknown) => {
+		console.error("[turn] settlement failed:", err);
+		try { onSettleFailure?.(err, reportedErrorText); }
+		catch (cleanupError) { console.error("[turn] settlement cleanup failed:", cleanupError); }
+		if (reportedErrorText === undefined) {
+			reportedErrorText = onSettleError?.(err) ?? "Det oppsto en feil.";
+			send({ type: "error", errorText: reportedErrorText });
+		}
+	};
+	/** Run the settle seam, then close every view — after the seam's
+	 *  promise when it returned one (the views stay open meanwhile). */
+	const settleThenClose = () => {
+		settling = true;
+		let pending: void | Promise<void>;
 		try {
 			const settled_ = [...agent.state.messages].filter((m) => (m as { role?: string }).role !== "system");
-			onFinish((uniquifier?.remapSettled(settled_) as AgentMessage[]) ?? settled_, sawAbort);
+			pending = onFinish((uniquifier?.remapSettled(settled_) as AgentMessage[]) ?? settled_, sawAbort, settleAbort.signal);
 		} catch (err) {
-			console.error("[turn] settlement failed:", err);
-			try { onSettleFailure?.(err, reportedErrorText); }
-			catch (cleanupError) { console.error("[turn] settlement cleanup failed:", cleanupError); }
-			if (reportedErrorText === undefined) {
-				reportedErrorText = onSettleError?.(err) ?? "Det oppsto en feil.";
-				send({ type: "error", errorText: reportedErrorText });
-			}
+			settleFailed(err);
+			closeAll();
+			return;
 		}
+		if (!(pending instanceof Promise)) {
+			closeAll();
+			return;
+		}
+		pending.catch(settleFailed).finally(closeAll);
 	};
 
 	const handle = (event: AgentEvent) => {
-		if (settled) return;
+		if (settled || settling) return;
 		// THE LACAN FIX: ids uniquify HERE, before any view — the one seam
 		// every consumer downstream shares. No uniquifier → verbatim.
 		const uniqued = uniquifier ? uniquifier.event(event) : event;
@@ -256,8 +278,7 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 		}
 		if (event.type === "agent_end") {
 			// Persist/report before the terminal closes every view to new frames.
-			settleWith();
-			closeAll();
+			settleThenClose();
 		}
 	};
 	requestCycle?.bindRelease(handle);
@@ -283,15 +304,14 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 			// stream as stopReason "error"): surface, close, persist. If the
 			// agent already settled (agent_end reached before the throw),
 			// the seam has run — never settle twice.
-			if (settled) {
+			if (settled || settling) {
 				console.error("[turn] error after settlement:", err);
 				return;
 			}
 			console.error("[turn] agent loop failed:", err);
 			reportedErrorText = onError?.(err) ?? "Det oppsto en feil.";
 			send({ type: "error", errorText: reportedErrorText });
-			settleWith();
-			closeAll();
+			settleThenClose();
 		}
 	})();
 
@@ -346,6 +366,9 @@ export function runPiTurn(spec: PiTurnSpec): PiTurnHandle {
 		},
 		abort() {
 			if (settled) return;
+			// A settle seam still awaiting (the re-pose's figure wait) stops.
+			settleAbort.abort();
+			if (settling) return;
 			sawAbort = true;
 			requestCycle?.abort();
 			agent.abort();
