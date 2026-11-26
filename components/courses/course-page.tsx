@@ -395,12 +395,15 @@ export function WorkNowCard({ topics, items, onWork, onAllTopics, onMakeTopics }
 								onClick={() => onWork(topic)}
 								data-testid="work-now-topic"
 								data-status={topic.status}
-								className="flex w-full cursor-pointer items-center gap-3 rounded-md bg-muted px-3.5 py-3 text-left font-ui outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
+								className="flex w-full cursor-pointer items-start gap-3 rounded-md bg-muted px-3.5 py-2.5 text-left font-ui outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50"
 							>
-								<span className={cn("size-2.5 shrink-0 rounded-full", DOT[topic.status])} aria-hidden="true" />
+								<span className={cn("mt-1.5 size-2.5 shrink-0 rounded-full", DOT[topic.status])} aria-hidden="true" />
 								<span className="sr-only">{TOPIC_STATUS_LABEL[topic.status]}:</span>
-								<span className="min-w-0 flex-1 truncate text-sm font-medium">{topic.title}</span>
-								<span className="max-w-[45%] shrink-0 truncate text-xs text-muted-foreground" title={reason}>{reason}</span>
+								{/* The reason under the title: side by side, both were cut in a third of the row. */}
+								<span className="flex min-w-0 flex-1 flex-col">
+									<span className="truncate text-sm font-medium" title={topic.title}>{topic.title}</span>
+									<span className="truncate text-xs text-muted-foreground" title={reason}>{reason}</span>
+								</span>
 							</button>
 						</li>
 					))}
@@ -433,7 +436,7 @@ export function MockExamsCard({ points, loaded, busy, pending, onMake }: {
 }) {
 	const change = mockExamChange(points);
 	const W = 360, H = 120;
-	const x = (i: number) => (points.length === 1 ? W / 2 : 20 + (i * (W - 40)) / (points.length - 1));
+	const x = (i: number) => 20 + (i * (W - 40)) / (points.length - 1);
 	const y = (p: number) => 104 - (p / 100) * 88;
 	return (
 		<section data-testid="course-mock-exams" aria-labelledby="mock-exams-title" className={cn(CARD, "flex flex-col gap-2.5")}>
@@ -463,15 +466,21 @@ export function MockExamsCard({ points, loaded, busy, pending, onMake }: {
 						</Button>
 					)}
 				</div>
+			) : points.length === 1 ? (
+				// One result: a lone dot on an empty axis says nothing — show the number.
+				<div className="flex flex-1 flex-col justify-center gap-1" data-testid="mock-exam-single">
+					<p className="font-title text-4xl font-semibold tabular-nums tracking-tight text-status-green-ink">{points[0]!.percent} %</p>
+					<p className="font-ui text-sm text-muted-foreground">
+						{points[0]!.label ? `Første prøveeksamen, ${points[0]!.label}.` : "Første prøveeksamen."} Ta en til, så ser du utviklingen.
+					</p>
+				</div>
 			) : (
 				<>
 					<svg
 						viewBox={`0 0 ${W} ${H}`}
 						className="h-auto w-full"
 						role="img"
-						aria-label={points.length === 1
-							? `Én prøveeksamen: ${points[0]!.percent} prosent`
-							: `Poeng fra ${points[0]!.percent} til ${points.at(-1)!.percent} prosent`}
+						aria-label={`Poeng fra ${points[0]!.percent} til ${points.at(-1)!.percent} prosent`}
 					>
 						<line x1="0" y1="104" x2={W} y2="104" stroke="var(--accent)" />
 						{points.length > 1 && (
@@ -493,7 +502,7 @@ export function MockExamsCard({ points, loaded, busy, pending, onMake }: {
 							/>
 						))}
 					</svg>
-					<ol className={cn("flex font-ui text-xs text-muted-foreground", points.length === 1 ? "justify-center" : "justify-between")}>
+					<ol className="flex justify-between font-ui text-xs text-muted-foreground">
 						{points.map((p, i) => (
 							<li key={p.id} className={cn("tabular-nums", i === points.length - 1 && "font-semibold text-status-green-ink")}>
 								{p.label ? `${p.label} · ` : ""}{p.percent} %
@@ -949,13 +958,13 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 						</div>
 					)}
 
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]">
+					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
 						<CountdownCard course={course} daysLeft={plan.daysLeft} verdict={verdict} onExamDate={setExamDate} />
 						<ProgressRingCard counts={counts} pulse={pulse} onMakeTopics={showWizard} />
 						<FlameCard />
 					</div>
 
-					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[1.25fr_1fr_1fr]">
+					<div className="grid gap-4 md:grid-cols-2 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)_minmax(0,1fr)]">
 						<WorkNowCard
 							topics={course.topics}
 							items={workNow}

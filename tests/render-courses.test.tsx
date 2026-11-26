@@ -304,6 +304,14 @@ describe("fag page (fase 7b): the summary cards, sections, not found", () => {
 		assert.match(empty.querySelector('[data-testid="mock-exams-empty"]')!.textContent!, /Lag prøveeksamen/);
 	});
 
+	it("one mock exam shows the number, not a lone dot on an empty axis", () => {
+		const one = dom(<MockExamsCard points={[{ id: "a", percent: 74, label: "26.11", gradedAt: "2026-11-26T10:00:00.000Z" }]} loaded onMake={() => {}} />);
+		assert.equal(one.querySelector('svg[role="img"]'), null);
+		const single = one.querySelector('[data-testid="mock-exam-single"]')!;
+		assert.match(single.textContent!, /74 %/);
+		assert.match(single.textContent!, /Første prøveeksamen, 26\.11\./);
+	});
+
 	it("sections open by hash; the old #kontekst opens «Kilder»", () => {
 		assert.equal(sectionFromHash("#temaer"), "topics");
 		assert.equal(sectionFromHash("#kilder"), "sources");
