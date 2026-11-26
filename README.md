@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://eksamenshjelp-one.vercel.app/">Nettside</a> ·
-  <a href="https://github.com/thomas030505/Eksamenshjelp/releases/latest">Last ned</a> ·
+  <a href="https://github.com/thomas-schlytter/Eksamenshjelp/releases/latest">Last ned</a> ·
   <a href="#slik-fungerer-det">Slik fungerer det</a> ·
   <a href="#bygger-på-learnharness">Opphav</a>
 </p>
@@ -27,7 +27,7 @@ Laget av [Thomas Schlytter-Henrichsen](https://www.linkedin.com/in/thomas-schlyt
 2. Trykk «Kopier» og lim teksten inn i Code-fanen i Claude-appen eller i Codex.
 3. Den installerer Eksamenshjelp, lager én mappe per fag og henter tidligere eksamener fra Canvas eller fagets wiki.
 
-Du trenger en Mac med Apple-brikke eller en Windows-PC, og Claude Pro/Max eller ChatGPT Plus/Pro. Selve nedlastingen bruker ingen tokens: installasjonsskriptet henter appen direkte fra [GitHub Releases](https://github.com/thomas030505/Eksamenshjelp/releases/latest).
+Du trenger en Mac med Apple-brikke eller en Windows-PC, og Claude Pro/Max eller ChatGPT Plus/Pro. Selve nedlastingen bruker ingen tokens: installasjonsskriptet henter appen direkte fra [GitHub Releases](https://github.com/thomas-schlytter/Eksamenshjelp/releases/latest).
 
 Appen er ikke signert hos Apple eller Microsoft. Kommer det en ny versjon, viser appen et varsel med nedlastingslenke.
 

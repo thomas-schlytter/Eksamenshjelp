@@ -165,8 +165,8 @@ describe("desktop packaging policy", () => {
 		// The author lists no email, so deb's maintainer is set explicitly
 		// (electron-builder otherwise demands author.email for deb).
 		assert.equal(config.linux.maintainer, "Thomas Schlytter-Henrichsen");
-		assert.equal(pkg.homepage, "https://github.com/thomas030505/Eksamenshjelp");
-		assert.deepEqual([config.publish[0].owner, config.publish[0].repo], ["thomas030505", "Eksamenshjelp"]);
+		assert.equal(pkg.homepage, "https://github.com/thomas-schlytter/Eksamenshjelp");
+		assert.deepEqual([config.publish[0].owner, config.publish[0].repo], ["thomas-schlytter", "Eksamenshjelp"]);
 		assert.equal(pkg.desktopName, "learnharness.desktop");
 	});
 });

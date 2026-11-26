@@ -60,7 +60,7 @@ describe("update banner", () => {
 		flushSync(() => pushed?.({ status: "up-to-date", version: null, url: null, revision: 1 }));
 		assert.equal(host.innerHTML, "", "no banner without a newer release");
 
-		const url = "https://github.com/thomas030505/Eksamenshjelp/releases/tag/v0.5.0";
+		const url = "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/v0.5.0";
 		flushSync(() => pushed?.({ status: "available", version: "0.5.0", url, revision: 2 }));
 		assert.ok(host.textContent!.includes("Ny versjon 0.5.0"), "the version renders");
 		const link = host.querySelector<HTMLAnchorElement>("[data-testid='update-banner-download']");

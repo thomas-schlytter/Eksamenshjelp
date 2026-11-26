@@ -10,7 +10,7 @@
  * and IPC; tests exercise these directly.
  */
 
-const RELEASES_REPO = "thomas030505/Eksamenshjelp";
+const RELEASES_REPO = "thomas-schlytter/Eksamenshjelp";
 const LATEST_RELEASE_API = `https://api.github.com/repos/${RELEASES_REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${RELEASES_REPO}/releases`;
 

@@ -25,7 +25,7 @@ function Install-Eksamenshjelp {
 	$oe = [char]0x00F8
 	$aa = [char]0x00E5
 
-	$repo = 'thomas030505/Eksamenshjelp'
+	$repo = 'thomas-schlytter/Eksamenshjelp'
 	$apiUrl = "https://api.github.com/repos/$repo/releases/latest"
 	$appName = 'Eksamenshjelp'
 	$coursesDir = Join-Path (Join-Path $env:USERPROFILE 'Documents') 'Eksamenshjelp'

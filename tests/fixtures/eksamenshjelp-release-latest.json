@@ -1,6 +1,6 @@
 {
-  "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/1000",
-  "html_url": "https://github.com/thomas030505/Eksamenshjelp/releases/tag/v0.7.0",
+  "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/1000",
+  "html_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/v0.7.0",
   "id": 1000,
   "tag_name": "v0.7.0",
   "name": "0.7.0",
@@ -10,7 +10,7 @@
   "published_at": "2026-11-26T12:00:00Z",
   "assets": [
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2000",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2000",
       "id": 2000,
       "name": "Eksamenshjelp-0.7.0-arm64.dmg",
       "label": "",
@@ -18,10 +18,10 @@
       "state": "uploaded",
       "size": 1000,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64.dmg"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64.dmg"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2001",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2001",
       "id": 2001,
       "name": "Eksamenshjelp-0.7.0-arm64.dmg.blockmap",
       "label": "",
@@ -29,10 +29,10 @@
       "state": "uploaded",
       "size": 1001,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64.dmg.blockmap"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64.dmg.blockmap"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2002",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2002",
       "id": 2002,
       "name": "Eksamenshjelp-0.7.0-arm64-mac.zip",
       "label": "",
@@ -40,10 +40,10 @@
       "state": "uploaded",
       "size": 1002,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64-mac.zip"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64-mac.zip"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2003",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2003",
       "id": 2003,
       "name": "Eksamenshjelp-0.7.0-arm64-mac.zip.blockmap",
       "label": "",
@@ -51,10 +51,10 @@
       "state": "uploaded",
       "size": 1003,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64-mac.zip.blockmap"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-arm64-mac.zip.blockmap"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2004",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2004",
       "id": 2004,
       "name": "Eksamenshjelp-0.7.0-x64-setup.exe",
       "label": "",
@@ -62,10 +62,10 @@
       "state": "uploaded",
       "size": 1004,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-x64-setup.exe"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-x64-setup.exe"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2005",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2005",
       "id": 2005,
       "name": "Eksamenshjelp-0.7.0-x64-setup.exe.blockmap",
       "label": "",
@@ -73,10 +73,10 @@
       "state": "uploaded",
       "size": 1005,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-x64-setup.exe.blockmap"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-x64-setup.exe.blockmap"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2006",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2006",
       "id": 2006,
       "name": "Eksamenshjelp-0.7.0-x86_64.AppImage",
       "label": "",
@@ -84,10 +84,10 @@
       "state": "uploaded",
       "size": 1006,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-x86_64.AppImage"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-x86_64.AppImage"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2007",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2007",
       "id": 2007,
       "name": "Eksamenshjelp-0.7.0-amd64.deb",
       "label": "",
@@ -95,10 +95,10 @@
       "state": "uploaded",
       "size": 1007,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-amd64.deb"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/Eksamenshjelp-0.7.0-amd64.deb"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2008",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2008",
       "id": 2008,
       "name": "latest-mac.yml",
       "label": "",
@@ -106,10 +106,10 @@
       "state": "uploaded",
       "size": 1008,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/latest-mac.yml"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/latest-mac.yml"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2009",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2009",
       "id": 2009,
       "name": "latest.yml",
       "label": "",
@@ -117,10 +117,10 @@
       "state": "uploaded",
       "size": 1009,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/latest.yml"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/latest.yml"
     },
     {
-      "url": "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/assets/2010",
+      "url": "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/assets/2010",
       "id": 2010,
       "name": "latest-linux.yml",
       "label": "",
@@ -128,7 +128,7 @@
       "state": "uploaded",
       "size": 1010,
       "download_count": 0,
-      "browser_download_url": "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/latest-linux.yml"
+      "browser_download_url": "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/latest-linux.yml"
     }
   ],
   "body": "Eksamenshjelp 0.7.0"

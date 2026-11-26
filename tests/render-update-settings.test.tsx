@@ -20,10 +20,10 @@ Object.assign(globalThis, { window: dom.window, document: dom.document, CustomEv
 const originalFetch = globalThis.fetch;
 const roots: { root: Root; host: HTMLElement }[] = [];
 const state = (over: Partial<UpdateState> = {}): UpdateState => ({ status: "idle", version: null, url: null, revision: 0, ...over });
-const RELEASE = "https://github.com/thomas030505/Eksamenshjelp/releases/tag/v0.5.0";
+const RELEASE = "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/v0.5.0";
 const available = (over: Partial<UpdateState> = {}) => state({ status: "available", version: "0.5.0", url: RELEASE, ...over });
 const props = { autoUpdate: true, onAutoUpdateChange: () => {} };
-const about = { version: "0.4.1", homepage: "https://github.com/thomas030505/Eksamenshjelp" };
+const about = { version: "0.4.1", homepage: "https://github.com/thomas-schlytter/Eksamenshjelp" };
 const q = (host: ParentNode, id: string) => host.querySelector<HTMLElement>(`[data-testid='${id}']`);
 
 function deferred<T>() {
@@ -77,7 +77,7 @@ describe("version, credits and contextual copy", () => {
 	it("build metadata comes from package.json and exposes only public version/homepage values", () => {
 		const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
 		assert.deepEqual(nextConfig.env, { LH_VERSION: pkg.version, LH_HOMEPAGE: pkg.homepage });
-		assert.equal(pkg.homepage, "https://github.com/thomas030505/Eksamenshjelp");
+		assert.equal(pkg.homepage, "https://github.com/thomas-schlytter/Eksamenshjelp");
 		assert.deepEqual(pkg.author, { name: "Thomas Schlytter-Henrichsen" });
 		assert.deepEqual(pkg.contributors, [{ name: "Amos Blomqvist", url: "https://github.com/amosblomqvist" }]);
 		assert.equal(pkg.license, "AGPL-3.0-only");
@@ -193,7 +193,7 @@ describe("General update rows", () => {
 		await b.push(available({ revision: 2 }));
 		assert.equal(q(host, "update-banner"), null, "repeated status must stay dismissed");
 		assert.ok(q(host, "update-download"), "Settings still offers the download");
-		const next = "https://github.com/thomas030505/Eksamenshjelp/releases/tag/v0.6.0";
+		const next = "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/v0.6.0";
 		await b.push(available({ version: "0.6.0", url: next, revision: 3 }));
 		assert.ok(q(host, "update-banner")!.textContent!.includes("0.6.0"));
 	});

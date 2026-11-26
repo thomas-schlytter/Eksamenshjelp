@@ -149,9 +149,9 @@ describe("release-check helpers", () => {
 	});
 
 	it("builds the release page from the repo constant, never the API's URLs", async () => {
-		assert.equal(releaseCheck.LATEST_RELEASE_API, "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/latest");
+		assert.equal(releaseCheck.LATEST_RELEASE_API, "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/latest");
 		const result = await releaseCheck.readLatestRelease(Response.json({ tag_name: "v0.5.0", html_url: "https://evil.invalid/" }), "0.4.1");
-		assert.deepEqual(result, { newer: true, version: "0.5.0", url: "https://github.com/thomas030505/Eksamenshjelp/releases/tag/v0.5.0" });
+		assert.deepEqual(result, { newer: true, version: "0.5.0", url: "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/v0.5.0" });
 		assert.equal(releaseCheck.releasePageFor("v1/../x"), `${releaseCheck.RELEASES_PAGE}/tag/v1%2F..%2Fx`);
 	});
 
@@ -216,7 +216,7 @@ describe("automatic-check preference gate", () => {
 describe("release check results", () => {
 	it("asks the public API anonymously, with no token", async () => {
 		const f = fixture(); f.run("setupReleaseCheck()"); await f.check(true);
-		assert.equal(f.requests[0]!.url, "https://api.github.com/repos/thomas030505/Eksamenshjelp/releases/latest");
+		assert.equal(f.requests[0]!.url, "https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/latest");
 		assert.ok(!Object.keys(f.requests[0]!.headers).some(name => name.toLowerCase() === "authorization"));
 	});
 
@@ -225,7 +225,7 @@ describe("release check results", () => {
 		await f.check(true);
 		assert.equal(f.state().status, "up-to-date");
 		f.answer({ status: 200, body: { tag_name: "0.5.0" } }); await f.check(true);
-		assert.deepEqual({ ...f.state(), revision: 0 }, { status: "available", version: "0.5.0", url: "https://github.com/thomas030505/Eksamenshjelp/releases/tag/0.5.0", revision: 0 });
+		assert.deepEqual({ ...f.state(), revision: 0 }, { status: "available", version: "0.5.0", url: "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/0.5.0", revision: 0 });
 		assert.equal(win.webContents.messages.at(-1)!.channel, "lh:update-status");
 	});
 

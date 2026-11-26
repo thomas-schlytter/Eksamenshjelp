@@ -20,7 +20,7 @@ const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const installSh = path.join(repoRoot, "site", "install.sh");
 const installPs1 = path.join(repoRoot, "site", "install.ps1");
 const fixture = path.join(repoRoot, "tests", "fixtures", "eksamenshjelp-release-latest.json");
-const DOWNLOAD = "https://github.com/thomas030505/Eksamenshjelp/releases/download/v0.7.0/";
+const DOWNLOAD = "https://github.com/thomas-schlytter/Eksamenshjelp/releases/download/v0.7.0/";
 
 type Release = { tag_name: string; assets: Array<{ name: string; browser_download_url: string }> };
 

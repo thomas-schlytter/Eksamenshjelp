@@ -2,7 +2,7 @@
  * POST /api/feil — «Meld feil» from the Eksamenshjelp app (Vercel function).
  *
  * The app's local server sends { message, email?, info?, log? }; this turns
- * it into an issue in the PRIVATE repo thomas030505/eksamenshjelp-feil,
+ * it into an issue in the PRIVATE repo thomas-schlytter/eksamenshjelp-feil,
  * labelled «fra-appen». The token lives only in Vercel:
  *   vercel env add FEIL_GITHUB_TOKEN production
  * (fine-grained, Issues: Read and write, that one repo).
@@ -13,7 +13,7 @@
  * private repo where they can be deleted.
  */
 
-const REPO = "thomas030505/eksamenshjelp-feil";
+const REPO = "thomas-schlytter/eksamenshjelp-feil";
 const LABEL = "fra-appen";
 const MAX_BODY_BYTES = 64 * 1024;
 const MAX_MESSAGE = 5000;

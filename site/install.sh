@@ -17,7 +17,7 @@
 
 set -euo pipefail
 
-REPO="thomas030505/Eksamenshjelp"
+REPO="thomas-schlytter/Eksamenshjelp"
 API_URL="https://api.github.com/repos/${REPO}/releases/latest"
 APP_NAME="Eksamenshjelp"
 COURSES_DIR="${HOME}/Documents/Eksamenshjelp"
