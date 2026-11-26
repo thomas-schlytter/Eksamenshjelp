@@ -103,10 +103,13 @@ pre{white-space:pre-wrap;max-height:260px;overflow:auto;background:var(--soft);b
 @media (max-width:720px){.how{grid-template-columns:1fr}}
 
 /* why */
-.why{padding-block:40px 24px;max-width:1200px}
-.why h2{font-size:clamp(24px,3vw,32px);font-weight:600}
-.why p{margin:10px 0 0;max-width:640px;font-size:17px;line-height:1.65}
-.why .sig{font-size:14px;color:var(--muted)}
+.why{padding-block:48px 32px}
+.quote{position:relative;max-width:720px;margin:0 auto;padding:40px 44px 36px;background:var(--card);border:1px solid var(--line);border-top:3px solid var(--gold);border-radius:var(--r-card);text-align:center}
+.quote::before{content:"\201C";display:block;font:600 64px/0.6 var(--head);color:var(--gold);margin-bottom:6px}
+.quote h2{font:600 13px var(--body);letter-spacing:.12em;text-transform:uppercase;color:var(--gold-ink)}
+.quote blockquote{margin:14px 0 0}
+.quote p{margin:0;font:500 clamp(18px,2.2vw,22px)/1.55 var(--head);letter-spacing:-.01em;color:var(--ink)}
+@media (max-width:640px){.quote{padding:32px 22px 28px}}
 
 /* tokens */
 .tokens{padding-block:24px 8px}
@@ -368,9 +371,10 @@ Har du verken nettleser eller computer use, hopp over dette steget.
 	</section>
 
 	<section class="wrap why" id="hvorfor" aria-labelledby="why-h">
-		<h2 id="why-h">Hvorfor?</h2>
-		<p>Jeg brukte <a href="https://github.com/amosblomqvist/learnharness">LearnHarness</a> til mine egne eksamener og tenkte at andre også kunne trenge det. Men det var flere feil og ting jeg ville endre. Så jeg satte Claude på saken, bygde det om til Eksamenshjelp og gjorde det åpen kildekode.</p>
-		<p class="sig">Thomas Schlytter-Henrichsen · <a href="https://www.linkedin.com/in/thomas-schlytter-henrichsen-0b4182296/">LinkedIn</a> · <a href="https://github.com/thomas030505/Eksamenshjelp">Kildekoden</a></p>
+		<figure class="quote">
+			<h2 id="why-h">Hvorfor?</h2>
+			<blockquote><p>Jeg brukte <a href="https://github.com/amosblomqvist/learnharness">LearnHarness</a> til mine egne eksamener og tenkte at andre også kunne trenge det. Men det var flere feil og ting jeg ville endre. Så jeg satte Claude på saken, bygde det om til Eksamenshjelp og gjorde det åpen kildekode.</p></blockquote>
+		</figure>
 	</section>
 
 	<section class="wrap tokens" id="tokens" aria-labelledby="tokens-h">
