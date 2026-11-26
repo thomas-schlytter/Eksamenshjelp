@@ -80,6 +80,11 @@ export {
 	getMockExamView, saveMockExamDraft, submitMockExam, openMockExamPdf, listCourseMockExams,
 	listMockExamResults, mockExamFailureResponse, mockExamSeams,
 } from "./mock-exams.ts";
+// Spørsmålskort (2026-11-26): the /api/flashcards service and the generation.
+export {
+	readFlashcards, startFlashcardGeneration, answerFlashcard, resetFlashcards, flashcardFailureResponse,
+	flashcardSeams, flashcardRun, type FlashcardView, type FlashcardGeneration, type FlashcardGenerationMode,
+} from "./flashcards.ts";
 // The flame (fase 7b): GET /api/streak, the celebration mark, the watcher.
 export { readStreak, markStreakCelebrated, installStreakWatcher } from "./streak.ts";
 // Bruk (2026-11-26): GET /api/usage-limits, the last known subscription limits.

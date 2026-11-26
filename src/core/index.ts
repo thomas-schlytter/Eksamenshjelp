@@ -56,6 +56,9 @@ export * from "./session-wrap.ts";
 // mock-exam.ts (prøveeksamen, fase 6): the exam/result contract, the public
 // projection and the pure scoring rules.
 export * from "./mock-exam.ts";
+// flashcards.ts (spørsmålskort, 2026-11-26): the deck, the round's setup
+// and selection, all-or-nothing scoring, the flame's days. Pure.
+export * from "./flashcards.ts";
 export * from "./input-events.ts";
 export { parseFilePaths, quoteFilePath, filePathLabel } from "./file-paths.ts";
 export type { FilePathPart } from "./file-paths.ts";
