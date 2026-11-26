@@ -1,0 +1,14 @@
+{
+	"claude": {
+		"verktoy": "Claude Code",
+		"godkjenning": "Studenten må godkjenne kommandoen når Claude spør.",
+		"nettleser": "Claude in Chrome, i nettleseren der studenten er innlogget",
+		"uten_nettleser": "Har du ikke Claude in Chrome, be studenten installere utvidelsen og koble den til. Vil studenten ikke det, hopp over dette steget."
+	},
+	"codex": {
+		"verktoy": "Codex",
+		"godkjenning": "Kommandoen trenger nettverk og skriver utenfor arbeidsmappen, så be om å kjøre den utenfor sandkassen. Studenten må godkjenne den.",
+		"nettleser": "Codex-nettleseren eller computer use",
+		"uten_nettleser": "Har du verken nettleser eller computer use, hopp over dette steget."
+	}
+}
