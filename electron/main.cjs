@@ -57,7 +57,14 @@ app.setName(PRODUCT_NAME);
 // userData is pinned explicitly — setName alone would move it to
 // "Eksamenshjelp". Must run before the LH_DEV_URL suffix below — dev
 // becomes "LearnHarness-dev".
-app.setPath("userData", path.join(app.getPath("appData"), DATA_FOLDER_NAME));
+// NOT in the browser-service helper: it keeps its own Chromium profile (the
+// default for the app name, or a --user-data-dir switch), and pinning
+// userData here would put it in the RUNNING app's profile. On Windows Chromium's
+// process singleton then hands the helper to the running app and it never
+// prints its CDP handshake (demos and prøveeksamen PDFs fail there).
+if (!process.argv.includes("--browser-service")) {
+	app.setPath("userData", path.join(app.getPath("appData"), DATA_FOLDER_NAME));
+}
 const AUTH_FILE = () => path.join(app.getPath("userData"), "auth.json");
 const DATA_DIR = () => path.join(app.getPath("userData"), "data");
 
