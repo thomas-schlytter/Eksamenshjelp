@@ -18,7 +18,7 @@
 	--head:"Sora",system-ui,sans-serif;--body:"Inter",system-ui,sans-serif;
 }
 *{box-sizing:border-box}
-html{scroll-behavior:smooth;scroll-padding-top:80px}
+html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);-webkit-font-smoothing:antialiased}
 a{color:var(--navy)}
 h1,h2,h3{font-family:var(--head);letter-spacing:-.02em;margin:0}
@@ -27,21 +27,23 @@ h1,h2,h3{font-family:var(--head);letter-spacing:-.02em;margin:0}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 
 /* nav */
-.top{position:sticky;top:0;z-index:20;background:rgba(255,255,255,.94);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.intro{position:relative;overflow:hidden}
+.top{position:relative;z-index:2}
 .nav{display:flex;align-items:center;justify-content:space-between;height:64px}
 .links{display:flex;align-items:center;gap:28px}
-.links a{font:500 14px var(--body);color:var(--ink);text-decoration:none}
-.links a:hover{color:var(--navy);text-decoration:underline;text-underline-offset:4px}
+.links a{font:500 14px var(--body);color:var(--navy-ink);text-decoration:none}
+.links a:hover{color:#fff;text-decoration:underline;text-underline-offset:4px}
+@media (max-width:900px){.links a{color:var(--ink)}.links a:hover{color:var(--navy)}}
 @media (max-width:640px){.links a:not(.gh){display:none}}
 .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font:600 18px var(--head)}
 
 /* hero */
-.hero{position:relative;overflow:hidden}
+.hero{position:relative;z-index:1}
 .hero-in{position:relative;padding-block:84px 72px}
 .hero h1{font-size:clamp(38px,5.4vw,68px);line-height:1.02;font-weight:600;max-width:660px}
 .hero h1 span{display:block}
 .hero .sub{max-width:520px;margin:18px 0 0;color:var(--muted);font-size:clamp(16px,2vw,19px)}
-.corner{position:absolute;top:0;right:0;height:100%;width:clamp(300px,34vw,600px);pointer-events:none}
+.corner{position:absolute;top:0;right:0;height:100%;width:max(460px,calc(50vw - 80px));pointer-events:none;z-index:0}
 @media (max-width:900px){.corner{display:none}.hero-in{padding-block:48px 40px}}
 
 /* get started */
@@ -100,6 +102,12 @@ pre{white-space:pre-wrap;max-height:260px;overflow:auto;background:var(--soft);b
 .how p{margin:6px 0 0;color:var(--muted);font-size:14px}
 @media (max-width:720px){.how{grid-template-columns:1fr}}
 
+/* why */
+.why{padding-block:40px 24px;max-width:1200px}
+.why h2{font-size:clamp(24px,3vw,32px);font-weight:600}
+.why p{margin:10px 0 0;max-width:640px;font-size:17px;line-height:1.65}
+.why .sig{font-size:14px;color:var(--muted)}
+
 /* tokens */
 .tokens{padding-block:24px 8px}
 .tokens h2{font-size:clamp(24px,3vw,32px);font-weight:600}
@@ -134,6 +142,11 @@ footer a{color:inherit}
 </style>
 </head>
 <body>
+<div class="intro">
+<svg class="corner" viewBox="0 0 1000 1000" preserveAspectRatio="none" aria-hidden="true">
+	<path d="M60 0 C 100 200 320 350 530 520 C 698 656 860 790 1000 900" fill="none" stroke="#C9A24A" stroke-width="56" vector-effect="non-scaling-stroke"/>
+	<path d="M60 0 C 100 200 320 350 530 520 C 698 656 860 790 1000 900 L1000 0 Z" fill="#1C2B4A"/>
+</svg>
 <header class="top">
 <div class="wrap nav">
 	<a class="brand" href="#">
@@ -142,18 +155,13 @@ footer a{color:inherit}
 	</a>
 	<nav class="links" aria-label="Hovedmeny">
 		<a href="#how">Slik bruker du</a>
+		<a href="#hvorfor">Hvorfor</a>
 		<a href="#tokens">Tokenbruk</a>
 		<a class="gh" href="https://github.com/thomas030505/Eksamenshjelp">GitHub</a>
 	</nav>
 </div>
 </header>
-
-<main>
 	<section class="hero">
-		<svg class="corner" viewBox="0 0 500 900" preserveAspectRatio="none" aria-hidden="true">
-			<path d="M98 0 C 118 250 278 410 318 600 C 344 730 372 836 400 900 L500 900 L500 0 Z" fill="#C9A24A"/>
-			<path d="M126 0 C 146 250 306 410 346 600 C 372 730 400 836 428 900 L500 900 L500 0 Z" fill="#1C2B4A"/>
-		</svg>
 		<div class="wrap hero-in">
 		<h1><span>Øv til eksamen,</span><span>som på eksamen.</span></h1>
 		<p class="sub">En AI-lærer som kjenner faget ditt, gir deg oppgaver som på eksamen og retter dem.</p>
@@ -313,6 +321,9 @@ Har du verken nettleser eller computer use, hopp over dette steget.
 		</div>
 		</div>
 	</section>
+</div>
+
+<main>
 
 	<section class="stage" aria-label="Eksamenshjelp i bruk">
 		<div class="wrap">
@@ -354,6 +365,12 @@ Har du verken nettleser eller computer use, hopp over dette steget.
 		<div><h3>Velg fagene dine</h3><p>Appen henter eksamensinfo fra NTNU og leser tidligere eksamener.</p></div>
 		<div><h3>Øv i fag-chatten</h3><p>Oppgaver som på eksamen. Hint bare når du ber om det.</p></div>
 		<div><h3>Ta en prøveeksamen</h3><p>Svar på papir eller i appen, og få den rettet med poeng.</p></div>
+	</section>
+
+	<section class="wrap why" id="hvorfor" aria-labelledby="why-h">
+		<h2 id="why-h">Hvorfor?</h2>
+		<p>Jeg brukte <a href="https://github.com/amosblomqvist/learnharness">LearnHarness</a> til mine egne eksamener og tenkte at andre også kunne trenge det. Men det var flere feil og ting jeg ville endre. Så jeg satte Claude på saken, bygde det om til Eksamenshjelp og gjorde det åpen kildekode.</p>
+		<p class="sig">Thomas Schlytter-Henrichsen · <a href="https://www.linkedin.com/in/thomas-schlytter-henrichsen-0b4182296/">LinkedIn</a> · <a href="https://github.com/thomas030505/Eksamenshjelp">Kildekoden</a></p>
 	</section>
 
 	<section class="wrap tokens" id="tokens" aria-labelledby="tokens-h">
