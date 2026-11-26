@@ -43,6 +43,12 @@ h1,h2,h3{font-family:var(--head);letter-spacing:-.02em;margin:0}
 .hero h1{font-size:clamp(38px,5.4vw,68px);line-height:1.02;font-weight:600;max-width:660px}
 .hero h1 span{display:block}
 .hero .sub{max-width:520px;margin:18px 0 0;color:var(--muted);font-size:clamp(16px,2vw,19px)}
+.free{list-style:none;margin:20px 0 0;padding:0;max-width:540px;display:flex;flex-wrap:wrap;gap:10px 28px;font-size:16px;color:var(--ink)}
+.free li{display:flex;align-items:center;gap:9px}
+.free b{font-weight:600;color:var(--navy)}
+.free svg{width:22px;height:22px;flex:none}
+.free circle{fill:var(--gold)}
+.free path{fill:none;stroke:#fff;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
 .corner{position:absolute;top:0;right:0;height:100%;width:max(460px,calc(50vw - 80px));pointer-events:none;z-index:0}
 @media (max-width:900px){.corner{display:none}.hero-in{padding-block:48px 40px}}
 
@@ -168,6 +174,10 @@ footer a{color:inherit}
 		<div class="wrap hero-in">
 		<h1><span>Øv til eksamen,</span><span>som på eksamen.</span></h1>
 		<p class="sub">En AI-lærer som kjenner faget ditt, gir deg oppgaver som på eksamen og retter dem.</p>
+		<ul class="free" aria-label="Pris og kildekode">
+			<li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10"/><path d="M5.5 10.4l3 3 6-6.6"/></svg><span><b>Gratis</b>, bruker AI-abonnementet du har fra før</span></li>
+			<li><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="10"/><path d="M5.5 10.4l3 3 6-6.6"/></svg><span><b>Åpen kildekode</b> på <a href="https://github.com/thomas-schlytter/Eksamenshjelp">GitHub</a></span></li>
+		</ul>
 
 		<div class="start" id="start">
 			<div class="choose" role="tablist" aria-label="Hvilken AI har du?">
