@@ -4,7 +4,8 @@
  * The installed app is ad-hoc signed (no Apple Developer ID), so Squirrel
  * cannot install updates. Instead the shell asks GitHub's public API for
  * the latest release and, when its tag is newer than the running version,
- * offers a link to the release page. No token, no download, no install.
+ * offers the release. No token. Downloading and installing it («Oppdater
+ * nå», mac arm64 / Windows x64) lives in electron/self-update.cjs.
  *
  * Pure helpers only (no Electron): electron/main.cjs owns timing, state
  * and IPC; tests exercise these directly.

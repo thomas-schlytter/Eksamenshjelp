@@ -19,9 +19,14 @@
  *
  *   window.lh.onUpdateStatus(cb) — the release-check channel (owner
  *   2026-11-23): "lh:update-status" pushes {status, version, url,
- *   revision}; "available" carries the GitHub release page to open.
- *   getUpdateState retrieves the snapshot for a late subscriber;
- *   checkForUpdates requests a manual check (even with automatic checks OFF).
+ *   revision, canInstall, install}; "available" carries the GitHub release
+ *   page to open. getUpdateState retrieves the snapshot for a late
+ *   subscriber; checkForUpdates requests a manual check (even with
+ *   automatic checks OFF). installUpdate (owner 2026-11-26, «Oppdater nå»)
+ *   downloads, verifies and installs the found release where canInstall is
+ *   true; progress and failures arrive as `install` on the same channel
+ *   ({phase: "downloading", percent} | {phase: "installing"} |
+ *   {phase: "failed", message}).
  *
  *   window.lh.onOpenSettings(cb) — menu navigation, buffered until React
  *   subscribes after a window is reopened. Browser builds have no bridge.
@@ -89,6 +94,7 @@ contextBridge.exposeInMainWorld("lh", {
 	},
 	getUpdateState: () => ipcRenderer.invoke("lh:update:get"),
 	checkForUpdates: () => ipcRenderer.invoke("lh:update:check"),
+	installUpdate: () => ipcRenderer.invoke("lh:update:install"),
 	// Fokus (fase 7b): a system notification at a round's boundary. The
 	// renderer's own Notification API is denied by the permission handler.
 	notify: (title, body) => ipcRenderer.invoke("lh:notify", { title, body }),

@@ -23,7 +23,10 @@ const releaseCheck = mainRequire("./release-check.cjs") as {
 
 type Answer = { status: number; body?: unknown } | Error;
 
-function fixture({ packaged = true, version = "0.4.1" } = {}) {
+function fixture({
+	packaged = true, version = "0.4.1", platform = "darwin", arch = "arm64",
+	env = { LH_DEV_URL: "http://127.0.0.1:9000" } as Record<string, string>,
+} = {}) {
 	let settings: string | Error = JSON.stringify({ version: 1, general: { autoUpdate: true } });
 	const settingsReads: string[] = [];
 	const intervals: { callback: () => void; delay: number }[] = [];
@@ -89,6 +92,8 @@ function fixture({ packaged = true, version = "0.4.1" } = {}) {
 	const context = createContext({
 		require: (id: string) => {
 			if (id === "electron") return electron;
+			// The installer's startup cleanup must never reach the real temp dir.
+			if (id === "node:os") return { tmpdir: () => "/fixture/tmp" };
 			if (id === "node:fs") return {
 				readFileSync: (file: string) => {
 					settingsReads.push(file);
@@ -98,7 +103,7 @@ function fixture({ packaged = true, version = "0.4.1" } = {}) {
 			};
 			return mainRequire(id);
 		},
-		process: { argv: [], env: { LH_DEV_URL: "http://127.0.0.1:9000" }, platform: "darwin", on() {} },
+		process: { argv: [], env, platform, arch, pid: 4242, execPath: "/Applications/Eksamenshjelp.app/Contents/MacOS/Eksamenshjelp", on() {} },
 		__dirname: path.dirname(mainFile), URL, AbortSignal, Promise,
 		fetch: fakeFetch,
 		setInterval: (callback: () => void, delay: number) => intervals.push({ callback, delay }),
@@ -225,7 +230,7 @@ describe("release check results", () => {
 		await f.check(true);
 		assert.equal(f.state().status, "up-to-date");
 		f.answer({ status: 200, body: { tag_name: "0.5.0" } }); await f.check(true);
-		assert.deepEqual({ ...f.state(), revision: 0 }, { status: "available", version: "0.5.0", url: "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/0.5.0", revision: 0 });
+		assert.deepEqual({ ...f.state(), revision: 0 }, { status: "available", version: "0.5.0", url: "https://github.com/thomas-schlytter/Eksamenshjelp/releases/tag/0.5.0", revision: 0, canInstall: false, install: null });
 		assert.equal(win.webContents.messages.at(-1)!.channel, "lh:update-status");
 	});
 
@@ -291,6 +296,50 @@ describe("release check results", () => {
 	});
 });
 
+describe("«Oppdater nå» wiring", () => {
+	const packagedEnv = {} as Record<string, string>;
+
+	it("a packaged mac arm64 build can install; the snapshot says so", async () => {
+		const f = fixture({ env: packagedEnv }); f.run("setupReleaseCheck()");
+		assert.equal(f.state().canInstall, true);
+		f.answer({ status: 200, body: { tag_name: "v0.5.0" } }); await f.check(true);
+		assert.deepEqual([f.state().status, f.state().canInstall, f.state().install], ["available", true, null]);
+		assert.equal(f.run("updateInstaller.workDir"), "/fixture/tmp/eksamenshjelp-update");
+	});
+
+	it("a packaged Windows x64 build can install", () => {
+		const f = fixture({ env: packagedEnv, platform: "win32", arch: "x64" }); f.run("setupReleaseCheck()");
+		assert.equal(f.state().canInstall, true);
+	});
+
+	for (const [label, options] of [
+		["Linux", { env: packagedEnv, platform: "linux", arch: "x64" }],
+		["the dev shell (LH_DEV_URL)", {}],
+		["an Intel Mac", { env: packagedEnv, arch: "x64" }],
+	] as const) {
+		it(`${label} keeps «Last ned» (canInstall false)`, async () => {
+			const f = fixture(options); f.run("setupReleaseCheck()");
+			f.answer({ status: 200, body: { tag_name: "v0.5.0" } }); await f.check(true);
+			assert.equal(f.state().status, "available");
+			assert.equal(f.state().canInstall, false);
+		});
+	}
+
+	it("a running install owns the snapshot; a check after a failure offers the install again", async () => {
+		const f = fixture({ env: packagedEnv }); const win = f.window(); f.run("setupReleaseCheck()");
+		f.answer({ status: 200, body: { tag_name: "v0.5.0" } }); await f.check(true);
+		f.run(`reportInstallStatus({ phase: "downloading", percent: 45 })`);
+		assert.deepEqual(f.state().install, { phase: "downloading", percent: 45 });
+		assert.equal(f.state().version, "0.5.0", "version and release page stay");
+		assert.deepEqual(win.webContents.messages.at(-1)!.value, f.state(), "progress is pushed on lh:update-status");
+		f.answer({ status: 200, body: { tag_name: "v0.6.0" } }); await f.check(true);
+		assert.deepEqual([f.state().version, f.state().install], ["0.5.0", { phase: "downloading", percent: 45 }]);
+		f.run(`reportInstallStatus({ phase: "failed", message: "Nedlastingen stoppet." })`);
+		f.answer({ status: 200, body: { tag_name: "v0.5.0" } }); await f.check(true);
+		assert.deepEqual([f.state().status, f.state().install, f.state().canInstall], ["available", null, true]);
+	});
+});
+
 describe("startup, timer, trusted IPC and menu wiring", () => {
 	it("starts and retains the 24h timer without any Settings subscription, checking current preference each time", async () => {
 		const f = fixture(); f.setSettings({ general: { autoUpdate: false } });
@@ -332,7 +381,19 @@ describe("startup, timer, trusted IPC and menu wiring", () => {
 		sender.mainFrame.url = "https://untrusted.invalid/";
 		assert.throws(() => check(event), /Untrusted/);
 		assert.equal(f.requests.length, 1);
-		assert.equal(f.handles.has("lh:update-install"), false);
+	});
+
+	it("the install IPC accepts only an owned main frame, and does nothing without an installer or a found release", async () => {
+		const f = fixture(); await f.run("main()");
+		const sender = f.windows[0]!.webContents;
+		const install = f.handles.get("lh:update:install")!;
+		assert.ok(install, "lh:update:install is handled");
+		assert.throws(() => install({ sender: {}, senderFrame: sender.mainFrame }), /Untrusted/);
+		assert.throws(() => install({ sender, senderFrame: { url: sender.mainFrame.url } }), /Untrusted/);
+		f.answer({ status: 200, body: { tag_name: "v0.5.0" } }); await f.check(true);
+		await install({ sender, senderFrame: sender.mainFrame });
+		assert.equal(f.state().install, null, "the dev shell (LH_DEV_URL) never installs");
+		assert.equal(f.requests.length, 1, "no release lookup for an install");
 	});
 
 	it("menu restores/focuses a minimized window, opens General, and manually checks while OFF", async () => {

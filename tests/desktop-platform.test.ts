@@ -96,7 +96,7 @@ describe("desktop window chrome", () => {
 		runInNewContext(readFileSync(new URL("../electron/preload.cjs", import.meta.url), "utf8"), context);
 		assert.equal(bridge.platform, "win32");
 		assert.deepEqual(Object.keys(bridge).sort(), [
-			"chatgpt", "checkForUpdates", "expandWindow", "getPathForFile", "getUpdateState", "getZoom", "notify", "onOpenSettings", "onUpdateStatus", "onZoom", "platform", "subscriptions",
+			"chatgpt", "checkForUpdates", "expandWindow", "getPathForFile", "getUpdateState", "getZoom", "installUpdate", "notify", "onOpenSettings", "onUpdateStatus", "onZoom", "platform", "subscriptions",
 		]);
 		assert.deepEqual(Object.keys(bridge.subscriptions as object).sort(), ["cancel", "consent", "disconnect", "login", "onChange", "open", "respond", "retry", "status"]);
 	});
@@ -108,6 +108,7 @@ describe("update preload bridge", () => {
 			onOpenSettings: (cb: (section: string) => void) => () => void;
 			getUpdateState: () => Promise<unknown>;
 			checkForUpdates: () => Promise<void>;
+			installUpdate: () => Promise<void>;
 		};
 		const handlers = new Map<string, (event: unknown, value: string) => void>();
 		const invoked: string[] = [];
@@ -131,8 +132,8 @@ describe("update preload bridge", () => {
 		assert.deepEqual(next, ["general"]);
 		off(); send(); assert.equal(next.length, 2, "old cleanup cannot remove a newer subscriber");
 		offNext();
-		await bridge.getUpdateState(); await bridge.checkForUpdates();
-		assert.deepEqual(invoked, ["lh:update:get", "lh:update:check"]);
+		await bridge.getUpdateState(); await bridge.checkForUpdates(); await bridge.installUpdate();
+		assert.deepEqual(invoked, ["lh:update:get", "lh:update:check", "lh:update:install"]);
 	});
 });
 
