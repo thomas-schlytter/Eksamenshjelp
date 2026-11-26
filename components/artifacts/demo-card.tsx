@@ -7,6 +7,7 @@ import { InvertDiscIcon } from "@/components/artifacts/invert-disc";
 import { ChatActionsContext } from "@/components/chat";
 import { downloadFile, slugFilename } from "@/components/artifacts/download";
 import { DispatchCard } from "@/components/artifacts/dispatch-card";
+import { JobsContext } from "@/components/jobs-context";
 import type { ArtifactPartProps, DemoResult } from "@/src/core";
 
 /**
@@ -84,7 +85,11 @@ export function reduceDemoBridgeState(state: DemoBridgeState, data: unknown): De
  * is the DispatchCard (live status via the chat view's jobs feed). The demo
  * itself renders from the steer message via DemoOutputCard. */
 export function DemoCard({ part }: ArtifactPartProps) {
+	const job = useContext(JobsContext).find((j) => j.toolCallId === part.toolCallId);
 	if (part.state !== "output-available") return null;
+	// A demo a question waited for (2026-11): claimed from the runner, so it
+	// renders here, before the question, instead of in a later steer.
+	if (job?.forQuestion && job.status === "done" && job.result !== undefined) return <DemoOutputCard output={job.result} />;
 	return <DispatchCard toolCallId={part.toolCallId} kind="demo" />;
 }
 

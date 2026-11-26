@@ -2,6 +2,7 @@
 
 import { ChevronRight } from "lucide-react";
 import { BrailleSpinner } from "@/components/braille-spinner";
+import { QUESTION_WAIT_TEXT, QuestionWaitLine } from "@/components/artifacts/dispatch-card";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import { toolActivityLabel } from "@/src/core";
 import type { ArtifactPartProps } from "@/src/core";
@@ -43,14 +44,7 @@ export function LiveToolCard({ part }: ArtifactPartProps) {
 	// The WAITED figure (fase 4, visual with wait: true): the task is held
 	// until its figure is done — one calm working line, no raw input.
 	if (tool === "visual" && inp.wait === true) {
-		return (
-			<div data-testid="visual-waiting" className="my-1 flex w-full max-w-2xl items-center gap-2 text-xs text-muted-foreground">
-				<BrailleSpinner label="Genererer oppgave, pågår" />
-				<Shimmer duration={1} className="text-xs">
-					Genererer oppgave …
-				</Shimmer>
-			</div>
-		);
+		return <QuestionWaitLine text={QUESTION_WAIT_TEXT.visual!} testid="visual-waiting" />;
 	}
 
 	return (

@@ -12,6 +12,7 @@ import { ToolContentResponse } from "@/components/ai-elements/message";
 import { HintRequestButton, HintStepper } from "@/components/hint-stepper";
 import { useParams } from "next/navigation";
 import { SvgImage } from "@/components/artifacts/svg-image";
+import { useSessionMermaid } from "@/components/session-overlay";
 import { cn } from "@/lib/utils";
 import {
 	buildAnswer,
@@ -380,13 +381,26 @@ export function QuestionParkedBar({ question, onUnpark }: { question: string; on
 	);
 }
 
-/** The question's figure (fase 4): a waited visual, shown above the task
- *  text on the same white backing as the transcript's figure card. */
+/** The question's figure (fase 4): a waited visual on the same white
+ *  backing as the transcript's figure card. Beside the task text when the
+ *  dock is wide enough, above it when narrow (the caller's layout); a
+ *  click opens it full size. */
 function QuestionFigure({ svg }: { svg: string }) {
+	const overlay = useSessionMermaid();
+	const image = <SvgImage svg={svg} className="mx-auto block h-auto max-h-[40dvh] max-w-full" />;
+	const frame = "w-full overflow-hidden rounded-lg bg-white @2xl:w-[45%] @2xl:shrink-0";
+	if (!overlay) return <div data-testid="question-figure" className={frame}>{image}</div>;
 	return (
-		<div data-testid="question-figure" className="mb-3 w-full overflow-hidden rounded-lg bg-white">
-			<SvgImage svg={svg} className="mx-auto block h-auto max-h-[40dvh] max-w-full" />
-		</div>
+		<button
+			type="button"
+			data-testid="question-figure"
+			aria-label="Forstørr figuren"
+			title="Forstørr figuren"
+			onClick={() => overlay.openFigure(svg, false)}
+			className={cn(frame, "block cursor-zoom-in")}
+		>
+			{image}
+		</button>
 	);
 }
 
@@ -790,15 +804,23 @@ function QuestionDockForm({
 								: "Spørsmål"}
 					{qd.mode === "multi-select" && " · velg alle som passer"}
 				</div>
-				{figureSvg && <QuestionFigure svg={figureSvg} />}
-				<div className="mb-3 font-medium">
-					<ToolContentResponse>{qd.question}</ToolContentResponse>
-				</div>
-				{qd.context && (
-					<div className="mb-3 text-sm text-muted-foreground">
-						<ToolContentResponse>{qd.context}</ToolContentResponse>
+				{/* The figure sits BESIDE the task (right, ≤ 45 %) when the dock
+				    is wide enough, above it when narrow (owner, 2026-11). */}
+				<div className="@container">
+					<div className={figureSvg ? "mb-3 flex flex-col gap-3 @2xl:flex-row-reverse @2xl:items-start" : undefined}>
+						{figureSvg && <QuestionFigure svg={figureSvg} />}
+						<div className="min-w-0 flex-1">
+							<div className={cn("font-medium", (!figureSvg || qd.context) && "mb-3")}>
+								<ToolContentResponse>{qd.question}</ToolContentResponse>
+							</div>
+							{qd.context && (
+								<div className={cn("text-sm text-muted-foreground", !figureSvg && "mb-3")}>
+									<ToolContentResponse>{qd.context}</ToolContentResponse>
+								</div>
+							)}
+						</div>
 					</div>
-				)}
+				</div>
 				{hints.length > 0 ? (
 					<div className="mb-3">
 						<HintStepper hints={hints} revealed={hintsRevealed} onReveal={setHintsRevealed} />

@@ -49,6 +49,9 @@ export interface RenderSvgOptions {
 export interface RenderPdfOptions {
 	/** Render DPI — 72 is 100% zoom; the skill's guidance is 100/150/200. */
 	dpi?: number;
+	/** Per-page DPI overrides (the read tool sizes each page for legibility);
+	 *  pages not named use `dpi`. */
+	dpiByPage?: Readonly<Record<number, number>>;
 }
 
 export interface RenderedPdfPage {
@@ -556,7 +559,7 @@ async function renderPdfPages(
 			if (pageNo < 1 || pageNo > doc.numPages) continue;
 			const pg = await doc.getPage(pageNo);
 			const base = pg.getViewport({ scale: 1 });
-			const geometry = pdfCanvasGeometry(base.width, base.height, dpi);
+			const geometry = pdfCanvasGeometry(base.width, base.height, opts.dpiByPage?.[pageNo] ?? dpi);
 			const vp = pg.getViewport({ scale: geometry.scale });
 			const canvas = createCanvas(geometry.width, geometry.height);
 			const ctx = canvas.getContext("2d");

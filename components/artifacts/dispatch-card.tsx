@@ -6,6 +6,7 @@ import { JobsContext } from "@/components/jobs-context";
 import { ChatActionsContext } from "@/components/chat";
 import { ROLE_DISPLAY, isModelsRefusal, isProviderKeyRefusal, type JobKind, type JobRecord } from "@/src/core";
 import { BrailleSpinner } from "@/components/braille-spinner";
+import { Shimmer } from "@/components/ai-elements/shimmer";
 
 /**
  * The dispatch card (contracts.ts "THE ASYNC PROTOCOL" §4): the tool-call
@@ -28,10 +29,34 @@ const KIND_LABEL: Record<JobKind, string> = {
 	mockGrade: "Retting",
 };
 
+/** What the learner is told while a question waits for its figure or demo
+ *  (owner, 2026-11): the teacher's decision, not a job name. */
+export const QUESTION_WAIT_TEXT: Partial<Record<JobKind, string>> = {
+	visual: "Læreren genererer figurer til oppgaven …",
+	demo: "Læreren har bestemt at du skal se en interaktiv demo",
+};
+
+/** The calm working line while a question waits for a figure or demo. */
+export function QuestionWaitLine({ text, testid }: { text: string; testid: string }) {
+	return (
+		<div data-testid={testid} className="my-1 flex w-full max-w-2xl items-center gap-2 text-xs text-muted-foreground">
+			<BrailleSpinner label={`${text}, pågår`} />
+			<Shimmer duration={1} className="text-xs">
+				{text}
+			</Shimmer>
+		</div>
+	);
+}
+
 export function DispatchCard({ toolCallId, kind }: { toolCallId: string; kind: JobKind }) {
 	const jobs = useContext(JobsContext);
 	const job = jobs.find((j) => j.toolCallId === toolCallId) ?? null;
 	const label = KIND_LABEL[kind];
+	const waitText = QUESTION_WAIT_TEXT[kind];
+
+	if (job?.forQuestion && job.status === "running" && waitText) {
+		return <QuestionWaitLine text={waitText} testid="question-job-waiting" />;
+	}
 
 	if (!job || job.status === "running") {
 		return <DispatchActivityCard job={job} label={label} />;

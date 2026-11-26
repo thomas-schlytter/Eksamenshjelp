@@ -61,7 +61,7 @@ export const visualInputSchema = Type.Object({
 		Type.Boolean({
 			description:
 				"Set true when the figure belongs to a task or question you are about to pose: the call then WAITS until the " +
-				"figure is finished (the learner sees «Genererer oppgave …» meanwhile), the figure renders right here, and the " +
+				"figure is finished (the learner sees «Læreren genererer figurer til oppgaven …» meanwhile), the figure renders right here, and the " +
 				"result gives you its figure id to pass as `figure` on the question. Omit for figures that illustrate teaching.",
 		}),
 	),
@@ -231,6 +231,77 @@ async function waitForVisual(
 		await Promise.race([waiter.promise, pause(VISUAL_WAIT_POLL_MS, signal)]);
 	}
 }
+
+// ─── a question waits for the figure or demo made for it (2026-11) ───────────
+
+/** How long a question waits for a figure or demo started in the same turn
+ *  before it is posed without it. Test seam. */
+export const questionJobWaitMs = { current: 5 * 60_000 };
+/** The kinds a question waits for: what the learner must SEE before it. */
+const SHOWN_BEFORE_QUESTION: ReadonlySet<JobRecord["kind"]> = new Set(["visual", "demo"]);
+
+/**
+ * THE QUESTION WAIT (owner, 2026-11 — «figurene genereres før spørsmålet»):
+ * a question posed while a `visual` or `demo` job dispatched in the SAME
+ * turn (created at or after `since`) is still running holds until that job
+ * is done, so the learner sees the figure or demo first. Deterministic, not
+ * doctrine: the teacher may forget `wait: true`, the learner still never
+ * gets a task before its figure.
+ *
+ * Each job is marked `forQuestion` while waited (the transcript shows
+ * «Læreren genererer figurer til oppgaven …» / «Læreren har bestemt at du
+ * skal se en interaktiv demo»). A success is claimed from the runner
+ * (awaited-jobs) — no steer follows; the result renders at its dispatch
+ * card, and a figure is attached to the question (the dock finds it by
+ * `forQuestion`, core attachedFigureId). A failure, the timeout,
+ * or a learner abort releases the job: it delivers the ordinary way later,
+ * and the question goes ahead without it.
+ */
+export async function waitForTurnJobs(
+	ctx: Pick<JobToolContext, "chatId" | "jobStore">,
+	since: number,
+	questionToolCallId: string,
+	signal: AbortSignal | undefined,
+): Promise<void> {
+	const pending = ctx.jobStore
+		.listJobs(ctx.chatId)
+		.filter((job) => SHOWN_BEFORE_QUESTION.has(job.kind) && job.status === "running" && Date.parse(job.createdAt) >= since);
+	if (pending.length === 0) return;
+	const waiters = new Map(pending.map((job) => {
+		ctx.jobStore.updateJob(job.id, { forQuestion: questionToolCallId });
+		return [job.id, { waiter: awaitJobResult(job.id, { takesFailures: false }), claimed: undefined as { result: unknown } | undefined }];
+	}));
+	for (const entry of waiters.values()) {
+		void entry.waiter.promise.then((result) => {
+			entry.claimed = { result };
+		});
+	}
+	const settle = (id: string, shown: boolean) => {
+		waiters.delete(id);
+		// Not shown with the question: it delivers on its own later.
+		if (!shown) ctx.jobStore.updateJob(id, { forQuestion: undefined });
+	};
+	const deadline = Date.now() + questionJobWaitMs.current;
+	for (;;) {
+		for (const [id, entry] of [...waiters]) {
+			if (entry.claimed) { settle(id, true); continue; }
+			const record = ctx.jobStore.getJob(id);
+			if (record && record.status !== "running") {
+				// Finished without the hand-over (a failure, an abort): release.
+				const late = entry.waiter.release();
+				settle(id, late !== undefined);
+			}
+		}
+		if (waiters.size === 0) return;
+		if (signal?.aborted || Date.now() >= deadline) {
+			for (const [id, entry] of [...waiters]) settle(id, entry.waiter.release() !== undefined);
+			if (signal?.aborted) throw new Error("Operation aborted");
+			return;
+		}
+		await Promise.race([...[...waiters.values()].map((e) => e.waiter.promise), pause(VISUAL_WAIT_POLL_MS, signal)]);
+	}
+}
+
 const PDF_DESCRIPTION =
 	"Dispatch a background sub-agent that READS a learner-provided PDF on your behalf (triage, targeted extraction, visual page " +
 	"reading for equations and diagrams) and returns a brief with page citations. The read tool already reads PDFs directly " +

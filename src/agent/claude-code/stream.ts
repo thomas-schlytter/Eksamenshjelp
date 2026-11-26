@@ -34,7 +34,7 @@ import { ContextWindowProbe } from "./context-window.ts";
 import { addLiveProcess, getLiveProcess, removeLiveProcess, type LiveProcess } from "./live-processes.ts";
 import { configurationForReuse, conversationForReuse } from "./reuse-context.ts";
 import { BRIDGE_SERVER_NAME, createToolBridge, toolNameFromMcp, type PendingToolCall, type ToolBridge } from "./tool-bridge.ts";
-import { toClaudeInput, toStreamJsonLine } from "./transcript.ts";
+import { rememberReplaySegment, replaySegmentsFor, toClaudeInput, toStreamJsonLine } from "./transcript.ts";
 
 type RunClaudeOptions = { cwd: string; env: NodeJS.ProcessEnv; signal?: AbortSignal };
 
@@ -716,10 +716,23 @@ function continueLiveProcess(turn: ClaudeTurn, owner: symbol, sessionId: string 
 	return true;
 }
 
+/** The CLI truncates an MCP tool result above MAX_MCP_OUTPUT_TOKENS (25 000
+ *  by default in 2.1.x), dropping images that do not fit. One read of a
+ *  tall PDF page carries up to PDF_IMAGE_LIMIT tiles (≈ 2 900–3 800 tokens
+ *  each) plus up to 50 KB of text, so the harness raises the cap for its
+ *  own children; a value the user set in the environment wins. */
+const MCP_OUTPUT_TOKENS = 64_000;
+
 function toClaudeEnv(): NodeJS.ProcessEnv {
 	// Preserve native CLI auth/routing, including launch-environment credentials.
 	// Claude Code chooses the account and billing method, not LearnHarness.
-	return { ...externalCliEnv(), MCP_TOOL_TIMEOUT: String(MCP_TOOL_TIMEOUT_MS), CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: String(MCP_TOOL_TIMEOUT_MS) };
+	const env = externalCliEnv();
+	return {
+		...env,
+		MCP_TOOL_TIMEOUT: String(MCP_TOOL_TIMEOUT_MS),
+		CLAUDE_CODE_MCP_TOOL_IDLE_TIMEOUT: String(MCP_TOOL_TIMEOUT_MS),
+		MAX_MCP_OUTPUT_TOKENS: env.MAX_MCP_OUTPUT_TOKENS || String(MCP_OUTPUT_TOKENS),
+	};
 }
 
 async function startProcess(
@@ -733,7 +746,8 @@ async function startProcess(
 	env: NodeJS.ProcessEnv,
 ): Promise<void> {
 	if (options?.signal?.aborted) { turn.fail(ABORT_MESSAGE, "aborted"); return; }
-	const input = toClaudeInput(context.messages);
+	const input = toClaudeInput(context.messages, replaySegmentsFor(options?.sessionId));
+	rememberReplaySegment(options?.sessionId, input.conversationLength);
 	let cliProcess: ClaudeProcess | undefined;
 	const bridge = await createToolBridge(input.tools, {
 		onCall: () => cliProcess?.flushAdmissions(),

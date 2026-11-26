@@ -54,7 +54,9 @@ current LearnHarness tool schemas through a temporary
 `127.0.0.1` on an ephemeral port and requires a random per-bridge bearer token.
 CLI built-in tools are disabled; the strict MCP configuration permits the declared
 `mcp__learnharness__…` tools instead. Tool results return through the held MCP call,
-including text, images, and error status.
+including text, images, and error status. The child gets `MAX_MCP_OUTPUT_TOKENS=64000`
+(unless the environment sets it), so a `read` result with many page tiles is not
+truncated by the CLI's default 25 000-token cap.
 
 **Streamed tool intent alone never authorizes execution.** An authenticated MCP
 request must carry a unique `claudecode/toolUseId` matching the streamed ID, tool
@@ -103,8 +105,11 @@ If there is no eligible held child—for example after timeout/restart, a change
 configuration, or history replacement—the next call starts fresh and replays the
 active LearnHarness history. [Replay](../src/agent/claude-code/transcript.ts) is
 labelled user/assistant/tool-call/tool-result text in a new user input, preserving
-user/tool-result images; it is **not** CLI `--resume` or exact native-role/thinking
-history restoration. The current system prompt and tool schemas are supplied
+user/tool-result images (a caption before an image stays before it); it is **not**
+CLI `--resume` or exact native-role/thinking history restoration. Content blocks
+end where an earlier fresh replay of the same session ended, so that replay comes
+back as a byte-identical prefix the prompt cache can read
+([token saving](token-saving.md)). The current system prompt and tool schemas are supplied
 separately. A compatibility failure after admission is reported on continuation,
 not silently hidden by replay. Recovery is not a guarantee that arbitrary CLI
 failures will retry automatically.

@@ -279,6 +279,13 @@ export interface PdfPageReading {
 	markdown: string;
 	/** Why the page should be seen, or null when its text carries it. */
 	visual: PdfPageVisual | null;
+	/** Page size in PDF points (72 per inch), rotation applied. */
+	widthPt: number;
+	heightPt: number;
+	/** The resolution of the page's largest raster picture (a scan), in
+	 *  dots per inch of the page — null for vector pages (typed text, tablet
+	 *  handwriting), whose detail has no source limit. */
+	sourceDpi: number | null;
 }
 
 /** Below this many characters a page is "thin": a title, a stray heading
@@ -299,7 +306,7 @@ const IDENTITY_DET = 1;
  *  Every image op paints the unit square through the current transform, so
  *  its area is |det(CTM)|; determinants multiply, so a stack of scalars is
  *  the whole state (save/restore, cm, form XObjects). */
-async function paintedArea(page: PDFPageProxy): Promise<{ coverage: number; paths: number }> {
+async function paintedArea(page: PDFPageProxy): Promise<{ coverage: number; paths: number; sourceDpi: number | null }> {
 	const { OPS } = await loadPdfjs();
 	const imageOps = new Set<number>([
 		OPS.paintImageXObject,
@@ -322,6 +329,21 @@ async function paintedArea(page: PDFPageProxy): Promise<{ coverage: number; path
 	let current = IDENTITY_DET;
 	let painted = 0;
 	let paths = 0;
+	// The largest raster picture's own resolution: its pixel count over the
+	// area it covers on the page (|det| pt², 72² pt² per square inch).
+	let largest = 0;
+	let sourceDpi: number | null = null;
+	const pixelsOf = (fn: number, args: unknown[] | null): number | null => {
+		if (fn === OPS.paintImageXObject || fn === OPS.paintImageXObjectRepeat) {
+			const [, w, h] = (args ?? []) as unknown[];
+			return typeof w === "number" && typeof h === "number" ? w * h : null;
+		}
+		if (fn === OPS.paintInlineImageXObject) {
+			const data = (args?.[0] ?? null) as { width?: unknown; height?: unknown } | null;
+			return typeof data?.width === "number" && typeof data.height === "number" ? data.width * data.height : null;
+		}
+		return null;
+	};
 	for (let i = 0; i < fnArray.length; i++) {
 		const fn = fnArray[i]!;
 		const args = argsArray[i] as unknown[] | null;
@@ -331,17 +353,27 @@ async function paintedArea(page: PDFPageProxy): Promise<{ coverage: number; path
 		else if (fn === OPS.paintFormXObjectBegin) { stack.push(current); current *= det(args?.[0]); }
 		else if (fn === OPS.paintFormXObjectEnd) current = stack.pop() ?? IDENTITY_DET;
 		else if (fn === OPS.constructPath) paths++;
-		else if (imageOps.has(fn)) painted += Math.abs(current);
+		else if (imageOps.has(fn)) {
+			const covered = Math.abs(current);
+			painted += covered;
+			const pixels = pixelsOf(fn, args);
+			if (pixels !== null && covered > largest) {
+				largest = covered;
+				sourceDpi = Math.round(Math.sqrt(pixels / (covered / (72 * 72))));
+			}
+		}
 	}
 	const [x0 = 0, y0 = 0, x1 = 0, y1 = 0] = page.view;
 	const area = Math.abs((x1 - x0) * (y1 - y0)) || 1;
-	return { coverage: Math.min(1, painted / area), paths };
+	return { coverage: Math.min(1, painted / area), paths, sourceDpi: largest > 0 ? sourceDpi : null };
 }
 
 async function readOnePage(doc: PDFDocumentProxy, number: number): Promise<PdfPageReading> {
 	const [converted] = await documentToMarkdown(doc, [number]);
 	const markdown = converted?.kind === "text" ? converted.markdown : "";
-	const { coverage, paths } = await paintedArea(await doc.getPage(number));
+	const page = await doc.getPage(number);
+	const { coverage, paths, sourceDpi } = await paintedArea(page);
+	const viewport = page.getViewport({ scale: 1 });
 	const text = markdown.trim();
 	let visual: PdfPageVisual | null = null;
 	if (!text) visual = coverage > 0 || paths > 0 ? "no-text" : null;
@@ -349,7 +381,7 @@ async function readOnePage(doc: PDFDocumentProxy, number: number): Promise<PdfPa
 	else if (paths >= DRAWING_PATHS) visual = "drawing";
 	else if (text.length < THIN_TEXT_CHARS) visual = "thin-text";
 	else if (mathDensity(text) >= MATH_DENSITY) visual = "math";
-	return { number, markdown, visual };
+	return { number, markdown, visual, widthPt: viewport.width, heightPt: viewport.height, sourceDpi };
 }
 
 export interface PdfPageReader {

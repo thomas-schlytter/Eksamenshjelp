@@ -873,6 +873,9 @@ test("spawns with the model alias, effort, bridge tools, MCP timeout headroom an
 	}
 	assert.equal(call.env.HOME, process.env.HOME);
 	assert.equal(call.env.CLAUDE_CONFIG_DIR, process.env.CLAUDE_CONFIG_DIR);
+	// A tall PDF page arrives as up to 12 image tiles in one read result: the
+	// CLI's 25 000-token MCP output cap would drop them (2026-11).
+	assert.equal(call.env.MAX_MCP_OUTPUT_TOKENS, process.env.MAX_MCP_OUTPUT_TOKENS || "64000");
 });
 
 test("MCP timeout headroom overrides inherited shorter timeouts", async (t) => {

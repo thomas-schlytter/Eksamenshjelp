@@ -19,6 +19,10 @@
 
 interface Waiter {
 	resolve: (result: unknown) => void;
+	/** False for a waiter that only wants a SUCCESS (a question held for its
+	 *  figure or demo): a failed job then delivers the ordinary way, so the
+	 *  teacher still hears that it failed. */
+	takesFailures: boolean;
 }
 
 interface LhAwaitGlobal {
@@ -40,7 +44,7 @@ export interface AwaitedJob {
 }
 
 /** Register a waiter for a job (one per job; a re-registration replaces). */
-export function awaitJobResult(jobId: string): AwaitedJob {
+export function awaitJobResult(jobId: string, options: { takesFailures?: boolean } = {}): AwaitedJob {
 	let claimed: { result: unknown } | undefined;
 	let resolve!: (result: unknown) => void;
 	const promise = new Promise<unknown>((res) => {
@@ -51,6 +55,7 @@ export function awaitJobResult(jobId: string): AwaitedJob {
 			claimed = { result };
 			resolve(result);
 		},
+		takesFailures: options.takesFailures ?? true,
 	};
 	registry().set(jobId, waiter);
 	return {
@@ -62,9 +67,11 @@ export function awaitJobResult(jobId: string): AwaitedJob {
 	};
 }
 
-/** Is someone waiting for this job right now? (the runner's finish check) */
-export function isAwaited(jobId: string): boolean {
-	return registry().has(jobId);
+/** Is someone waiting for this job's outcome right now? (the runner's
+ *  finish check; `failed` — a waiter that only takes successes says no) */
+export function isAwaited(jobId: string, failed = false): boolean {
+	const waiter = registry().get(jobId);
+	return waiter !== undefined && (!failed || waiter.takesFailures);
 }
 
 /** The runner's hand-over: resolves the live waiter with the result and

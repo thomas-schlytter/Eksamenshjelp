@@ -356,7 +356,7 @@ export function createJobRunner(deps: JobRunnerDeps): JobRunner {
 		// inline as its own tool result: the delivery is done right here and
 		// no steer is queued — the figure must not also arrive a second time.
 		// Synchronous check-and-claim: the waiter cannot release in between.
-		if (isAwaited(jobId)) {
+		if (isAwaited(jobId, failed)) {
 			jobStore.updateJob(jobId, {
 				result,
 				status: failed ? "error" : "done",

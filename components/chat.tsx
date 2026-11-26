@@ -87,6 +87,8 @@ import {
 	dismissedAnswer,
 	endsInFailedTurn,
 	figureSvgOf,
+	attachedFigureId,
+	jobFigureSvg,
 	normalizeFigureId,
 	findPendingToolCall,
 	phaseAt3,
@@ -2012,7 +2014,11 @@ export function Chat({
 					onHoldQuestion={holdQuestion}
 					parked={parked}
 					onUnpark={() => setParkedKey(null)}
-					figureSvg={figureSvgOf(nativeMessages, normalizeFigureId((pending?.input as { figure?: unknown } | null | undefined)?.figure))}
+					figureSvg={(() => {
+						// The named figure, else the one the question waited for (2026-11).
+						const figureId = normalizeFigureId((pending?.input as { figure?: unknown } | null | undefined)?.figure) ?? attachedFigureId(jobs, pending?.toolCallId);
+						return figureSvgOf(nativeMessages, figureId) ?? jobFigureSvg(jobs, figureId);
+					})()}
 				/>
 				</Conversation>
 

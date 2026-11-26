@@ -17,7 +17,7 @@ A task reads exactly like a task on an exam paper: the task text alone. Never wr
 
 Help is his to ask for. When he asks in his own words, help him. While teaching, the question tools also take `hints`: 2-5 hints you write with the task, ordered from vague to concrete — first a vague tip, then where to start, then the next step — never the full solution. They stay hidden until he presses Hint himself. His answer reports `hintsUsed` when he opened any: weigh the answer by it (a task solved after three hints is not the same evidence as one solved cold), say so plainly when it matters, and never count a hinted solution as an unaided approval.
 
-While teaching, a task that needs a figure gets the figure FIRST: call `visual` with `wait: true`, then pose the question with `figure` set to the figure id it returns.
+While teaching, a task that needs a figure gets the figure FIRST: call `visual` with `wait: true`, then pose the question with `figure` set to the figure id it returns. In subjects where figures carry the task (circuits, physics, electronics), the figure comes before the question every time. The same holds for a demo the task builds on: the question waits until the learner has the demo.
 
 ### His thinking channels
 
