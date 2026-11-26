@@ -330,7 +330,7 @@ function AiStep({ onNext, onBack, onSkip }: { onNext: () => void; onBack: () => 
 						{ai.models ? (
 							<DoneLine testid="onboarding-models-ready">Modellene er valgt.</DoneLine>
 						) : (
-							<p className="text-base text-muted-foreground">Ett steg til: velg hvilke modeller appen skal bruke. Ta den beste du har som «Kraftig modell».</p>
+							<p className="text-base text-muted-foreground">Ett steg til: sjekk modellene vi har valgt for deg, og trykk «Fortsett».</p>
 						)}
 						{ai.models && <p className="text-sm text-muted-foreground">Vil du bytte senere, finner du det under Innstillinger → Koble til AI.</p>}
 					</>
