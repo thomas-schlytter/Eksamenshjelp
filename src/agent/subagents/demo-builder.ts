@@ -56,6 +56,11 @@ Runtime contract (the document runs in a sandboxed iframe, sandbox="allow-script
 - NO localStorage, sessionStorage, or document.cookie — the sandbox makes them throw.
 - The parent sizes the iframe to the document height automatically; just build normal flowing layout.
   Make the demo fill the width and size its own height sensibly.
+- Size by WIDTH only. The frame's height follows the page, so anything sized from the window height is
+  circular and collapses (or grows without end) in the lesson: never use vh/vmin/vmax units, height:100% or
+  min-height:100vh on html, body or containers, or window.innerHeight for sizing. Give an SVG width:100%
+  and a viewBox (its height follows the aspect ratio); give a canvas width:100% and a fixed pixel height or
+  an aspect-ratio. run_demo checks this and reports a LAYOUT problem when the page height tracks the window.
 
 Build quality:
 - The demo must directly serve the brief: every control named in the brief must exist and do the thing.
@@ -151,6 +156,7 @@ function summarizeCounts(result: DemoRunResult): string {
 		result.consoleErrors.length > 0 ? `${result.consoleErrors.length} console error${result.consoleErrors.length === 1 ? "" : "s"}` : null,
 		result.pageErrors.length > 0 ? `${result.pageErrors.length} page error${result.pageErrors.length === 1 ? "" : "s"}` : null,
 		result.failedRequests.length > 0 ? `${result.failedRequests.length} failed request${result.failedRequests.length === 1 ? "" : "s"}` : null,
+		(result.layoutProblems?.length ?? 0) > 0 ? "a layout problem" : null,
 	].filter(Boolean);
 	return counts.length > 0 ? counts.join(", ") : "ok";
 }
@@ -161,7 +167,7 @@ function formatRunResult(result: DemoRunResult): string {
 			result.probeResult !== undefined
 				? ` Probe result: ${JSON.stringify(result.probeResult) ?? "undefined"}.`
 				: "";
-		return `PASSED: no console errors, no uncaught errors, no failed requests.${probe} If you are satisfied, finish with your notes; otherwise keep improving and re-test.`;
+		return `PASSED: no console errors, no uncaught errors, no failed requests, no layout problem.${probe} If you are satisfied, finish with your notes; otherwise keep improving and re-test.`;
 	}
 	const sections: string[] = [`FAILED: ${summarizeCounts(result)}.`];
 	if (result.consoleErrors.length > 0)
@@ -170,6 +176,8 @@ function formatRunResult(result: DemoRunResult): string {
 		sections.push(`Uncaught errors:\n${result.pageErrors.slice(0, 10).map((e) => `- ${e}`).join("\n")}`);
 	if (result.failedRequests.length > 0)
 		sections.push(`Failed requests:\n${result.failedRequests.slice(0, 10).map((r) => `- ${r}`).join("\n")}`);
+	if (result.layoutProblems && result.layoutProblems.length > 0)
+		sections.push(`LAYOUT:\n${result.layoutProblems.map((p) => `- ${p}`).join("\n")}`);
 	sections.push("Fix the document (write_demo) and re-test (run_demo).");
 	return sections.join("\n");
 }
@@ -177,7 +185,7 @@ function formatRunResult(result: DemoRunResult): string {
 /** Short summary of a run for failure notes. */
 function failureSummary(result: DemoRunResult | null): string {
 	if (!result) return "never tested";
-	const details = [...result.consoleErrors, ...result.pageErrors, ...result.failedRequests].slice(0, 5);
+	const details = [...result.consoleErrors, ...result.pageErrors, ...result.failedRequests, ...(result.layoutProblems ?? [])].slice(0, 5);
 	return details.length > 0 ? `${summarizeCounts(result)} — ${details.join(" | ")}` : summarizeCounts(result);
 }
 

@@ -5,10 +5,11 @@ import { ConfidenceRail } from "@/components/confidence-rail";
 import { GlyphMark } from "@/components/ui/glyph-mark";
 import { ThinkingBlock } from "@/components/thinking-block";
 import { PathText } from "@/components/file-path-chip";
+import { QuestionFigure } from "@/components/question-figure";
 import { cn } from "@/lib/utils";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import type { QuestionAnswerData } from "@/src/core";
-import { answerForPresentation, explainLabel, parseAskInput, parseQuizInput } from "@/src/core";
+import { answerForPresentation, explainLabel, parseAskInput, parseExplainInput, parseQuizInput } from "@/src/core";
 
 /**
  * Static rendering of an answered question (tool part in `output-available`).
@@ -20,7 +21,16 @@ import { answerForPresentation, explainLabel, parseAskInput, parseQuizInput } fr
  * client — the card reveals his answer, the committed correct answer, and
  * the explanation, with NO verdict chips (owner ruling 2026-09-27).
  */
-export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionAnswerData; input?: unknown }) {
+export function AnsweredCard({
+	answer: savedAnswer,
+	input,
+	figureSvg,
+}: {
+	answer: QuestionAnswerData;
+	input?: unknown;
+	/** The question's figure (core questionFigureSvg), placed as in the dock. */
+	figureSvg?: string | null;
+}) {
 	const answer = answerForPresentation(savedAnswer, input);
 	const [whyOpen, setWhyOpen] = useState(false); // the tucked explanation (predictions, owner 2026-10-03)
 	if (answer.dismissed) {
@@ -59,7 +69,9 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 	// snapshot (what the model sees, compactAnswerForModel) is untouched;
 	// any parse failure or absent input renders exactly the older card.
 	const askInput = answer.kind === "ask" ? parseAskInput(input) : undefined;
-	const parsedDetails = askInput?.details ?? (answer.kind === "quiz" ? parseQuizInput(input)?.details : undefined);
+	const parsedDetails =
+		askInput?.details ??
+		(answer.kind === "quiz" ? parseQuizInput(input)?.details : answer.kind === "explain" ? parseExplainInput(input)?.details : undefined);
 	const descByIndex = new Map((askInput?.options ?? []).map((o, i) => [i + 1, o.description]));
 
 	return (
@@ -112,16 +124,25 @@ export function AnsweredCard({ answer: savedAnswer, input }: { answer: QuestionA
 					</span>
 				)}
 			</div>
-			<div className="mb-3 font-medium">
-				<ToolContentResponse>{answer.questionText}</ToolContentResponse>
-			</div>
-			{parsedDetails && (
-				// The details line, same paint as the pending dock (owner,
-				// 2026-10-12): full markdown, LaTeX included.
-				<div className="mb-3 text-sm text-muted-foreground">
-					<ToolContentResponse>{parsedDetails}</ToolContentResponse>
+			{/* The figure sits where the dock put it (2026-11): beside the task
+			    when the card is wide, above it when narrow. */}
+			<div className="@container">
+				<div className={figureSvg ? "mb-3 flex flex-col gap-3 @2xl:flex-row-reverse @2xl:items-start" : undefined}>
+					{figureSvg && <QuestionFigure svg={figureSvg} />}
+					<div className="min-w-0 flex-1">
+						<div className={cn("font-medium", (!figureSvg || parsedDetails) && "mb-3")}>
+							<ToolContentResponse>{answer.questionText}</ToolContentResponse>
+						</div>
+						{parsedDetails && (
+							// The details line, same paint as the pending dock (owner,
+							// 2026-10-12): full markdown, LaTeX included.
+							<div className={cn("text-sm text-muted-foreground", !figureSvg && "mb-3")}>
+								<ToolContentResponse>{parsedDetails}</ToolContentResponse>
+							</div>
+						)}
+					</div>
 				</div>
-			)}
+			</div>
 
 			{((answer.options?.length ?? 0) > 0 || answer.other) && (
 				<div className="flex flex-col gap-1.5 text-sm">

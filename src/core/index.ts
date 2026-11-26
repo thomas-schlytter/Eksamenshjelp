@@ -25,6 +25,7 @@ export * from "./render-settings.ts";
 export { MIN_CLUSTER_SIZE } from "./clusters.ts";
 
 export * from "./question-core.ts";
+export * from "./figure-svg.ts";
 // The event bus (push architecture, 2026-10-02): vocabulary + emit/subscribe
 // for every layer; the browser shell consumes the types + the runtime names
 // through this barrel (shell law: pure core via @/src/core only).

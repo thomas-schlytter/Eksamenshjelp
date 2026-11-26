@@ -18,6 +18,7 @@
  */
 
 import { Type, type Static } from "typebox";
+import { FIGURE_SVG_MAX_CHARS } from "./figure-svg.ts";
 import { stripModelValueDebris } from "./value-debris.ts";
 
 // ─── shared types ───────────────────────────────────────────────────────────
@@ -104,6 +105,24 @@ export const figureField = Type.Optional(
 		description:
 			"Optional figure id of a finished figure (returned by a visual call made with wait: true). " +
 			"The figure is shown above the question text. Omit when the question has no figure.",
+	}),
+);
+
+/** The figure the teacher DRAWS himself (2026-11, «figuren i
+ *  oppgaveteksten»): SVG markup written into the question call — no job,
+ *  no wait. The rules live in core/figure-svg; the question tools check
+ *  them (plus a render) at the call boundary, and the display reads the
+ *  field through normalizeFigureSvg. Mechanics only; the craft is in the
+ *  prompts. Every graded question tool carries it (the shared bases). */
+export const figureSvgField = Type.Optional(
+	Type.String({
+		description:
+			"Optional figure for this question, drawn by you as SVG markup: one complete <svg>…</svg> with a viewBox " +
+			"(a circuit diagram, a graph, a block diagram). It is shown inside the question — beside the text when there " +
+			`is room, above it otherwise — scaled to the answer field. Checked at call time: at most ${FIGURE_SVG_MAX_CHARS} ` +
+			"characters; no script, foreignObject, images, links, animations or event attributes; no reference outside the " +
+			'figure (only href="#id" and url(#id)); and it must render. A failing figure comes back to you to fix. ' +
+			'SVG text renders no LaTeX: write labels as plain text, e.g. R₁ or V<tspan baseline-shift="sub">in</tspan>.',
 	}),
 );
 
@@ -260,6 +279,7 @@ export const quizInputBase = Type.Object({
 	details: Type.Optional(
 		Type.String({ description: TASK_DETAILS_DESCRIPTION }),
 	),
+	figureSvg: figureSvgField,
 });
 
 // The TEACH-side quiz object: the shared base + the plan-position field
@@ -399,6 +419,7 @@ export const explainInputBase = Type.Object({
 	details: Type.Optional(
 		Type.String({ description: TASK_DETAILS_DESCRIPTION }),
 	),
+	figureSvg: figureSvgField,
 });
 
 /** The TEACH-side explain object: base + the plan-position field (same

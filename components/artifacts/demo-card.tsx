@@ -56,21 +56,40 @@ export function buildDemoSrcDoc(html: string): string {
 export interface DemoBridgeState {
 	height: number | null;
 	error: string | null;
+	/** The shrink-loop breaker (2026-11): consecutive small shrinks seen,
+	 *  the height before the run, and whether the height is frozen. */
+	shrinks?: number;
+	shrinkPeak?: number | null;
+	frozen?: boolean;
 }
 
 export const INITIAL_DEMO_BRIDGE_STATE: DemoBridgeState = { height: null, error: null };
 
 const MIN_HEIGHT = 80;
 const MAX_HEIGHT = 2400;
+/** A demo sized from the window height (vh units, height:100%) shrinks a
+ *  few pixels every time the frame follows it, down to MIN_HEIGHT — the
+ *  "tiny figure in a big card" incident (2026-11). This many small shrinks
+ *  in a row is that loop, never a real layout change: the frame freezes at
+ *  the height before the run. */
+const SHRINK_LOOP_STEPS = 5;
+const SHRINK_LOOP_MAX_STEP = 40;
 
 /** Pure reducer over incoming postMessage data (contracts.ts DemoBridgeMessage). */
 export function reduceDemoBridgeState(state: DemoBridgeState, data: unknown): DemoBridgeState {
 	if (typeof data !== "object" || data === null) return state;
 	const message = data as { type?: unknown; height?: unknown; message?: unknown };
 	if (message.type === "demo-resize") {
+		if (state.frozen) return state;
 		if (typeof message.height !== "number" || !Number.isFinite(message.height) || message.height <= 0) return state;
 		const height = Math.min(Math.max(Math.round(message.height), MIN_HEIGHT), MAX_HEIGHT);
-		return height === state.height ? state : { ...state, height };
+		if (height === state.height) return state;
+		const smallShrink = state.height !== null && height < state.height && state.height - height <= SHRINK_LOOP_MAX_STEP;
+		if (!smallShrink) return { ...state, height, shrinks: 0, shrinkPeak: null };
+		const shrinks = (state.shrinks ?? 0) + 1;
+		const shrinkPeak = shrinks === 1 ? state.height : (state.shrinkPeak ?? state.height);
+		if (shrinks >= SHRINK_LOOP_STEPS) return { ...state, height: shrinkPeak, shrinks, shrinkPeak, frozen: true };
+		return { ...state, height, shrinks, shrinkPeak };
 	}
 	if (message.type === "demo-error") {
 		const text = typeof message.message === "string" && message.message.trim() ? message.message : "ukjent feil";

@@ -44,10 +44,11 @@ import {
 } from "../core/settings-resolution.ts";
 import { modelsNotConfigured, providerKeyMissing as providerKeyMissingEnvelope, ROLE_SLOT, type ModelSlotName, type ProviderKeyMissing } from "../core/settings.ts";
 import { beginTurn, endTurn } from "./turn-liveness.ts";
-import { applyHeldQuestionRepose, applyParkedDismissal } from "./dismissal-park.ts";
+import { applyHeldQuestionRepose, applyParkedDismissal, heldQuestionReposeOwed } from "./dismissal-park.ts";
+import { turnJobsRunning, waitForTurnJobs } from "../agent/tools/jobs.ts";
 import { registerTurn, rememberTurnFailure, unregisterTurn } from "./turn-runs.ts";
 import { persistTurn, triggerExtraction, TurnPersistenceError } from "./turn-service.ts";
-import { hasProbeDone, hasUnresolvedQuestion } from "../core/native-messages.ts";
+import { hasProbeDone, hasUnresolvedQuestion, newReposeCallId } from "../core/native-messages.ts";
 import { composeInstructions } from "../agent/teacher-agent.ts";
 import { ensureCompacted, kickCompaction, effectiveThresholdTokens } from "./compaction.ts";
 import { catalogContextLimits, refreshConnectionCatalog } from "./model-catalog.ts";
@@ -390,6 +391,10 @@ export async function handleChatInput(
 		console.error(`[chat ${chatId}] input visibility bookkeeping failed:`, err);
 	}
 
+	// The figure and demo jobs this turn starts are the ones a held question's
+	// re-pose waits for at settle (2026-11).
+	const turnStartedAt = Date.now();
+
 	// MONEY CHANNEL (wave 4): one collector per request, fed by the agent's
 	// message_end events. Every model call's usage lands in the chat record's
 	// append-only turns log at onFinish — idempotent per turn id.
@@ -600,7 +605,7 @@ export async function handleChatInput(
 				reconcileUserSteers(chatId, persisted);
 				settleSteers(chatId, persisted, true, constructed);
 			},
-			onFinish: (turnMessages, isAborted) => {
+			onFinish: (turnMessages, isAborted, signal) => {
 				// Wave B: append only messages past the temporary agent prefix.
 				// Retry's saved record still includes its earlier failed attempts.
 				const stamped = persistTurn(stores.chatStore, chatId, persistBaseCount, turnMessages, isAborted);
@@ -638,61 +643,78 @@ export async function handleChatInput(
 				applyParkedDismissal(stores.chatStore, chatId);
 				// THE HELD-QUESTION RE-POSE (fase 4): a question parked with
 				// «Spør agenten» comes back right after this reply — same
-				// ordering law (durable before turn-settled).
+				// ordering law (durable before turn-settled). When the reply
+				// started a figure or demo that is still being made (2026-11),
+				// the re-pose waits for it exactly like a posed question
+				// (waitForTurnJobs: the job is marked for the re-posed call, the
+				// learner sees the wait line, a finished figure attaches). The
+				// turn stays open meanwhile; the learner's stop ends the wait
+				// without a re-pose, which the next completed reply then owes.
+				if (heldQuestionReposeOwed(stores.chatStore, chatId) && turnJobsRunning({ chatId, jobStore: stores.jobStore }, turnStartedAt)) {
+					const reposeCallId = newReposeCallId();
+					return waitForTurnJobs({ chatId, jobStore: stores.jobStore }, turnStartedAt, reposeCallId, signal)
+						.then(() => applyHeldQuestionRepose(stores.chatStore, chatId, reposeCallId), () => {})
+						.then(() => releaseTurn(stamped));
+				}
 				applyHeldQuestionRepose(stores.chatStore, chatId);
-				// LAST: a poller that sees not-in-flight must read an already-persisted
-				// record — endTurn only after persistTurn has done its job.
-				endTurn(chatId);
-				// And only then does the turn stop being a running object
-				// (background-turn wave, 2026-09-25): a reattach that finds
-				// nothing must find the persisted record current — the same
-				// ordering rule as endTurn.
-				unregisterTurn(chatId);
-				// Wave C steer settlement: the live agent is dead (no more
-				// followUp handoffs) - reconcile the steer registry against
-				// what this run actually persisted (in-run injections
-				// resolve; stranded markers return to pending), then let
-				// the pump take any stragglers down the idle wake.
-				unregisterLiveAgent(chatId);
-				settleSteers(chatId, stamped, false, constructed);
-				// Composer steers (2026-10-03): delivered ids dropped, stranded
-				// ones stay parked for the chat's next run (the registry is the
-				// stranding safety net — the agent's undrained copy died above).
-				reconcileUserSteers(chatId, stamped);
-				// THE SETTLE KICK (owner round 14): the turn settled — if the
-				// projection is now over threshold, the summary starts in the
-				// background, INSIDE the learner's reading/answering pause
-				// (question/problem poses end runs, so this moment is always a
-				// between-runs window). The next turn's ensureCompacted gate
-				// awaits whatever this leaves running; a lost engine or a
-				// beneath-threshold record is a silent no-op. Skipped under
-				// tests (the extraction precedent — scripted chats are
-				// fixtures; the service itself is pinned directly).
-				if (process.env.NODE_ENV !== "test" && (!requestCycle || requestCycle.dispatched))
-					kickCompaction(() => {
-						const fresh = effectiveSettings();
-						const spec = resolveConversationSpec(stores.chatStore.getChat(chatId)?.settings, fresh.models.strong);
-						if (!spec || !connectionBackgroundAllowed(spec.provider)) return null;
-						let kickEngine: PiEngine;
-						try { kickEngine = piEngineForSpec(spec, true, undefined, retentionForSlot("strong")); } catch { return null; }
-						const kickModelId = `${kickEngine.model.provider}:${kickEngine.model.id}`;
-						const freshRecord = stores.chatStore.getChat(chatId);
-						if (!freshRecord) return null;
-						return {
-							chatStore: stores.chatStore,
-							engine: kickEngine,
-							canStart: () => connectionBackgroundAllowed(spec.provider),
-							modelId: kickModelId,
-							kind: freshRecord.kind === "practice" ? "practice" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
-							thresholdTokens: effectiveThresholdTokens(
-								fresh.compaction?.thresholdTokens,
-								catalogContextLimits().get(kickModelId),
-							),
-							systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : "teacher").length / 4),
-						};
-					}, chatId);
+				releaseTurn(stamped);
 			},
 		});
+		/** The settle's tail, after the record is final: liveness, the turn
+		 *  registry, steer settlement and the compaction kick. */
+		function releaseTurn(stamped: ReturnType<typeof persistTurn>) {
+			// LAST: a poller that sees not-in-flight must read an already-persisted
+			// record — endTurn only after persistTurn has done its job.
+			endTurn(chatId);
+			// And only then does the turn stop being a running object
+			// (background-turn wave, 2026-09-25): a reattach that finds
+			// nothing must find the persisted record current — the same
+			// ordering rule as endTurn.
+			unregisterTurn(chatId);
+			// Wave C steer settlement: the live agent is dead (no more
+			// followUp handoffs) - reconcile the steer registry against
+			// what this run actually persisted (in-run injections
+			// resolve; stranded markers return to pending), then let
+			// the pump take any stragglers down the idle wake.
+			unregisterLiveAgent(chatId);
+			settleSteers(chatId, stamped, false, constructed);
+			// Composer steers (2026-10-03): delivered ids dropped, stranded
+			// ones stay parked for the chat's next run (the registry is the
+			// stranding safety net — the agent's undrained copy died above).
+			reconcileUserSteers(chatId, stamped);
+			// THE SETTLE KICK (owner round 14): the turn settled — if the
+			// projection is now over threshold, the summary starts in the
+			// background, INSIDE the learner's reading/answering pause
+			// (question/problem poses end runs, so this moment is always a
+			// between-runs window). The next turn's ensureCompacted gate
+			// awaits whatever this leaves running; a lost engine or a
+			// beneath-threshold record is a silent no-op. Skipped under
+			// tests (the extraction precedent — scripted chats are
+			// fixtures; the service itself is pinned directly).
+			if (process.env.NODE_ENV !== "test" && (!requestCycle || requestCycle.dispatched))
+				kickCompaction(() => {
+					const fresh = effectiveSettings();
+					const spec = resolveConversationSpec(stores.chatStore.getChat(chatId)?.settings, fresh.models.strong);
+					if (!spec || !connectionBackgroundAllowed(spec.provider)) return null;
+					let kickEngine: PiEngine;
+					try { kickEngine = piEngineForSpec(spec, true, undefined, retentionForSlot("strong")); } catch { return null; }
+					const kickModelId = `${kickEngine.model.provider}:${kickEngine.model.id}`;
+					const freshRecord = stores.chatStore.getChat(chatId);
+					if (!freshRecord) return null;
+					return {
+						chatStore: stores.chatStore,
+						engine: kickEngine,
+						canStart: () => connectionBackgroundAllowed(spec.provider),
+						modelId: kickModelId,
+						kind: freshRecord.kind === "practice" ? "practice" : hasProbeDone(freshRecord.messages) ? "teach" : "probe",
+						thresholdTokens: effectiveThresholdTokens(
+							fresh.compaction?.thresholdTokens,
+							catalogContextLimits().get(kickModelId),
+						),
+						systemPromptTokens: Math.ceil(composeInstructions(freshRecord.kind === "practice" ? "practice" : "teacher").length / 4),
+					};
+				}, chatId);
+		}
 		// The turn is now a live background object: register it so any view
 		// can reattach (GET /api/chats/[id]/stream) or remotely abort it
 		// (POST /api/activity/abort, kind "turn"). Registration after the

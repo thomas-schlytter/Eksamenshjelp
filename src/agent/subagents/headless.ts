@@ -28,8 +28,34 @@ export interface DemoRunResult {
 	failedRequests: string[];
 	/** Value of the optional probe expression, when requested and successful. */
 	probeResult?: unknown;
+	/** Layout the lesson's auto-sized frame cannot show (2026-11): the page
+	 *  height follows the window height. Absent = not checked or none. */
+	layoutProblems?: string[];
 	/** True when nothing above recorded anything. */
 	ok: boolean;
+}
+
+/** The two window heights the layout check renders the demo in. */
+const LAYOUT_CHECK_HEIGHTS = [600, 1000] as const;
+const LAYOUT_CHECK_WIDTH = 900;
+/** Height drift a window change may cause before it counts as tracking. */
+const LAYOUT_DRIFT_PX = 24;
+/** The page height exactly as the lesson's iframe bridge measures it
+ *  (components/artifacts/demo-card.tsx DEMO_BRIDGE_SCRIPT). */
+const BRIDGE_HEIGHT_EXPRESSION =
+	"(() => { const b = document.body; if (!b) return document.documentElement.scrollHeight; const cs = getComputedStyle(b); " +
+	"return Math.ceil(Math.max(b.scrollHeight, b.getBoundingClientRect().height) + (parseFloat(cs.marginTop) || 0) + (parseFloat(cs.marginBottom) || 0)); })()";
+
+/** The layout problem for two measured heights, or null (pure; exported for tests). */
+export function windowTrackingProblem(heights: readonly [number, number]): string | null {
+	const [short, tall] = heights;
+	if (!Number.isFinite(short) || !Number.isFinite(tall) || Math.abs(tall - short) <= LAYOUT_DRIFT_PX) return null;
+	return (
+		`The page height follows the window height: ${short} px tall in a ${LAYOUT_CHECK_HEIGHTS[0]} px window, ${tall} px in a ` +
+		`${LAYOUT_CHECK_HEIGHTS[1]} px window. In the lesson the frame takes the page's own height, so the demo shrinks to a ` +
+		"sliver (or grows without end). Size by width only: no vh/vmin/vmax, no height:100% or min-height:100vh on html, body " +
+		"or containers, no window.innerHeight sizing — give the SVG width:100% with a viewBox, a canvas a fixed pixel height."
+	);
 }
 
 export interface RunDemoOptions {
@@ -303,6 +329,7 @@ async function runDemo(html: string, opts: RunDemoOptions = {}): Promise<DemoRun
 	const failedRequests: string[] = [];
 	let probeResult: unknown;
 	let probed = false;
+	const layoutProblems: string[] = [];
 
 	try {
 		await withBrowserPage(async (page) => {
@@ -313,8 +340,22 @@ async function runDemo(html: string, opts: RunDemoOptions = {}): Promise<DemoRun
 		page.on("requestfailed", (req) => failedRequests.push(`${req.url()} (${req.failure()?.errorText ?? "failed"})`));
 
 		try {
+			await page.setViewport({ width: LAYOUT_CHECK_WIDTH, height: LAYOUT_CHECK_HEIGHTS[0] });
 			await page.goto(pathToFileURL(file).href, { waitUntil: "load", timeout: 30_000 });
 			await new Promise((resolve) => setTimeout(resolve, settleMs));
+			// The layout check (2026-11): the same page in a taller window
+			// must keep its height, or the lesson's auto-sized frame loops.
+			try {
+				const short = Number(await page.evaluate(BRIDGE_HEIGHT_EXPRESSION));
+				await page.setViewport({ width: LAYOUT_CHECK_WIDTH, height: LAYOUT_CHECK_HEIGHTS[1] });
+				await new Promise((resolve) => setTimeout(resolve, 300));
+				const tall = Number(await page.evaluate(BRIDGE_HEIGHT_EXPRESSION));
+				await page.setViewport({ width: LAYOUT_CHECK_WIDTH, height: LAYOUT_CHECK_HEIGHTS[0] });
+				const problem = windowTrackingProblem([short, tall]);
+				if (problem) layoutProblems.push(problem);
+			} catch {
+				/* the check is best-effort; the run's own errors are reported above */
+			}
 			if (opts.probe) {
 				try {
 					probeResult = await page.evaluate(opts.probe);
@@ -340,7 +381,8 @@ async function runDemo(html: string, opts: RunDemoOptions = {}): Promise<DemoRun
 		pageErrors,
 		failedRequests,
 		...(probed ? { probeResult } : {}),
-		ok: consoleErrors.length === 0 && pageErrors.length === 0 && failedRequests.length === 0,
+		...(layoutProblems.length > 0 ? { layoutProblems } : {}),
+		ok: consoleErrors.length === 0 && pageErrors.length === 0 && failedRequests.length === 0 && layoutProblems.length === 0,
 	};
 }
 

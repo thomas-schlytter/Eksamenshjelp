@@ -86,12 +86,19 @@ export function applyParkedDismissal(chatStore: ChatStore, chatId: string): void
  *  dismissal apply (after persistTurn, before endTurn), so a client
  *  reacting to "turn-settled" already reads the question in the record and
  *  the dock arms it without a "fortsett". Idempotent: once appended, the
- *  record no longer owes it. */
-export function applyHeldQuestionRepose(chatStore: ChatStore, chatId: string): void {
+ *  record no longer owes it. `callId`: the id minted ahead when the
+ *  re-pose waited for a figure or demo of the reply (chat-handler). */
+export function applyHeldQuestionRepose(chatStore: ChatStore, chatId: string, callId?: string): void {
 	const record = chatStore.getChat(chatId);
 	if (!record) return;
-	const repose = heldQuestionRepose(record.messages);
+	const repose = heldQuestionRepose(record.messages, callId);
 	if (!repose) return;
 	chatStore.saveMessages(chatId, [...record.messages, repose]);
 	emit("record-changed", { chatId });
+}
+
+/** Does the record owe the held question's re-pose right now? */
+export function heldQuestionReposeOwed(chatStore: ChatStore, chatId: string): boolean {
+	const record = chatStore.getChat(chatId);
+	return !!record && heldQuestionRepose(record.messages) !== null;
 }

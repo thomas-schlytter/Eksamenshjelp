@@ -18,6 +18,7 @@ import type { JobStore } from "../core/ports.ts";
 import { jobTools, waitForTurnJobs, type DemoInput, type JobToolContext, type PdfInput, type ResearchInput, type VisualInput } from "./tools/jobs.ts";
 import { planTools, type PlanToolContext } from "./tools/plan.ts";
 import { probeDoneTool, type ProbeDoneContext } from "./tools/probe.ts";
+import { figureSvgInputProblems } from "./tools/figure-svg.ts";
 import { proberGraphTools } from "./tools/graph.ts";
 import { readTool } from "./tools/read.ts";
 import { lsTool } from "./tools/ls.ts";
@@ -140,12 +141,14 @@ export const quizExampleBody = {
 	correctAnswer: "a",
 };
 
-/** The teach tools' two optional fields (fase 4, 2026-11), mechanics only:
- *  hidden hints the learner opens himself, and a waited figure's id. */
+/** The teach tools' optional fields (fase 4, 2026-11), mechanics only:
+ *  hidden hints the learner opens himself, a waited figure's id, and the
+ *  figure drawn into the call itself. */
 const TEACH_HINTS_AND_FIGURE =
 	"Optional `hints` stay hidden until the learner presses Hint and steps through them himself; the answer reports " +
-	"how many he opened as hintsUsed. Optional `figure` takes the figure id a visual call with wait: true returned, " +
-	"and shows that figure above the question. ";
+	"how many he opened as hintsUsed. Optional `figureSvg` carries a figure you draw as SVG markup; it is shown inside " +
+	"the question. Optional `figure` takes the figure id a visual call with wait: true returned, and shows that figure " +
+	"with the question. ";
 
 /** The quiz mechanics every variant shares; `delta` appends the variant's
  *  own fields (its NAME among them — the probe-phase tools self-reference
@@ -224,7 +227,7 @@ export const probeQuizTool: AgentTool<typeof probeQuizInputSchema> = {
 	prepareArguments: prepareQuestionArguments,
 	executionMode: "sequential",
 	execute: async (_toolCallId, input) => {
-		const problems = quizInputProblems(input);
+		const problems = [...quizInputProblems(input), ...figureSvgInputProblems(input.figureSvg)];
 		if (problems.length > 0) return invalidInputResult("probe", problems);
 		return questionResult();
 	},
@@ -245,7 +248,7 @@ export function teachExplainToolFor(
 		prepareArguments: prepareQuestionArguments,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
-			const problems = [...explainInputProblems(input), ...hintInputProblems(input.hints)];
+			const problems = [...explainInputProblems(input), ...hintInputProblems(input.hints), ...figureSvgInputProblems(input.figureSvg)];
 			const nodeIdProblemText = nodeIdProblem(ctx, input.nodeId);
 			if (nodeIdProblemText) problems.push(nodeIdProblemText);
 			if (problems.length > 0) return invalidInputResult("explain", problems);
@@ -267,7 +270,7 @@ export const probeExplainTool: AgentTool<typeof explainInputBase> = {
 	prepareArguments: prepareQuestionArguments,
 	executionMode: "sequential",
 	execute: async (_toolCallId, input) => {
-		const problems = explainInputProblems(input);
+		const problems = [...explainInputProblems(input), ...figureSvgInputProblems(input.figureSvg)];
 		if (problems.length > 0) return invalidInputResult("recall", problems);
 		return questionResult();
 	},
@@ -397,7 +400,7 @@ export function teachQuizToolFor(ctx: Pick<PlanToolContext, "chatId" | "chatStor
 		prepareArguments: prepareQuestionArguments,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
-			const problems = [...quizInputProblems(input), ...hintInputProblems(input.hints)];
+			const problems = [...quizInputProblems(input), ...hintInputProblems(input.hints), ...figureSvgInputProblems(input.figureSvg)];
 			const nodeIdProblemText = nodeIdProblem(ctx, input.nodeId);
 			if (nodeIdProblemText) problems.push(nodeIdProblemText);
 			if (problems.length > 0) return invalidInputResult("quiz", problems);
