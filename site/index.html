@@ -95,20 +95,24 @@ pre{white-space:pre-wrap;max-height:260px;overflow:auto;background:var(--soft);b
 .tokens{padding-block:24px 8px}
 .tokens h2{font-size:clamp(24px,3vw,32px);font-weight:600}
 .tokens .lead{margin:6px 0 0;color:var(--muted);font-size:15px;max-width:620px}
-.tstats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-top:20px}
+.tstats{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:20px}
 .tstat{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:18px 20px}
 .tstat b{display:block;font:600 30px/1.1 var(--head);color:var(--navy);letter-spacing:-.02em}
 .tstat span{display:block;margin-top:6px;font-size:13px;color:var(--muted)}
 .bars{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:18px 20px}
+.tq{margin-top:20px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:18px 20px;max-width:720px}
+.tq h3,.bars h3{margin:0;font:600 16px/1.3 var(--head);color:var(--navy)}
+.tq p{margin:6px 0 0;font-size:15px;color:var(--muted)}
+.bars h3{margin-bottom:12px}
 .bar{display:grid;grid-template-columns:150px 1fr 60px;gap:12px;align-items:center;font-size:14px;margin-top:10px}
-.bar:first-child{margin-top:0}
+.bars h3+.bar{margin-top:0}
 .track{height:10px;background:var(--soft);border-radius:var(--r-chip);overflow:hidden}
 .fill{height:100%;background:var(--navy);border-radius:var(--r-chip)}
 .fill.est{background:var(--gold)}
 .w68{width:68%}.w88{width:88%}
 .bar em{font-style:normal;color:var(--muted);font-size:12px}
 .tnote{margin:12px 0 0;font-size:12px;color:var(--muted)}
-@media (max-width:720px){.tstats{grid-template-columns:1fr 1fr}.bar{grid-template-columns:110px 1fr 48px}}
+@media (max-width:720px){.tstats{grid-template-columns:1fr}.bar{grid-template-columns:110px 1fr 48px}}
 
 footer{padding-block:40px 48px;color:var(--muted);font-size:13px;text-align:center;opacity:.75}
 footer a{color:inherit}
@@ -264,18 +268,22 @@ Har du verken nettleser eller computer use, hopp over dette steget.
 
 	<section class="wrap tokens" aria-labelledby="tokens-h">
 		<h2 id="tokens-h">Tømmer ikke abonnementet</h2>
-		<p class="lead">Målt på 477 svar i tre fag-chatter. Det meste av samtalen leses fra cache, som koster en tidel.</p>
+		<p class="lead">Claude og ChatGPT teller tokens, altså biter av tekst de leser og skriver. Abonnementet ditt har en grense per uke. Eksamenshjelp bruker så få som mulig.</p>
+		<div class="tq">
+			<h3>Koster det tokens å laste ned?</h3>
+			<p>Nei. Appen lastes ned rett fra GitHub, ikke gjennom AI-en. Claude eller ChatGPT trykker bare på startknappen for deg. Det som bruker tokens, er oppsettet etterpå: AI-en lager fagmappene og henter gamle eksamener fra Canvas.</p>
+		</div>
 		<div class="tstats">
-			<div class="tstat"><b>0</b><span>tokens for nedlasting og installasjon</span></div>
-			<div class="tstat"><b>3 500</b><span>nye tokens per svar (median)</span></div>
-			<div class="tstat"><b>1 800</b><span>tokens skrevet per svar (snitt)</span></div>
-			<div class="tstat"><b>≈ 50 %</b><span>lavere kostnad per svar i 0.7 (beregnet)</span></div>
+			<div class="tstat"><b>0</b><span>tokens for å laste ned appen</span></div>
+			<div class="tstat"><b>≈ 50 %</b><span>lavere kostnad per svar enn LearnHarness (beregnet)</span></div>
+			<div class="tstat"><b>1/10</b><span>pris for tekst AI-en har lest før i samme samtale</span></div>
 		</div>
-		<div class="bars" role="group" aria-label="Andel av konteksten som leses fra cache">
-			<div class="bar"><span>Før 0.7 <em>målt</em></span><div class="track"><div class="fill w68"></div></div><b>68 %</b></div>
-			<div class="bar"><span>Med 0.7 <em>beregnet</em></span><div class="track"><div class="fill est w88"></div></div><b>~88 %</b></div>
+		<div class="bars" role="group" aria-labelledby="bars-h">
+			<h3 id="bars-h">Hvor mye av samtalen som gjenbrukes</h3>
+			<div class="bar"><span>LearnHarness <em>målt</em></span><div class="track"><div class="fill w68"></div></div><b>68 %</b></div>
+			<div class="bar"><span>Eksamenshjelp <em>beregnet</em></span><div class="track"><div class="fill est w88"></div></div><b>~88 %</b></div>
 		</div>
-		<p class="tnote">Også: uendrede filer sendes ikke på nytt, PDF-er leses fra cache, og bakgrunnsjobber bruker den billigste modellen.</p>
+		<p class="tnote">Jo mer som gjenbrukes, jo mindre går av grensen din. Målt på 477 svar i tre fag. Eksamenshjelp sender heller ikke samme PDF eller bilde to ganger.</p>
 	</section>
 
 </main>
