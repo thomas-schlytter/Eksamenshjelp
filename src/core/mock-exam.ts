@@ -20,6 +20,8 @@
  * Pure and browser-safe: no IO here. Persistence is src/store/mock-exams.ts.
  */
 
+import { latexProblems } from "./latex-check.ts";
+
 /** What «Lag prøveeksamen» sends: the request the agent answers with mock_exam.
  *  Lives here (not in the card) so the course page needn't pull in the chat. */
 export const MAKE_MOCK_EXAM_TEXT = "Lag en prøveeksamen for meg.";
@@ -357,6 +359,7 @@ export function mockExamProblems(draft: MockExamDraft, opts: { topicIds?: readon
 	const numbers = new Set<string>();
 	for (const task of draft.tasks) {
 		const where = `task ${JSON.stringify(task.number)}`;
+		problems.push(...latexProblems(task.title, `${where} title`), ...latexProblems(task.intro, `${where} intro`));
 		if (!TASK_NUMBER_PATTERN.test(task.number ?? "")) problems.push(`${where}: number must look like "1", "12" or "1.3"`);
 		if (numbers.has(task.number)) problems.push(`${where}: duplicate task number`);
 		numbers.add(task.number);
@@ -373,6 +376,12 @@ export function mockExamProblems(draft: MockExamDraft, opts: { topicIds?: readon
 		const labels = new Set<string>();
 		for (const part of task.parts) {
 			const at = `${where} part ${JSON.stringify(part.label)}`;
+			problems.push(
+				...latexProblems(part.text, `${at} text`),
+				...latexProblems(part.solution, `${at} solution`),
+				...latexProblems(part.rubric, `${at} rubric`),
+				...(part.options ?? []).flatMap((o) => latexProblems(o.text, `${at} option ${JSON.stringify(o.id)}`)),
+			);
 			if (!PART_LABEL_PATTERN.test(part.label ?? "")) problems.push(`${at}: label must be "" or lower-case letters like "a", "b"`);
 			if (labels.has(part.label)) problems.push(`${at}: duplicate part label`);
 			labels.add(part.label);

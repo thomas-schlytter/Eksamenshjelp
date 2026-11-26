@@ -19,6 +19,7 @@ import { jobTools, waitForTurnJobs, type DemoInput, type JobToolContext, type Pd
 import { planTools, type PlanToolContext } from "./tools/plan.ts";
 import { probeDoneTool, type ProbeDoneContext } from "./tools/probe.ts";
 import { figureSvgInputProblems } from "./tools/figure-svg.ts";
+import { latexInputProblems } from "../core/latex-check.ts";
 import { proberGraphTools } from "./tools/graph.ts";
 import { readTool } from "./tools/read.ts";
 import { lsTool } from "./tools/ls.ts";
@@ -227,7 +228,7 @@ export const probeQuizTool: AgentTool<typeof probeQuizInputSchema> = {
 	prepareArguments: prepareQuestionArguments,
 	executionMode: "sequential",
 	execute: async (_toolCallId, input) => {
-		const problems = [...quizInputProblems(input), ...figureSvgInputProblems(input.figureSvg)];
+		const problems = [...quizInputProblems(input), ...figureSvgInputProblems(input.figureSvg), ...latexInputProblems(input)];
 		if (problems.length > 0) return invalidInputResult("probe", problems);
 		return questionResult();
 	},
@@ -248,7 +249,7 @@ export function teachExplainToolFor(
 		prepareArguments: prepareQuestionArguments,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
-			const problems = [...explainInputProblems(input), ...hintInputProblems(input.hints), ...figureSvgInputProblems(input.figureSvg)];
+			const problems = [...explainInputProblems(input), ...hintInputProblems(input.hints), ...figureSvgInputProblems(input.figureSvg), ...latexInputProblems(input)];
 			const nodeIdProblemText = nodeIdProblem(ctx, input.nodeId);
 			if (nodeIdProblemText) problems.push(nodeIdProblemText);
 			if (problems.length > 0) return invalidInputResult("explain", problems);
@@ -270,7 +271,7 @@ export const probeExplainTool: AgentTool<typeof explainInputBase> = {
 	prepareArguments: prepareQuestionArguments,
 	executionMode: "sequential",
 	execute: async (_toolCallId, input) => {
-		const problems = [...explainInputProblems(input), ...figureSvgInputProblems(input.figureSvg)];
+		const problems = [...explainInputProblems(input), ...figureSvgInputProblems(input.figureSvg), ...latexInputProblems(input)];
 		if (problems.length > 0) return invalidInputResult("recall", problems);
 		return questionResult();
 	},
@@ -400,7 +401,7 @@ export function teachQuizToolFor(ctx: Pick<PlanToolContext, "chatId" | "chatStor
 		prepareArguments: prepareQuestionArguments,
 		executionMode: "sequential",
 		execute: async (_toolCallId, input) => {
-			const problems = [...quizInputProblems(input), ...hintInputProblems(input.hints), ...figureSvgInputProblems(input.figureSvg)];
+			const problems = [...quizInputProblems(input), ...hintInputProblems(input.hints), ...figureSvgInputProblems(input.figureSvg), ...latexInputProblems(input)];
 			const nodeIdProblemText = nodeIdProblem(ctx, input.nodeId);
 			if (nodeIdProblemText) problems.push(nodeIdProblemText);
 			if (problems.length > 0) return invalidInputResult("quiz", problems);

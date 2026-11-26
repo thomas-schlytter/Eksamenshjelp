@@ -4,6 +4,7 @@ import {
 	canParseTex, knownTexCommand, mapMathContent, numericPercentEscape, outsideTexComments,
 	readContentSpans, recoverDocumentLayout, texRanges,
 } from "./content-reader.ts";
+import { repairInlineTags } from "./latex-check.ts";
 
 const escaped = (text: string, i: number) => {
 	let n = 0; while (i > 0 && text[--i] === "\\") n++;
@@ -36,7 +37,9 @@ function replaceEscapedDollars(content: string): string {
 
 /** Read old \(...\)/\[...\] syntax without touching literal content or
  * reparsing native math as Markdown. Dollar authoring remains native. */
-export function transformMathDelimiters(markdown: string): string {
+export function transformMathDelimiters(input: string): string {
+	// \tag inside inline math is the commonest KaTeX failure (red source).
+	const markdown = repairInlineTags(input);
 	let offset = 0;
 	return readContentSpans(markdown).map(span => {
 		const start = offset; offset += span.raw.length;
