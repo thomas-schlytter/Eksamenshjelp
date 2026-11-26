@@ -1,12 +1,10 @@
 /**
- * Per-device help state (NTNU round): which tours are finished and whether
- * the first-launch invitation has been answered. localStorage, like the key
+ * Per-device help state (NTNU round): which tours are finished. localStorage, like the key
  * map: it is about this device's UI, not the learning record. Every access
  * is guarded, so private mode or SSR simply behaves as "nothing stored".
  */
 
 const COMPLETED_KEY = "lh:help:tours-done";
-const INVITE_KEY = "lh:help:invite-answered";
 
 function read(key: string): string | null {
 	if (typeof window === "undefined") return null;
@@ -45,16 +43,6 @@ export function markTourCompleted(id: string): string[] {
 	const next = [...new Set([...loadCompletedTours(), id])];
 	write(COMPLETED_KEY, JSON.stringify(next));
 	return next;
-}
-
-/** True once the learner has answered the invitation (either way), or has
- *  finished any tour: the invitation is offered exactly once, ever. */
-export function inviteAnswered(): boolean {
-	return read(INVITE_KEY) === "1" || loadCompletedTours().length > 0;
-}
-
-export function answerInvite(): void {
-	write(INVITE_KEY, "1");
 }
 
 /** The answer the palette asked the help page to open. Module state rather

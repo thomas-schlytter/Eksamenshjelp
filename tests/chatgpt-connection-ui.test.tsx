@@ -74,11 +74,11 @@ test("Providers is the first/default page; General is last and other pages keep 
  const html = renderToStaticMarkup(<SettingsDialogBody onClose={() => {}} />);
  const ids = [...html.matchAll(/data-testid="settings-nav-([^"]+)"/g)].map((m) => m[1]);
  assert.deepEqual(ids, ["keys", "agent", "appearance", "graph", "keyboard", "general"]);
- assert.match(html, /settings-nav-keys[^>]*aria-current="true"/); assert.match(html, />Leverandører<\/button>/);
+ assert.match(html, /settings-nav-keys[^>]*aria-current="true"/); assert.match(html, />Koble til AI<\/button>/);
  assert.doesNotMatch(html, />Model providers<\/button>/);
 });
 
-test("Providers has five ordered sections including External CLI; unknown variables stay masked/read-only at the end of Model API keys", async () => {
+test("«Koble til AI»: Claude and ChatGPT first, the rest under «Avansert»; unknown variables stay masked/read-only at the end of Model API keys", async () => {
  globalThis.fetch = async (url) => {
   if (url === "/api/claude-code") return Response.json({ state: "not-found", version: null, minimumVersion: "2.1.259" });
   assert.equal(url, "/api/keys");
@@ -86,8 +86,12 @@ test("Providers has five ordered sections including External CLI; unknown variab
  };
  fixture(); await mount(<KeysSection />);
  const headings = [...document.querySelectorAll('[data-testid^="group-"] > p')].map((el) => el.textContent);
- assert.deepEqual(headings, ["API-nøkler for modeller", "Abonnementer", "Ekstern CLI", "Diktering", "Søk"]);
- assert(byTest("claude-code-installation").closest('[data-testid="group-external-cli"]'));
+ assert.deepEqual(headings, ["Claude eller ChatGPT", "API-nøkler for modeller", "Andre abonnementer", "Diktering", "Søk"]);
+ assert(byTest("claude-code-installation").closest('[data-testid="group-recommended"]'));
+ assert(byTest("chatgpt-connection").closest('[data-testid="group-recommended"]'));
+ assert(!byTest("chatgpt-connection").closest('[data-testid="keys-advanced"]'));
+ for (const id of ["group-provider-keys", "group-subscriptions", "group-dictation", "group-search"]) assert(byTest(id).closest('[data-testid="keys-advanced"]'), `${id} is advanced`);
+ assert.equal(byTest("keys-advanced").hasAttribute("open"), false, "folded for a learner without API keys");
  assert(byTest("key-deepgram_api_key").closest('[data-testid="group-dictation"]'));
  assert(byTest("key-tavily_api_key").closest('[data-testid="group-search"]'));
  assert(byTest("key-brave_api_key").closest('[data-testid="group-search"]'));

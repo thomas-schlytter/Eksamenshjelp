@@ -51,7 +51,7 @@ export async function subscriptionControlsResponse(request: Request): Promise<Re
 		if (typeof fields.op !== "string" || !allowed.includes(fields.op)) return error("Unsupported control.", 400);
 		return Response.json(await webSubscriptionOwner().control(providerId as string, fields, subscriptionRequestOrigin(request)!), { headers: HEADERS });
 	} catch {
-		return error("Kunne ikke endre abonnementstilkoblingen. Prøv igjen, eller koble til på nytt under Leverandører.", 400);
+		return error("Kunne ikke endre abonnementstilkoblingen. Prøv igjen, eller koble til på nytt under «Koble til AI» i innstillingene.", 400);
 	}
 }
 /** One-use same-origin navigation. Full provider authorization URLs go only to

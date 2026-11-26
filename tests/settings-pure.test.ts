@@ -369,7 +369,7 @@ describe("sectionedSegments — the prompts overhaul (2026-09-26)", () => {
 		// assembly order: the base file first, then the shared fragments
 		assert.deepEqual(shared.segments.map((s) => s.path), ["system-prompt.md", "shared/10-personality.md"]);
 		// the Shared header carries the one hint that earns its place
-		assert.equal(shared.hint, "Brukes av begge agentene");
+		assert.equal(shared.hint, "Brukes av både Læreren og Kartleggeren");
 		assert.equal(teacher.hint, undefined);
 	});
 

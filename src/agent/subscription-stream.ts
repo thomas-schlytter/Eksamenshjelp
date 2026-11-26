@@ -11,11 +11,11 @@ export function nativeSubscriptionError(provider: string, message: string): stri
 	// Learner-facing (Norwegian). The desktop shell's public errors arrive
 	// already localized, hence the Norwegian keywords beside the English ones.
 	const suffix = " Ingen API-nøkkel ble brukt i stedet.";
-	if (/background|bakgrunn/i.test(message)) return `Bruk i bakgrunnen er slått av for ${label} i denne appen. Slå det på under Leverandører for å kjøre dette.${suffix}`;
+	if (/background|bakgrunn/i.test(message)) return `Bruk i bakgrunnen er slått av for ${label} i denne appen. Slå det på under «Koble til AI» i innstillingene for å kjøre dette.${suffix}`;
 	if (/quota|429|limit/i.test(message)) return `Bruksgrensen for ${label} er nådd. Sjekk kontoen hos leverandøren og prøv igjen senere.${suffix}`;
-	if (/expired|invalid_grant|401|refresh|fornye/i.test(message)) return `Innloggingen for ${label} kunne ikke fornyes. Prøv igjen, eller koble til på nytt under Leverandører.${suffix}`;
+	if (/expired|invalid_grant|401|refresh|fornye/i.test(message)) return `Innloggingen for ${label} kunne ikke fornyes. Prøv igjen, eller koble til på nytt under «Koble til AI» i innstillingene.${suffix}`;
 	if (/cancel|abort|closed|disconnect|avbrutt/i.test(message)) return `Forespørselen til ${label} ble avbrutt, eller tilkoblingen ble lukket.${suffix}`;
-	if (/catalog|model|stale|changed|katalog/i.test(message)) return `Den valgte modellen eller tilkoblingen for ${label} er ikke tilgjengelig. Oppdater Leverandører og velg en tilgjengelig modell.${suffix}`;
+	if (/catalog|model|stale|changed|katalog/i.test(message)) return `Den valgte modellen eller tilkoblingen for ${label} er ikke tilgjengelig. Åpne «Koble til AI» i innstillingene og velg en tilgjengelig modell.${suffix}`;
 	return `Forespørselen til ${label} mislyktes. Sjekk tilkoblingen, kontotilgangen og grensene hos leverandøren, og prøv igjen.${suffix}`;
 }
 export function subscriptionHistory(context: TranscriptContext, logical: Model<Api>, nativeId: string): TranscriptContext {

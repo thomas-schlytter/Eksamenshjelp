@@ -345,7 +345,7 @@ export function ModelControl({ chatId, onModelChange }: { chatId?: string; onMod
 						onPick={pickModel}
 						footer={
 							catalog && catalog.models.length === 0
-								? "Ingen modeller. Legg til en API-nøkkel under Leverandører"
+								? "Ingen modeller. Koble til AI under Innstillinger først"
 								: chatId
 									? "Modellen for denne økta"
 									: "Sterk-nivået, standard for nye økter"

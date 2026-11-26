@@ -103,3 +103,7 @@ export * from "./data-import.ts";
 export * from "./course-verdict.ts";
 export * from "./streak.ts";
 export * from "./focus-timer.ts";
+// Innføringen: the fagmappe convention + the Canvas prompt (shared with the
+// website and the install scripts), and the agents' display names.
+export * from "./setup-prompts.ts";
+export * from "./role-names.ts";

@@ -23,6 +23,7 @@ import type {
 	DictationSettings,
 	GraphSettings,
 	ModelsSettings,
+	OnboardingSettings,
 	ModelSlot,
 	RoleModelOverride,
 } from "../core/settings.ts";
@@ -100,6 +101,15 @@ export function parseClaudeCodeSettingsBody(body: unknown): SettingsBodyResult<{
 	if (raw.enabled === undefined) return { ok: true, settings: {} };
 	if (typeof raw.enabled !== "boolean") return { ok: false, error: "enabled must be a boolean" };
 	return { ok: true, settings: { enabled: raw.enabled } };
+}
+
+/** onboarding: { done?: boolean } — the innføring finished or skipped. */
+export function parseOnboardingSettingsBody(body: unknown): SettingsBodyResult<OnboardingSettings> {
+	const raw = asRecord(body);
+	if (!raw) return { ok: false, error: "Invalid JSON body" };
+	if (raw.done === undefined) return { ok: true, settings: {} };
+	if (typeof raw.done !== "boolean") return { ok: false, error: "done must be a boolean" };
+	return { ok: true, settings: { done: raw.done } };
 }
 
 /** agent.models: only the six known background roles; each override's
@@ -460,6 +470,7 @@ export const SETTINGS_SECTIONS = {
 	models: parseModelsSettingsBody,
 	dictation: parseDictationSettingsBody,
 	claudeCode: parseClaudeCodeSettingsBody,
+	onboarding: parseOnboardingSettingsBody,
 } as const;
 
 export type SettingsSectionName = keyof typeof SETTINGS_SECTIONS;

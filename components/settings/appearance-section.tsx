@@ -41,7 +41,7 @@ import { MenuShell } from "@/components/menu-shell";
 import { Hint } from "@/components/ui/hint";
 import { resolveAppearance, useAppearance } from "./appearance.tsx";
 import { FontMenuList } from "./model-menu";
-import { CommitInput, SettingsMenuTrigger, SettingsRow, ThinSelect, Toggle } from "./controls.tsx";
+import { CommitInput, SettingsAdvanced, SettingsMenuTrigger, SettingsRow, ThinSelect, Toggle } from "./controls.tsx";
 
 /** The factory reading family — the DEFAULT row's identity (unset =
  *  this). Exported for tests. */
@@ -186,7 +186,7 @@ export function AppearanceSection({
 
 	return (
 		<>
-			<SettingsRow label="Modus" testid="row-mode">
+			<SettingsRow label="Modus" hint="Lys, mørk eller som på maskinen din" testid="row-mode">
 				<ThinSelect
 					value={resolved.mode}
 					ariaLabel="modus"
@@ -197,19 +197,6 @@ export function AppearanceSection({
 					<option value="light">Lys</option>
 					<option value="dark">Mørk</option>
 				</ThinSelect>
-			</SettingsRow>
-			<SettingsRow
-				label="Bakgrunn"
-				hint={`Bare i mørk modus. Tomt = ${resolved.background ?? "#14171c"}`}
-				testid="row-background"
-			>
-				<CommitInput
-					value={appearance?.background ?? ""}
-					placeholder="#14171c"
-					ariaLabel="bakgrunnsfarge (hex)"
-					testid="input-background"
-					onCommit={(v) => onSectionChange({ ...appearance, background: v === "" ? null : v })}
-				/>
 			</SettingsRow>
 			<SettingsRow
 				label="Skrifttype"
@@ -267,7 +254,7 @@ export function AppearanceSection({
 					)}
 				</span>
 			</SettingsRow>
-			<SettingsRow label="Skriftstørrelse" hint={`${resolved.proseFontSize}px`} testid="row-prose-size">
+			<SettingsRow label="Skriftstørrelse" hint={`Tekststørrelsen i øktene, nå ${resolved.proseFontSize}px`} testid="row-prose-size">
 				<CommitInput
 					type="number"
 					value={String(appearance?.proseFontSize ?? "")}
@@ -286,6 +273,20 @@ export function AppearanceSection({
 						if (!Number.isFinite(n)) return; // bad input: no write, factory stays
 						onSectionChange({ ...appearance, proseFontSize: Math.min(24, Math.max(12, Math.round(n))) });
 					}}
+				/>
+			</SettingsRow>
+			<SettingsAdvanced testid="appearance-advanced" hint="Farger og detaljer i skriften.">
+			<SettingsRow
+				label="Bakgrunn"
+				hint={`Bare i mørk modus. Tomt = ${resolved.background ?? "#14171c"}`}
+				testid="row-background"
+			>
+				<CommitInput
+					value={appearance?.background ?? ""}
+					placeholder="#14171c"
+					ariaLabel="bakgrunnsfarge (hex)"
+					testid="input-background"
+					onCommit={(v) => onSectionChange({ ...appearance, background: v === "" ? null : v })}
 				/>
 			</SettingsRow>
 			<SettingsRow label="Øktnavn med seriffer" testid="row-session-serif">
@@ -340,6 +341,7 @@ export function AppearanceSection({
 					onCommit={(v) => onSectionChange({ ...appearance, mdRendering: { ...md, italicColor: v === "" ? null : v } })}
 				/>
 			</SettingsRow>
+			</SettingsAdvanced>
 		</>
 	);
 }
@@ -371,10 +373,10 @@ export function GraphSection({
 			    switch below arrived: off ≠ no graph, off = the graph stops
 			    growing. The testid keeps the old name's shape (row-enabled) so
 			    this stays one rename, not a test re-pin. */}
-			<SettingsRow label="Uttrekk" hint="Av = kunnskapskartet slutter å vokse" testid="graph-row-enabled">
+			<SettingsRow label="Bygg kunnskapskartet" hint="Notatskriveren skriver ned det du lærer. Av = kartet slutter å vokse" testid="graph-row-enabled">
 				<Toggle
 					checked={graph?.enabled ?? true}
-					label="uttrekk på"
+					label="bygg kunnskapskartet"
 					testid="toggle-extraction-enabled"
 					onChange={(on) =>
 						// Compose, never replace-whole (the section PUT is, but the
@@ -388,7 +390,7 @@ export function GraphSection({
 			    round): display-only. Off = the home shows the chains view
 			    instead of the canvas. The ledgers, the pipeline, everything
 			    data keeps working — that is the extraction switch above. */}
-			<SettingsRow label="Vis kunnskapskartet" hint="Av = kildevisningen vises i stedet for kartet" testid="graph-row-rendering">
+			<SettingsRow label="Vis kunnskapskartet" hint="Av = Hjem viser kildene i stedet for kartet" testid="graph-row-rendering">
 				<Toggle
 					checked={graph?.rendering ?? true}
 					label="vis kunnskapskartet"
@@ -396,8 +398,9 @@ export function GraphSection({
 					onChange={(on) => onSectionChange({ ...graph, rendering: on })}
 				/>
 			</SettingsRow>
+			<SettingsAdvanced testid="graph-advanced">
 			<SettingsRow
-				label="Bolkstørrelse for uttrekk"
+				label="Bolkstørrelse for notater"
 				hint={`${resolved.extractionChunkTokens} tok`}
 				testid="graph-row-chunk-tokens"
 			>
@@ -405,7 +408,7 @@ export function GraphSection({
 					type="number"
 					value={String(graph?.extractionChunkTokens ?? "")}
 					placeholder={String(resolved.extractionChunkTokens)}
-					ariaLabel="bolkstørrelse for uttrekk"
+					ariaLabel="bolkstørrelse for notater"
 					testid="input-chunk-tokens"
 					onCommit={(v) => {
 						// Empty = factory default (the fix-wave discipline): absence is
@@ -426,6 +429,7 @@ export function GraphSection({
 					}}
 				/>
 			</SettingsRow>
+			</SettingsAdvanced>
 		</>
 	);
 }

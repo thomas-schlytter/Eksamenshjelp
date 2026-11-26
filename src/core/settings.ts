@@ -161,11 +161,15 @@ export interface ProviderKeyMissing {
 }
 /** The refusal wording's invariant tail — the matcher below keys on it
  * (the label prefix varies by provider). */
-const PROVIDER_KEY_MISSING_TAIL = "mangler API-nøkkel. Legg til en under Innstillinger → Leverandører";
-const CLAUDE_CODE_UNAVAILABLE = "Claude Code er utilgjengelig. Slå det på og sett det opp under Innstillinger → Leverandører.";
-/** The pre-translation wordings (stored job records still carry them). */
+const PROVIDER_KEY_MISSING_TAIL = "mangler API-nøkkel. Legg til en under Innstillinger → Koble til AI";
+const CLAUDE_CODE_UNAVAILABLE = "Claude Code er utilgjengelig. Slå det på og sett det opp under Innstillinger → Koble til AI.";
+/** Earlier wordings (stored job records still carry them): the English
+ *  originals and the Norwegian ones from before the section was renamed
+ *  from «Leverandører» to «Koble til AI». */
 const PROVIDER_KEY_MISSING_TAIL_LEGACY = "key is set — add one in Settings → Keys";
 const CLAUDE_CODE_UNAVAILABLE_LEGACY = "Claude Code is unavailable. Enable and set it up in Settings → Providers.";
+const PROVIDER_KEY_MISSING_TAIL_NB_LEGACY = "mangler API-nøkkel. Legg til en under Innstillinger → Leverandører";
+const CLAUDE_CODE_UNAVAILABLE_NB_LEGACY = "Claude Code er utilgjengelig. Slå det på og sett det opp under Innstillinger → Leverandører.";
 export function providerKeyMissing(provider: string, slots: ModelSlotName[]): ProviderKeyMissing {
 	const label = AUTH_PROVIDER_KEYS.find((p) => p.id === provider)?.label ?? provider;
 	return {
@@ -182,7 +186,8 @@ export function providerKeyMissing(provider: string, slots: ModelSlotName[]): Pr
 export function isProviderKeyRefusal(error: string | undefined): boolean {
 	return !!error && (
 		error.endsWith(PROVIDER_KEY_MISSING_TAIL) || error === CLAUDE_CODE_UNAVAILABLE ||
-		error.endsWith(PROVIDER_KEY_MISSING_TAIL_LEGACY) || error === CLAUDE_CODE_UNAVAILABLE_LEGACY
+		error.endsWith(PROVIDER_KEY_MISSING_TAIL_LEGACY) || error === CLAUDE_CODE_UNAVAILABLE_LEGACY ||
+		error.endsWith(PROVIDER_KEY_MISSING_TAIL_NB_LEGACY) || error === CLAUDE_CODE_UNAVAILABLE_NB_LEGACY
 	);
 }
 /** The typed throw for in-process seams (extraction pipeline) — the
@@ -345,6 +350,11 @@ export interface GeneralSettings {
 	autoUpdate?: boolean;
 }
 
+/** The innføring's one fact: finished (or skipped) on this machine. */
+export interface OnboardingSettings {
+	done?: boolean;
+}
+
 /** One app-wide dictation preference, shared by every composer. */
 export interface DictationSettings {
 	language?: DictationLanguage;
@@ -481,6 +491,11 @@ export interface UserSettings {
 	dictation?: DictationSettings;
 	/** Explicit app-wide opt-in; absent/invalid is off, including older records. */
 	claudeCode?: { enabled?: boolean };
+	/** The first-run innføring (components/onboarding): `done` once the
+	 *  learner finished or skipped it. Absent = not yet (older records too;
+	 *  the client also skips it for anyone who already has courses and a
+	 *  connection). */
+	onboarding?: OnboardingSettings;
 	agent?: AgentSettings;
 	/** The strong/cheap/vision model slots (model slots wave, 2026-09-20). */
 	models?: ModelsSettings;
@@ -836,6 +851,12 @@ export function sanitizeUserSettings(raw: unknown): UserSettings | null {
 		out.claudeCode = raw !== null && typeof raw === "object" && !Array.isArray(raw)
 			&& typeof (raw as Record<string, unknown>).enabled === "boolean"
 			? { enabled: (raw as { enabled: boolean }).enabled } : {};
+	}
+	if (r.onboarding !== undefined) {
+		const raw = r.onboarding;
+		out.onboarding = raw !== null && typeof raw === "object" && !Array.isArray(raw)
+			&& typeof (raw as Record<string, unknown>).done === "boolean"
+			? { done: (raw as { done: boolean }).done } : {};
 	}
 	if (r.agent !== null && typeof r.agent === "object" && !Array.isArray(r.agent)) {
 		out.agent = sanitizeAgent(r.agent as Record<string, unknown>);

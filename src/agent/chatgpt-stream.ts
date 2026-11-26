@@ -12,12 +12,12 @@ const NO_FALLBACK = "Ingen API-nøkkel ble brukt i stedet.";
  *  already-localized public errors, hence the Norwegian keywords. */
 export function chatGPTStreamError(message: string): string {
 	if (/subscription_sharing_usage_limit_exceeded|quota|429/.test(message)) return `Bruksgrensen for ChatGPT-abonnementet er nådd. Se forbruket på ${USAGE}. ${NO_FALLBACK}`;
-	if (/scope|authorization_context|permission|tillatelse/.test(message)) return `ChatGPT mangler tillatelse til å bruke abonnementet. Koble til på nytt under Leverandører og godkjenn bruk av abonnementet. ${NO_FALLBACK}`;
-	if (/expired|invalid_grant|401|invalid_user|utløpt/.test(message)) return `ChatGPT-innloggingen er utløpt. Koble til på nytt under Leverandører. ${NO_FALLBACK}`;
-	if (/background|Background|bakgrunn/.test(message)) return `Bruk i bakgrunnen er slått av for ChatGPT i denne appen. Slå på «Tillat bruk i bakgrunnen» for ChatGPT under Leverandører for å kjøre dette. ${NO_FALLBACK}`;
+	if (/scope|authorization_context|permission|tillatelse/.test(message)) return `ChatGPT mangler tillatelse til å bruke abonnementet. Koble til på nytt under «Koble til AI» i innstillingene og godkjenn bruk av abonnementet. ${NO_FALLBACK}`;
+	if (/expired|invalid_grant|401|invalid_user|utløpt/.test(message)) return `ChatGPT-innloggingen er utløpt. Koble til på nytt under «Koble til AI» i innstillingene. ${NO_FALLBACK}`;
+	if (/background|Background|bakgrunn/.test(message)) return `Bruk i bakgrunnen er slått av for ChatGPT i denne appen. Slå på «Tillat bruk i bakgrunnen» for ChatGPT under «Koble til AI» i innstillingene for å kjøre dette. ${NO_FALLBACK}`;
 	if (/eligible|403/.test(message)) return "Denne ChatGPT-kontoen eller arbeidsområdet tillater ikke denne forespørselen. Sjekk innstillingene i ChatGPT. Det er ikke sikkert det hjelper å koble til på nytt.";
 	if (/cancel|abort|closed|disconnect|avbrutt|frakoblet/i.test(message)) return `ChatGPT-forespørselen ble avbrutt, eller tilkoblingen ble lukket. ${NO_FALLBACK}`;
-	if (/catalog|model|katalog/.test(message)) return `Den valgte modellen er ikke tilgjengelig for denne ChatGPT-kontoen. Oppdater Leverandører og velg en tilgjengelig modell. ${NO_FALLBACK}`;
+	if (/catalog|model|katalog/.test(message)) return `Den valgte modellen er ikke tilgjengelig for denne ChatGPT-kontoen. Åpne «Koble til AI» i innstillingene og velg en tilgjengelig modell. ${NO_FALLBACK}`;
 	if (/incomplete|terminal|interrupted|stop reason/.test(message)) return `ChatGPT ga et ufullstendig svar. Prøv igjen når du er klar. ${NO_FALLBACK}`;
 	return `ChatGPT-forespørselen mislyktes. Sjekk tilkoblingen og ChatGPT-forbruket, og prøv igjen. ${NO_FALLBACK}`;
 }

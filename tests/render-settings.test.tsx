@@ -117,16 +117,19 @@ describe("AgentSection (thin SSR)", () => {
 			// The shared model-picker dropdown as the opened menu (owner,
 			// 2026-09-20), the thin trigger as the collapsed look.
 			assert.ok(html.includes(`data-testid="slot-model-${slot}"`), `${slot} model trigger`);
-			assert.ok(html.includes(`data-testid="slot-thinking-${slot}"`), `${slot} thinking trigger`);
-			// the roster hint rides every row
-			assert.ok(html.includes("Hovedmodellen i øktene dine") || slot !== "strong", "strong roster");
+			// Innføringen: the thinking level folds under «Vis tenkenivå og cache».
+			assert.ok(!html.includes(`data-testid="slot-thinking-${slot}"`), `${slot} thinking trigger is advanced`);
 		}
+		// The plain names and the roster hint ride every row (src/core/role-names.ts).
+		assert.ok(html.includes(">Kraftig modell<") && html.includes("Brukes av Læreren og Kartleggeren"), "strong");
+		assert.ok(html.includes(">Rask og billig modell<") && html.includes("Brukes av Kildesøk, Demo-lageren, Notatskriveren og Kvalitetskontrollen"), "cheap");
+		assert.ok(html.includes(">Modell som ser bilder<") && html.includes("Brukes av Figurtegneren og PDF-leseren"), "vision");
 		// Fix wave: no Default anywhere — an unpicked slot reads "—"
 		// (the owner's no-factory-fallback language), and no menu
 		// carries a Default row (menu-default testid is retired).
 		assert.equal((html.match(/>Default<\/span>/g) ?? []).length, 0, "no Default trigger");
 		assert.ok(!html.includes('data-testid="menu-default"'), "no Default row");
-		assert.equal((html.match(/>—<\/span>/g) ?? []).length, 6, "three slots × two — triggers");
+		assert.equal((html.match(/>—<\/span>/g) ?? []).length, 3, "three slots × one — trigger (thinking is advanced)");
 		// the per-role rows are GONE (slots-only)
 		for (const role of ["researcher", "demoBuilder", "visualMaker"]) {
 			assert.ok(!html.includes(`data-testid="role-row-${role}"`), `${role} retired`);
@@ -134,6 +137,18 @@ describe("AgentSection (thin SSR)", () => {
 		assert.ok(html.includes('data-testid="group-models"'), "Models sub-group");
 		assert.ok(html.includes('data-testid="group-tools"'), "Tools sub-group");
 		assert.ok(html.includes('data-testid="group-prompts"'), "System prompts sub-group");
+	});
+
+	it("«Hvem gjør hva» names every role with one plain line; tools, context and prompts fold under «Avansert»", () => {
+		const html = renderToStaticMarkup(<AgentSection agent={undefined} models={undefined} graph={undefined} onSectionChange={() => {}} onModelsChange={() => {}} />);
+		for (const role of ["teacher", "prober", "researcher", "demoBuilder", "extractor", "auditor", "visualMaker", "pdfReader"]) {
+			assert.ok(html.includes(`data-testid="role-${role}"`), role);
+		}
+		assert.match(html, /Læreren<\/span>: den du snakker med i chatten/);
+		const advanced = html.split('data-testid="agent-advanced"')[1] ?? "";
+		assert.ok(!/<details[^>]*open/.test(html.split('data-testid="agent-advanced"')[0]!.slice(-200)), "closed by default");
+		for (const id of ["group-tools", "group-context", "group-prompts"]) assert.ok(advanced.includes(`data-testid="${id}"`), `${id} is advanced`);
+		assert.ok(!(html.split('data-testid="agent-advanced"')[0] ?? "").includes('data-testid="group-tools"'));
 	});
 
 	it("the search-engine row renders with its live reason (search wave 2026-09-20)", () => {
@@ -165,7 +180,7 @@ describe("AgentSection (thin SSR)", () => {
 		const rows = [...toolsGroup.matchAll(/data-testid="(graph-tools-row|tool-row-\w+)"/g)].map((m) => m[1]);
 		assert.equal(rows[0], "graph-tools-row", "graph tools is the FIRST row of the Tools group");
 		// (the apostrophe in "sessions'" HTML-escapes — match up to it)
-		assert.ok(html.includes("Lar agenten slå opp i kunnskapskartet ditt mellom øktene"), "the describing hint");
+		assert.ok(html.includes("Lar Kartleggeren slå opp i kunnskapskartet ditt mellom øktene"), "the describing hint");
 		assert.ok((html.split('data-testid="graph-tools-row"')[1] ?? "").includes('aria-checked="true"'), "absent = on");
 		const rowHtml = html.split('data-testid="graph-tools-row"')[1]?.split('data-testid="tool-row-')[0] ?? "";
 		assert.ok(!rowHtml.includes("opacity-40"), "lit while the graph is on (the search row may dim — no keys in SSR)");
@@ -235,7 +250,7 @@ describe("GraphSection — master switch + chunk budget (wave 7 + 2026-10-02)", 
 	it("renders the master-switch row — EXTRACTION since 2026-10-06 (the data channel, renamed when rendering split off)", () => {
 		const html = renderToStaticMarkup(<GraphSection graph={undefined} onSectionChange={() => {}} />);
 		assert.ok(html.includes('data-testid="graph-row-enabled"'));
-		assert.ok(html.includes(">Uttrekk<"), "the row names the DATA channel, not 'Graph'");
+		assert.ok(html.includes(">Bygg kunnskapskartet<"), "the row names the DATA channel, not the graph");
 		assert.ok(!html.includes("graph-row-embedding"), "the dead rungs render nothing");
 		assert.ok(!html.includes("Embedding model"), "the picker is gone");
 		assert.ok(!html.includes("graph-row-clustering"));

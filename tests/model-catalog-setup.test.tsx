@@ -187,7 +187,7 @@ test("Agent opens with cached thinking metadata; refresh and disconnect never cl
 	const models: ModelsSettings = { strong: { model: { provider: a.provider, id: a.id }, thinkingLevel: "low" } };
 	let changed: ModelsSettings | undefined;
 	await render(<><Reader /><AgentSection agent={undefined} models={models} graph={undefined} compaction={undefined} onSectionChange={() => {}} onModelsChange={(next) => { changed = next; }} onCompactionChange={() => {}} /></>);
-	await click("slot-thinking-strong"); assert.deepEqual(levels(), ["off", "low✓", "high"]);
+	await click("models-advanced"); await click("slot-thinking-strong"); assert.deepEqual(levels(), ["off", "low✓", "high"]);
 	assert.equal(element("slot-model-strong").textContent, "model:free▾");
 	await answer(1, catalog());
 	await act(async () => notifySettingsSaved("keys")); await answer(2, catalog(false));
@@ -302,12 +302,12 @@ test("cache retention is hidden by default, slot-specific, resettable, and prese
 		return <AgentSection agent={undefined} models={models} graph={undefined} compaction={undefined} onCompactionChange={() => {}} onSectionChange={() => {}} onModelsChange={(next) => { changes.push(next); setModels(next); }} />;
 	}
 	await render(<Settings />); await answer(1, catalog());
-	assert.equal(element("models-advanced").textContent, "Vis avanserte innstillinger");
+	assert.equal(element("models-advanced").textContent, "Vis tenkenivå og cache");
 	assert.equal(element("models-advanced").getAttribute("aria-expanded"), "false");
 	assert.equal(document.querySelector('[data-testid="slot-cache-strong"]'), null);
 	assert.equal(changes.length, 0, "mounting untouched controls writes nothing");
 	await click("models-advanced");
-	assert.equal(element("models-advanced").textContent, "Skjul avanserte innstillinger");
+	assert.equal(element("models-advanced").textContent, "Skjul tenkenivå og cache");
 	assert.equal(element("slot-cache-strong").textContent, "Cache: lang▾");
 	assert.equal(element("slot-cache-cheap").textContent, "Cache: standard▾");
 	assert.equal(element("slot-cache-vision").textContent, "Cache: ikke forespurt▾");

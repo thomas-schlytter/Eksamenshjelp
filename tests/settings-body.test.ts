@@ -241,8 +241,17 @@ describe("SETTINGS_SECTIONS (the route's section map)", () => {
 		// connected through POST /api/custom-provider.
 		assert.deepEqual(
 			Object.keys(SETTINGS_SECTIONS),
-			["general", "chat", "agent", "appearance", "graph", "compaction", "models", "dictation", "claudeCode"],
+			["general", "chat", "agent", "appearance", "graph", "compaction", "models", "dictation", "claudeCode", "onboarding"],
 		);
+	});
+});
+
+describe("parseOnboardingSettingsBody (innføringen)", () => {
+	it("done is a boolean; an empty section is not done; anything else is a 400", () => {
+		assert.deepEqual(SETTINGS_SECTIONS.onboarding({ done: true }), { ok: true, settings: { done: true } });
+		assert.deepEqual(SETTINGS_SECTIONS.onboarding({}), { ok: true, settings: {} });
+		assert.equal(SETTINGS_SECTIONS.onboarding({ done: "yes" }).ok, false);
+		assert.equal(SETTINGS_SECTIONS.onboarding(null).ok, false);
 	});
 });
 

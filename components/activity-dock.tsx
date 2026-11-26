@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { ActivityIcon, BotIcon, ClipboardCheckIcon, FileTextIcon, NotebookPenIcon, PenToolIcon, PlayIcon, SearchIcon, SquareIcon, WaypointsIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CallUsage, JobKind, JobRecord } from "@/src/core";
-import { isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
+import { JOB_KIND_ROLE, ROLE_DISPLAY, isModelsRefusal, isProviderKeyRefusal, subscriptionLabel, subscriptionLabels } from "@/src/core";
 import { formatTokens, planCostLabel } from "@/components/usage-format";
 import { useServerEvent, useServerResync } from "@/components/server-events";
 
@@ -264,6 +264,19 @@ const EXTRACTION_PHASE_LABEL: Record<string, string> = {
 	embedding: "indekserer",
 };
 
+/** A blob's name: the agent doing the work (src/core/role-names.ts). The
+ *  audit phase of an extraction run is Kvalitetskontrollen's; mock exams
+ *  keep the task's own name (Læreren writes and grades them). */
+export function blobLabel(blob: Pick<ActivityBlob, "process" | "phase" | "jobKind">): string {
+	if (blob.process === "extraction") {
+		const who = ROLE_DISPLAY[blob.phase === "auditing" ? "auditor" : "extractor"].name;
+		return `${who}: ${EXTRACTION_PHASE_LABEL[blob.phase ?? ""] ?? blob.phase ?? "kjører"}`;
+	}
+	if (blob.jobKind === "mockExam") return "Prøveeksamen";
+	if (blob.jobKind === "mockGrade") return "Retting";
+	return blob.jobKind ? ROLE_DISPLAY[JOB_KIND_ROLE[blob.jobKind]].name : "Bakgrunnsagent";
+}
+
 /** Elapsed as a compact ticking string: 45s / 3m 04s / 1t 12m. */
 export function formatElapsed(ms: number): string {
 	const s = Math.max(0, Math.floor(ms / 1000));
@@ -400,22 +413,7 @@ function ActivityBlobRow({
 	onAbort: () => void;
 }) {
 	const Icon = blob.process === "extraction" ? WaypointsIcon : (blob.jobKind && KIND_ICON[blob.jobKind]) || BotIcon;
-	const label =
-		blob.process === "extraction"
-			? `Uttrekk: ${EXTRACTION_PHASE_LABEL[blob.phase ?? ""] ?? blob.phase ?? "kjører"}`
-			: blob.jobKind === "research"
-				? "Research"
-				: blob.jobKind === "demo"
-					? "Demo"
-					: blob.jobKind === "visual"
-						? "Visualisering"
-						: blob.jobKind === "pdf"
-							? "PDF-leser"
-							: blob.jobKind === "mockExam"
-								? "Prøveeksamen"
-								: blob.jobKind === "mockGrade"
-									? "Retting"
-									: "Bakgrunnsagent";
+	const label = blobLabel(blob);
 	return (
 		<div
 			data-testid={`activity-blob-${blob.process}`}

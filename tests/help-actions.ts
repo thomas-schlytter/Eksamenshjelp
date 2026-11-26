@@ -78,6 +78,14 @@ export function assertActionValid(action: HelpAction, where: string): void {
 			assert.ok(host.includes("addEventListener(OPEN_LEGACY_IMPORT_EVENT"), `${where}: nothing listens for the import event`);
 			break;
 		}
+		case "onboarding": {
+			// The innføring opens through a window event; prove a host listens.
+			const provider = readFileSync(join(ROOT, "components/help/help-provider.tsx"), "utf8");
+			const host = readFileSync(join(ROOT, "components/onboarding/onboarding.tsx"), "utf8");
+			assert.ok(provider.includes("<OnboardingHost />"), `${where}: the innføring host is not mounted`);
+			assert.ok(host.includes("addEventListener(OPEN_ONBOARDING_EVENT"), `${where}: nothing listens for the innføring event`);
+			break;
+		}
 		case "point":
 			assert.ok(routeExists(action.route), `${where}: route ${action.route} has no page in app/`);
 			assert.ok((TOUR_ANCHORS as readonly string[]).includes(action.anchor), `${where}: anchor ${action.anchor} is not in the contract`);

@@ -53,6 +53,39 @@ export function SettingsGroup({
 	);
 }
 
+/** «Avansert» (innføringen): what most learners never need, folded away.
+ *  A native <details>: the content stays in the markup (the render pins
+ *  read it) and the browser owns the fold. `defaultOpen` unfolds it on
+ *  arrival, e.g. when a deep-link targets a row inside. */
+export function SettingsAdvanced({
+	children,
+	hint,
+	testid,
+	defaultOpen = false,
+}: {
+	children: React.ReactNode;
+	hint?: string;
+	testid?: string;
+	defaultOpen?: boolean;
+}) {
+	const [open, setOpen] = useState(defaultOpen);
+	return (
+		<details
+			data-testid={testid}
+			open={open}
+			onToggle={(e) => setOpen(e.currentTarget.open)}
+			className="group mt-5 border-t border-border/60 pt-4"
+		>
+			<summary className="flex cursor-pointer list-none items-center gap-1.5 text-xs uppercase tracking-widest text-muted-foreground transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
+				<span aria-hidden className="inline-block transition-transform group-open:rotate-90">›</span>
+				Avansert
+			</summary>
+			{hint && <p className="mt-1 text-xs text-muted-foreground/70">{hint}</p>}
+			<div className="mt-4 flex flex-col gap-3">{children}</div>
+		</details>
+	);
+}
+
 /** One label + one control. Label left (with optional muted hint), control
  *  right — the settings row shape. */
 export function SettingsRow({

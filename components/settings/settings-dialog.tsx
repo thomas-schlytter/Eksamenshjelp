@@ -40,7 +40,7 @@ import {
 	type UserSettings,
 } from "@/src/core";
 import { useAppearance } from "./appearance.tsx";
-import { SettingsGroup, SettingsRow, SettingsSection } from "./controls.tsx";
+import { SettingsAdvanced, SettingsGroup, SettingsRow, SettingsSection } from "./controls.tsx";
 import { Button } from "@/components/ui/button";
 import { openLegacyImport } from "@/components/import/legacy-import-event";
 import { AboutSettings, UpdateSettings } from "./update-settings.tsx";
@@ -59,7 +59,7 @@ import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
  *  prose is out; only the keyboard note stays (storage location is a
  *  real question users ask). */
 const SECTIONS = [
-	{ id: "keys", label: "Leverandører" },
+	{ id: "keys", label: "Koble til AI" },
 	{ id: "agent", label: "Agent" },
 	{ id: "appearance", label: "Utseende" },
 	{ id: "graph", label: "Kunnskapskart" },
@@ -371,6 +371,7 @@ export function SettingsDialogBody({
 											}
 										/>
 									</SettingsGroup>
+									<SettingsAdvanced testid="general-advanced">
 									<SettingsGroup label="Data" testid="settings-data">
 										<SettingsRow
 											label="Importer fra LearnHarness"
@@ -390,16 +391,18 @@ export function SettingsDialogBody({
 											</Button>
 										</SettingsRow>
 									</SettingsGroup>
+									</SettingsAdvanced>
 								</SettingsSection>
 							)}
 							{active === "keys" && (
-								<SettingsSection title="Leverandører" testid="section-keys">
+								<SettingsSection title="Koble til AI" hint="Eksamenshjelp bruker din egen AI. Koble til den du har." testid="section-keys">
 									<KeysSection initialRow={initialRow ?? undefined} />
 								</SettingsSection>
 							)}
 							{active === "agent" && (
 								<SettingsSection
 									title="Agent"
+									hint="Hvilke AI-modeller appen bruker, og til hva."
 									testid="section-agent"
 								>
 									<AgentSection

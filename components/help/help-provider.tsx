@@ -11,14 +11,18 @@
  *   `lh:start-tour` ({ id }),
  * - the one executor for HelpAction, so the palette, the help page and the
  *   tours all "do the thing" through the same code path,
- * - the first-launch invitation.
+ * - the innføring (components/onboarding/): the first-launch walk-through.
+ *   It replaced the old first-launch tour invitation (2026-11): two
+ *   first-start prompts competed, and the innføring covers what the welcome
+ *   tour's first steps did (adding a course) plus the AI connection. The
+ *   tours stay in the help centre.
  *
  * Nothing here blocks the app: every fetch is optional, every missing
  * element has a fallback, and every layer closes on Esc.
  */
 
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { kbdEventForAction, type AppearanceSettings } from "@/src/core";
 import { useSettingsDialog } from "@/components/settings/settings-dialog.tsx";
 import { useAppearance } from "@/components/settings/appearance.tsx";
@@ -27,11 +31,13 @@ import { useSidebar } from "@/components/sidebar";
 import { openLegacyImport } from "@/components/import/legacy-import-event";
 import { LegacyImportHost } from "@/components/import/legacy-import-host";
 import { HelpContext, type HelpApi } from "./help-context.ts";
-import { answerInvite, inviteAnswered, loadCompletedTours, markTourCompleted, setPendingArticle } from "./storage.ts";
+import { loadCompletedTours, markTourCompleted, setPendingArticle } from "./storage.ts";
 import { TOUR_IDLE, tourReducer, type TourEvent, type TourState } from "./tour-machine.ts";
 import { PaletteShell } from "./palette-shell.tsx";
 import { TourOverlay } from "./tour-overlay.tsx";
-import { TOURS, WELCOME_TOUR_ID } from "./tours.ts";
+import { TOURS } from "./tours.ts";
+import { OnboardingHost } from "@/components/onboarding/onboarding";
+import { openOnboarding } from "@/components/onboarding/onboarding-model";
 import { FOCUS_ARTICLE_EVENT, OPEN_HELP_EVENT, START_TOUR_EVENT, type HelpAction, type ThemeMode, type Tour } from "./types.ts";
 
 const loadSearchPalette = () => import("./search-palette.tsx");
@@ -60,7 +66,6 @@ async function saveThemeMode(mode: ThemeMode): Promise<AppearanceSettings | null
 
 export function HelpProvider({ children }: { children: React.ReactNode }) {
 	const router = useRouter();
-	const pathname = usePathname();
 	const { open: openSettings } = useSettingsDialog();
 	const { onAppearanceChange } = useAppearance();
 	const sidebar = useSidebar();
@@ -71,7 +76,6 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 	const [tour, setTour] = useState<TourState>(TOUR_IDLE);
 	const [pointTour, setPointTour] = useState<Tour | null>(null);
 	const [completedTours, setCompletedTours] = useState<string[]>([]);
-	const [invite, setInvite] = useState(false);
 
 	const tours = useMemo(() => (pointTour ? [...TOURS, pointTour] : TOURS), [pointTour]);
 	// The reducer needs the tour list of the SAME call (a "point" action
@@ -124,9 +128,6 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 	const startTour = useCallback(
 		(id: string) => {
 			closeSearch();
-			// Starting any tour answers the invitation for good.
-			answerInvite();
-			setInvite(false);
 			dispatchTour({ type: "start", tourId: id });
 		},
 		[closeSearch, dispatchTour],
@@ -163,6 +164,10 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 				case "legacy-import":
 					closeSearch();
 					openLegacyImport();
+					break;
+				case "onboarding":
+					closeSearch();
+					openOnboarding();
 					break;
 				case "point": {
 					const one: Tour = {
@@ -217,21 +222,6 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 		setCompletedTours(loadCompletedTours());
 	}, []);
 
-	// First launch: offer the welcome tour once, quietly, after the page has
-	// settled. Never over a session (the composer and question dock live in
-	// that corner of the screen's attention) and never while a tour runs.
-	const inSession = pathname.startsWith("/chat/");
-	useEffect(() => {
-		if (inSession || inviteAnswered()) return;
-		const timer = window.setTimeout(() => setInvite(true), 1200);
-		return () => window.clearTimeout(timer);
-	}, [inSession]);
-
-	const dismissInvite = useCallback(() => {
-		answerInvite();
-		setInvite(false);
-	}, []);
-
 	const api = useMemo<HelpApi>(() => ({ run, openSearch, startTour, completedTours }), [run, openSearch, startTour, completedTours]);
 	const running = tour.status === "running";
 
@@ -262,49 +252,8 @@ export function HelpProvider({ children }: { children: React.ReactNode }) {
 					toggleSidebar={sidebar.toggle}
 				/>
 			)}
-			{invite && !running && !palette.open && !inSession && (
-				<TourInvite onStart={() => startTour(WELCOME_TOUR_ID)} onDismiss={dismissInvite} />
-			)}
+			{/* First start: the innføring (it decides for itself whether to open). */}
+			<OnboardingHost />
 		</HelpContext.Provider>
-	);
-}
-
-/** The first-launch invitation: a small card, not a modal. It takes no
- *  focus and blocks nothing; either button retires it for good.
- *
- *  It sits in the top bar's band, centred: that strip is empty on every
- *  page that shows the invitation (home, fag, hjelp), so the card never
- *  covers a button. The bottom-right corner is taken (the start box's send
- *  button, and the update banner). On narrow windows the bar's own content
- *  reaches the middle, so the card drops just below the bar instead.
- *  lh-no-drag: the band is a window-drag region in the desktop app. */
-function TourInvite({ onStart, onDismiss }: { onStart: () => void; onDismiss: () => void }) {
-	return (
-		<div
-			role="region"
-			aria-label="Omvisning"
-			data-testid="tour-invite"
-			className="lh-no-drag fixed top-[4.25rem] left-1/2 z-40 flex w-max max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-lg border border-border bg-popover py-1.5 pr-1.5 pl-3 font-ui text-sm text-popover-foreground shadow-lg lg:top-2"
-		>
-			<span>
-				<span className="font-medium">Ny her?</span> Ta en omvisning på 1 minutt.
-			</span>
-			<button
-				type="button"
-				onClick={onStart}
-				data-testid="tour-invite-start"
-				className="rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			>
-				Start
-			</button>
-			<button
-				type="button"
-				onClick={onDismiss}
-				data-testid="tour-invite-dismiss"
-				className="rounded-md px-2 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-			>
-				Ikke nå
-			</button>
-		</div>
 	);
 }

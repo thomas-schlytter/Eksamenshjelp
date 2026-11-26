@@ -67,7 +67,7 @@ import { useCallback, useDeferredValue, useEffect, useLayoutEffect, useMemo, use
 import { NotesImportControl, NotesImportErrors, NotesImportNotices, useNotesImport } from "@/components/notes-import.tsx";
 import Link from "next/link";
 import { FileTextIcon, ListTreeIcon, Loader2Icon, SearchIcon, SettingsIcon, WaypointsIcon } from "lucide-react";
-import { incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
+import { ROLE_DISPLAY, incrementalLayout, propositionSessionHref, type GraphCostSummary, type GraphNode, type GraphSnapshot } from "@/src/core";
 import { planCostLabel } from "@/components/usage-format";
 import { GraphCanvasRenderer, type GraphRenderSettings } from "./graph-canvas.ts";
 import { mapClusterColors } from "./cluster-geometry.ts";
@@ -453,8 +453,8 @@ export function GraphCostControl({ costs }: { costs: GraphCostSummary }) {
  */
 function GraphCostPanel({ costs }: { costs: GraphCostSummary }) {
 	const stageRows: [string, GraphCostSummary["stages"]["extraction"]][] = [
-		["Uttrekk", costs.stages.extraction],
-		["Kontroll", costs.stages.audit],
+		[ROLE_DISPLAY.extractor.name, costs.stages.extraction],
+		[ROLE_DISPLAY.auditor.name, costs.stages.audit],
 	];
 	// The displayed figures come from displayCostTotals (naming excluded —
 	// the pill and this panel must agree).

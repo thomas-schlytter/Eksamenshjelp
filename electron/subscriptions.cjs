@@ -14,7 +14,7 @@ const clone = (value) => value === undefined ? undefined : JSON.parse(JSON.strin
 const MESSAGES = {
 	storage: "Den lagrede tilkoblingen kunne ikke leses eller skrives trygt. Åpne appen på nytt, eller koble til på nytt når problemet med innloggingsfila er løst.",
 	login: "Innloggingen ble ikke fullført. Prøv å koble til på nytt.",
-	refresh: "Tilkoblingen kunne ikke fornyes. Prøv igjen, eller koble til på nytt under Leverandører.",
+	refresh: "Tilkoblingen kunne ikke fornyes. Prøv igjen, eller koble til på nytt under «Koble til AI» i innstillingene.",
 	cancel: "Innloggingen ble avbrutt.",
 	unavailable: "Denne abonnementstilkoblingen er ikke tilgjengelig. Koble til på nytt, eller velg selv en annen tilkobling.",
 	background: "Bruk i bakgrunnen er slått av for denne tilkoblingen. Den automatiske oppfølgingen blir stående i køen.",
