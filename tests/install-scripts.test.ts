@@ -147,7 +147,7 @@ describe("site/install.ps1", { skip: hasPwsh ? false : "pwsh is not installed" }
 });
 
 describe("site/install.ps1 text", () => {
-	it("is plain ASCII (irm decodes GitHub Pages' answer without a charset)", () => {
+	it("is plain ASCII (irm may decode the answer without a charset)", () => {
 		const bytes = fs.readFileSync(installPs1);
 		const offending = [...bytes].findIndex((byte) => byte > 0x7e || (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d));
 		assert.equal(offending, -1, `non-ASCII byte at offset ${offending}`);
@@ -164,8 +164,8 @@ describe("setup prompts (site/prompts → site/index.html)", () => {
 		const prompts = renderAll();
 		assert.deepEqual(Object.keys(prompts).sort(), ["claude", "codex"]);
 		for (const text of Object.values(prompts)) {
-			assert.ok(text.includes("curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash"));
-			assert.ok(text.includes("irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex"));
+			assert.ok(text.includes("curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash"));
+			assert.ok(text.includes("irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"));
 			assert.doesNotMatch(text, /\{\{|\}\}/);
 			assert.doesNotMatch(text, /git clone|npm /);
 		}

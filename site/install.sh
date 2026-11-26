@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Eksamenshjelp – installasjon for Mac.
 #
-#   curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash
+#   curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
 #
 # Henter siste utgivelse fra GitHub (én anonym API-forespørsel), laster ned
 # den ferdige appen (arm64-zip, ellers dmg), legger den i /Applications
@@ -127,7 +127,7 @@ main() {
 	local os arch
 	os="${EKSAMENSHJELP_OS:-$(uname -s)}"
 	if [ "$os" != "Darwin" ]; then
-		fail "Dette skriptet er for Mac. På Windows kjører du i PowerShell: irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex"
+		fail "Dette skriptet er for Mac. På Windows kjører du i PowerShell: irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
 	fi
 	arch="$(detect_arch)"
 	if [ "$arch" != "arm64" ]; then

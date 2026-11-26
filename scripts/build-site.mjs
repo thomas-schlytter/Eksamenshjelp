@@ -6,11 +6,11 @@
  * rendered, HTML-escaped text lands between the markers
  *   <!-- prompt:<tool> --> … <!-- /prompt:<tool> -->
  * in site/index.html, so the committed page works as-is (no build step on
- * GitHub Pages) and the page never drifts from the template.
+ * Vercel, see site/vercel.json) and the page never drifts from the template.
  *
  *   node scripts/build-site.mjs           rewrite site/index.html
  *   node scripts/build-site.mjs --check   exit 1 if index.html is stale
- *                                         (the Pages workflow and a test run this)
+ *                                         (a test runs this)
  *
  * When the app gets its own copy of the prompt (src/core/setup-prompts.ts),
  * point this script at that one source instead of keeping two.

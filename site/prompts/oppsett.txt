@@ -4,9 +4,9 @@ Du er i {{verktoy}} og skal sette opp appen Eksamenshjelp for en NTNU-student. F
 
 2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. {{godkjenning}}
 Mac:
-curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash
+curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
 Windows:
-powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
 Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
 
 3. Spør studenten: «Hvilke fag har du denne eksamensperioden? Skriv fagkodene, for eksempel TMA4100 TDT4110.»

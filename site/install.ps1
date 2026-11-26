@@ -1,6 +1,6 @@
 # Eksamenshjelp - installasjon for Windows.
 #
-#   irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex
+#   irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex
 #
 # Henter siste utgivelse fra GitHub (en anonym API-foresporsel), laster ned
 # NSIS-installeren (x64), fjerner nedlastingsmerket (Unblock-File; appen er
@@ -9,7 +9,7 @@
 # flere ganger: har du nyeste versjon, lastes ingenting ned.
 #
 # Filen er bevisst ren ASCII: irm dekoder svaret uten tegnsett-informasjon
-# fra GitHub Pages, og Windows PowerShell 5.1 ville da odelagt norske tegn.
+# fra en webserver, og Windows PowerShell 5.1 ville da odelagt norske tegn.
 # Bokstavene ae/oe/aa bygges derfor med [char] under.
 #
 # Miljovariabler for testing:
@@ -37,7 +37,7 @@ function Install-Eksamenshjelp {
 		if ($PSVersionTable.PSEdition -eq 'Core' -and -not $IsWindows) { $os = 'Other' } else { $os = 'Windows' }
 	}
 	if ($os -ne 'Windows') {
-		throw "Dette skriptet er for Windows. P$aa Mac kj${oe}rer du i Terminal: curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash"
+		throw "Dette skriptet er for Windows. P$aa Mac kj${oe}rer du i Terminal: curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash"
 	}
 	$arch = $env:EKSAMENSHJELP_ARCH
 	if (-not $arch) {

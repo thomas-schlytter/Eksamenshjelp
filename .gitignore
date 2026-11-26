@@ -19,3 +19,6 @@ xai-credentials.json*
 
 # dev-fresh launcher scratch (fresh-user sim): disposable per launch
 .fresh-data/
+
+# Vercel CLI link for site/
+.vercel
