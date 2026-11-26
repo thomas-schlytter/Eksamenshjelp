@@ -32,11 +32,13 @@ const { attachSubscriptionChild, subscriptionControl } = require("./subscription
 const { desktopAPIHeaders } = require("./desktop-api.cjs");
 const { openWebSubscriptionBrowser } = require("./web-subscription-browser.cjs");
 const { LATEST_RELEASE_API, readLatestRelease } = require("./release-check.cjs");
+const { createUpdateInstaller, installTargetFor } = require("./self-update.cjs");
 const { randomBytes } = require("node:crypto");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
+const os = require("node:os");
 const path = require("node:path");
 
 // Mirrors SIDEBAR_AUTOCLOSE in components/sidebar.tsx — keep in sync (the
@@ -444,10 +446,17 @@ const ZOOM_LADDER = [0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
  * Squirrel.Mac cannot install updates and electron-updater is no longer
  * used. Instead the shell reads GitHub's public API for the latest
  * release (electron/release-check.cjs). When its tag is newer than
- * app.getVersion(), the status carries the version and the release page;
- * the renderer offers «Ny versjon X – last ned», which opens that page in
- * the system browser (setWindowOpenHandler → shell.openExternal). Nothing
- * is downloaded or installed by the app.
+ * app.getVersion(), the status carries the version and the release page.
+ *
+ * «Oppdater nå» (owner 2026-11-26): on macOS arm64 and Windows x64
+ * (packaged, not the dev shell) `canInstall` is true and the renderer's
+ * button calls "lh:update:install": electron/self-update.cjs downloads the
+ * right file, checks its sha512 against latest*.yml, hands off to a
+ * detached helper (mac) or the silent NSIS installer (Windows) and quits.
+ * Progress rides the same "lh:update-status" snapshot as `install`
+ * ({phase: "downloading", percent} | {phase: "installing"} |
+ * {phase: "failed", message}). Elsewhere the renderer keeps «Last ned»,
+ * which opens the release page in the system browser.
  *
  * Hard rules:
  *  - DEV NEVER CHECKS: !app.isPackaged reports "disabled".
@@ -462,29 +471,53 @@ let releaseCheckEnabled = false; // packaged builds only
 let releaseCheckInFlight = null;
 // Observational only: this snapshot NEVER gates a check.
 // The revision lets late subscribers reject an older in-flight IPC snapshot.
-let updateState = { status: "idle", version: null, url: null, revision: 0 };
+let updateState = { status: "idle", version: null, url: null, revision: 0, canInstall: false, install: null };
+let updateInstaller = null; // «Oppdater nå»: mac arm64 / Windows x64, packaged only
+
+function publishUpdateState(next) {
+	updateState = { ...next, revision: updateState.revision + 1 };
+	for (const win of BrowserWindow.getAllWindows()) {
+		try {
+			win.webContents.send("lh:update-status", updateState);
+		} catch {
+			/* window mid-teardown — snapshot retrieval covers a later load */
+		}
+	}
+}
 
 function reportUpdateStatus(status, version = null, url = null) {
 	try {
 		// A failed or repeated check must not hide a newer version already
 		// found; only a new "available" answer replaces it.
 		if (updateState.status === "available" && status !== "available") return;
-		updateState = {
+		// A running download/install owns the snapshot until it fails or quits.
+		if (updateState.install && updateState.install.phase !== "failed") return;
+		publishUpdateState({
 			status,
 			version: typeof version === "string" ? version : null,
 			url: typeof url === "string" ? url : null,
-			revision: updateState.revision + 1,
-		};
-		for (const win of BrowserWindow.getAllWindows()) {
-			try {
-				win.webContents.send("lh:update-status", updateState);
-			} catch {
-				/* window mid-teardown — snapshot retrieval covers a later load */
-			}
-		}
+			canInstall: updateInstaller !== null,
+			install: null,
+		});
 	} catch {
 		/* Status reporting must never interrupt the check. */
 	}
+}
+
+/** Install progress rides the "available" snapshot (version + page stay). */
+function reportInstallStatus(install) {
+	try {
+		publishUpdateState({ ...updateState, install });
+	} catch {
+		/* Status reporting must never interrupt the install. */
+	}
+}
+
+/** Never rejects; outcomes arrive as install status. Only a found release
+ * on a machine that can install it starts anything. */
+function installUpdate() {
+	if (!updateInstaller || updateState.status !== "available") return Promise.resolve();
+	return updateInstaller.install();
 }
 
 /** Read the SAME data directory passed to the packaged server. Only an
@@ -547,6 +580,29 @@ function setupReleaseCheck() {
 		return;
 	}
 	releaseCheckEnabled = true;
+	const target = installTargetFor({ platform: process.platform, arch: process.arch, packaged: app.isPackaged, devUrl: process.env.LH_DEV_URL });
+	if (!target) return;
+	try {
+		updateInstaller = createUpdateInstaller({
+			target,
+			currentVersion: app.getVersion(),
+			apiUrl: process.env.LH_UPDATE_FEED || LATEST_RELEASE_API,
+			feedUrl: process.env.LH_UPDATE_FEED || null,
+			userAgent: `${PRODUCT_NAME}/${app.getVersion()}`,
+			tmpRoot: os.tmpdir(),
+			execPath: process.execPath,
+			pid: process.pid,
+			report: reportInstallStatus,
+			quit: () => app.quit(),
+			log,
+		});
+		// Whatever an earlier update left in the temp folder.
+		updateInstaller.cleanup();
+	} catch (err) {
+		updateInstaller = null;
+		log(`update installer unavailable: ${err?.message ?? err}`);
+	}
+	updateState = { ...updateState, canInstall: updateInstaller !== null };
 }
 
 /** One result surface for manual checks. Preload buffers the navigation
@@ -739,6 +795,10 @@ async function main() {
 	ipcMain.handle("lh:update:check", (event) => {
 		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
 		return checkForUpdates({ manual: true });
+	});
+	ipcMain.handle("lh:update:install", (event) => {
+		if (!trustedAppWindows.has(BrowserWindow.fromWebContents(event.sender)) || !trustedSender(event, new URL(url).origin, BrowserWindow)) throw new Error("Untrusted desktop request.");
+		return installUpdate();
 	});
 	// Fokus (fase 7b): the timer's «Pause!» / «Pausen er over» as a system
 	// notification. Plain short strings only; silent (the app plays its own

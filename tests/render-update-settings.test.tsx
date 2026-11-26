@@ -35,7 +35,7 @@ function deferred<T>() {
 
 function bridge(initial = state(), snapshot = Promise.resolve(initial)) {
 	const listeners = new Set<(value: UpdateState) => void>();
-	const calls = { check: 0, get: 0 };
+	const calls = { check: 0, get: 0, install: 0 };
 	let onOpen: ((section: string) => void) | null = null;
 	let checkFailure: Error | null = null;
 	window.lh = {
@@ -43,6 +43,7 @@ function bridge(initial = state(), snapshot = Promise.resolve(initial)) {
 		getUpdateState: () => { calls.get++; return snapshot; },
 		onUpdateStatus: cb => { listeners.add(cb); return () => { listeners.delete(cb); }; },
 		checkForUpdates: async () => { calls.check++; if (checkFailure) throw checkFailure; },
+		installUpdate: async () => { calls.install++; },
 		onOpenSettings: cb => { onOpen = cb; return () => { onOpen = null; }; },
 	};
 	return {
@@ -150,6 +151,45 @@ describe("General update rows", () => {
 		assert.equal(link.getAttribute("target"), "_blank");
 		assert.equal(q(host, "update-status"), null);
 		assert.equal(q(host, "update-restart"), null, "no restart state remains");
+		assert.equal(q(host, "update-install"), null, "no «oppdater nå» without canInstall (Linux, dev)");
+	});
+
+	it("where the shell can install, the row offers «oppdater nå» and shows progress, then a failure with «Last ned selv»", async () => {
+		const b = bridge(); const host = await mount(<UpdateSettings {...props} />);
+		await b.push(available({ canInstall: true, revision: 1 }));
+		assert.equal(q(host, "update-download"), null, "no «last ned» link");
+		const button = q(host, "update-install") as HTMLButtonElement;
+		assert.equal(button.textContent, "Ny versjon 0.5.0 – oppdater nå");
+		assert.equal(button.disabled, false);
+		await click(button); assert.equal(b.calls.install, 1);
+		await b.push(available({ canInstall: true, install: { phase: "downloading", percent: 45 }, revision: 2 }));
+		assert.equal(q(host, "update-status")!.textContent, "Laster ned … 45 %");
+		assert.equal((q(host, "update-install") as HTMLButtonElement).disabled, true);
+		assert.equal(q(host, "update-install")!.getAttribute("aria-busy"), "true");
+		await b.push(available({ canInstall: true, install: { phase: "installing" }, revision: 3 }));
+		assert.equal(q(host, "update-status")!.textContent, "Installerer …");
+		await b.push(available({ canInstall: true, install: { phase: "failed", message: "Nedlastingen stemte ikke med utgivelsen, så den ble ikke installert." }, revision: 4 }));
+		assert.equal(q(host, "update-status")!.textContent, "Nedlastingen stemte ikke med utgivelsen, så den ble ikke installert.");
+		assert.equal(q(host, "update-install"), null);
+		const manual = q(host, "update-manual-download")!;
+		assert.equal(manual.textContent, "Last ned selv");
+		assert.equal(manual.getAttribute("href"), RELEASE);
+		assert.equal(manual.getAttribute("target"), "_blank");
+	});
+
+	it("the banner and Settings show the same progress, and the banner returns for it after being dismissed", async () => {
+		const b = bridge(available({ canInstall: true, revision: 1 }));
+		const host = await mount(<><UpdateSettings {...props} /><UpdateBanner /></>);
+		await click(host.querySelector<HTMLElement>("[aria-label='Lukk oppdateringsvarselet']"));
+		assert.equal(q(host, "update-banner"), null);
+		await click(q(host, "update-install")); assert.equal(b.calls.install, 1);
+		await b.push(available({ canInstall: true, install: { phase: "downloading", percent: 7 }, revision: 2 }));
+		assert.equal(q(host, "update-banner-status")!.textContent, "Laster ned … 7 %");
+		assert.equal(host.querySelector("[aria-label='Lukk oppdateringsvarselet']"), null, "no dismissing mid-install");
+		await b.push(available({ canInstall: true, install: { phase: "failed", message: "Nedlastingen stoppet. Sjekk nettforbindelsen." }, revision: 3 }));
+		await click(host.querySelector<HTMLElement>("[aria-label='Lukk oppdateringsvarselet']"));
+		assert.equal(q(host, "update-banner"), null, "a failure can be dismissed");
+		assert.ok(q(host, "update-manual-download"), "Settings still offers «Last ned selv»");
 	});
 
 	it("an available status without a release page falls back to the check button", async () => {

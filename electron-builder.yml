@@ -184,10 +184,12 @@ linux:
   # Both targets update via electron-updater 6.8.9. AppImage replaces its
   # own file; deb uses dpkg/apt and may request administrator permission.
 publish:
-  # Releases live on Thomas' fork (owner 2026-11-23). The app no longer
-  # self-updates (ad-hoc signed, no Developer ID): electron/main.cjs reads
-  # GitHub's public /releases/latest for this repo and links to the
-  # release page (electron/release-check.cjs — keep owner/repo in sync).
+  # Releases live on Thomas' fork (owner 2026-11-23). No electron-updater
+  # (ad-hoc signed, no Developer ID): electron/main.cjs reads GitHub's
+  # public /releases/latest for this repo (electron/release-check.cjs —
+  # keep owner/repo in sync), and «Oppdater nå» (electron/self-update.cjs)
+  # installs the arm64 mac zip / x64 setup.exe checked against
+  # latest-mac.yml / latest.yml. Keep those file names stable.
   # REQUIRES THE REPO TO BE PUBLIC — the anonymous API cannot see a
   # private repo, and a token baked into the app would be a leak.
   # desktop:dist passes no --publish flag, so builds never upload;

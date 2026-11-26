@@ -90,6 +90,8 @@ declare global {
 			getUpdateState?: () => Promise<UpdateState>;
 			/** Explicit manual release check (GitHub), even with automatic checks off. */
 			checkForUpdates?: () => Promise<void>;
+			/** «Oppdater nå»: download, verify and install the found release (canInstall only). */
+			installUpdate?: () => Promise<void>;
 			onOpenSettings?: (cb: (section: string) => void) => () => void;
 			/** Fokus (fase 7b): a system notification through Electron. */
 			notify?: (title: string, body: string) => Promise<boolean>;
