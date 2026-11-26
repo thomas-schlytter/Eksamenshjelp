@@ -44,9 +44,9 @@ export function FlashcardsCard({ code, view, starting = false, onMake }: {
 	const deck = Boolean(view?.deck && stats && stats.total > 0);
 	return (
 		<section data-testid="course-flashcards" aria-labelledby="flashcards-title" className="flex flex-col gap-3 rounded-lg border bg-card p-5">
-			<div className="flex items-baseline justify-between gap-3">
+			<div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5">
 				<h2 id="flashcards-title" className="font-title text-xl font-semibold tracking-tight">Spørsmålskort</h2>
-				{deck && <span className="font-ui text-sm tabular-nums text-muted-foreground" data-testid="flashcards-total">{stats!.total} kort</span>}
+				{deck && <span className="shrink-0 whitespace-nowrap font-ui text-sm tabular-nums text-muted-foreground" data-testid="flashcards-total">{stats!.total} kort</span>}
 			</div>
 			{view === null ? (
 				<p className="font-ui text-sm text-muted-foreground">Laster …</p>
