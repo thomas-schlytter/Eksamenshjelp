@@ -235,6 +235,8 @@ function startServer(port) {
 					PORT: String(port),
 					HOSTNAME: "127.0.0.1", // the server defaults to 0.0.0.0 — never
 					LH_DATA_DIR: DATA_DIR(),
+					// «Meld feil» reports the version the student actually runs.
+					LH_APP_VERSION: app.getVersion(),
 					// The auth/keys store — the child reads AND writes this file itself
 					// (no env injection anymore: a spawn-time copy would shadow every
 					// settings-page key change until restart; env wins over file).

@@ -71,6 +71,8 @@ export * from "./session-wrap.ts";
 export * from "./session-topics.ts";
 // Hints on request for tasks without authored hints (the Hint button).
 export * from "./task-hints.ts";
+// «Meld feil» (2026-11-26): preview + send to the website's /api/feil.
+export { buildFeedbackPayload, collectFeedbackDetails, sendFeedback } from "./feedback.ts";
 // «Legg inn besvarelse»: the /api/attachments service (pasted images → files).
 export * from "./attachments.ts";
 // Prøveeksamen (fase 6): the /api/mock-exams service and the results read API.

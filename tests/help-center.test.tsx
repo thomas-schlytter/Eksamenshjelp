@@ -13,6 +13,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { HELP_ARTICLES, HELP_CATEGORIES } from "../components/help/content.ts";
 import { HelpCenter } from "../components/help/help-center.tsx";
 import { HelpContext } from "../components/help/help-context.ts";
+import { feedbackText } from "../components/help/report-problem.tsx";
 import { TOURS } from "../components/help/tours.ts";
 
 function escapeHtml(text: string): string {
@@ -26,6 +27,20 @@ describe("HelpCenter (static render)", () => {
 		assert.ok(html.includes('data-testid="help-center"'));
 		assert.ok(html.includes("<h1"));
 		assert.ok(html.includes("Hjelpesenter"));
+	});
+
+	it("shows «Meld feil» closed under the search field", () => {
+		assert.ok(html.includes('data-testid="report-problem"'));
+		assert.ok(html.includes("Noe som ikke virker?"));
+		assert.ok(html.includes('data-testid="report-problem-open"'));
+		assert.ok(!html.includes('data-testid="report-problem-message"'), "the form opens only on click");
+		assert.ok(html.indexOf('data-testid="help-search"') < html.indexOf('data-testid="report-problem"'));
+	});
+
+	it("the copy fallback holds the message and the details", () => {
+		const text = feedbackText(" Hei ", "kari@stud.ntnu.no", { info: { version: "0.7.3", os: "macOS", provider: "claude" }, log: "linje" });
+		assert.equal(text, "Hva skjedde:\nHei\n\nSvar til: kari@stud.ntnu.no\n\nVersjon: 0.7.3\nSystem: macOS\nAI: claude\n\nLogg:\nlinje");
+		assert.equal(feedbackText("Hei", "", null), "Hva skjedde:\nHei");
 	});
 
 	it("has the search field on top", () => {

@@ -95,7 +95,7 @@ async function serverLaunch(platform: string) {
 	const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
 	const context = {
 		require: (id: string) => id === "electron" ? {
-			app: { setName() {}, setPath() {}, requestSingleInstanceLock: () => false, quit() {}, getPath: () => "/fixture/user-data" },
+			app: { setName() {}, setPath() {}, requestSingleInstanceLock: () => false, quit() {}, getPath: () => "/fixture/user-data", getVersion: () => "0.0.0-test" },
 		} : id === "node:child_process" ? {
 			spawn(binary: string, args: string[], options: typeof launch.options) {
 				launch = JSON.parse(JSON.stringify({ binary, args, options }));

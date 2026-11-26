@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, ChevronDown, Compass, Search } from "lucide-react";
 import { findArticle, HELP_ARTICLES, HELP_CATEGORIES } from "./content.ts";
 import { useHelp } from "./help-context.ts";
+import { ReportProblem } from "./report-problem.tsx";
 import { articleIndex, tourIndex } from "./palette-model.ts";
 import { search } from "./search.ts";
 import { takePendingArticle } from "./storage.ts";
@@ -103,6 +104,8 @@ export function HelpCenter() {
 						className={`h-12 w-full rounded-lg border border-input bg-card pr-4 pl-11 text-base shadow-xs outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50`}
 					/>
 				</div>
+
+				<ReportProblem />
 
 				{hits ? (
 					<section aria-label="Søkeresultater" aria-live="polite" className="mt-8" data-testid="help-results">

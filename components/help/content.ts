@@ -643,6 +643,17 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 
 	// ── Feilsøking ──────────────────────────────────────────────────────────
 	{
+		id: "melde-feil",
+		category: "feilsoking",
+		question: "Jeg har funnet en feil. Hvor melder jeg fra?",
+		answer: [
+			"Øverst i hjelpesenteret står kortet «Noe som ikke virker?». Trykk «Meld feil», skriv hva som skjedde, og trykk Send. Vil du ha svar, kan du legge inn e-posten din.",
+			"Med «Ta med teknisk info» følger versjon, system, hvilken AI du bruker og de siste linjene fra loggen med. Brukernavnet ditt på maskinen tas bort, og under «Se hva som sendes» ser du nøyaktig hva som går.",
+		],
+		keywords: ["meld feil", "feil", "bug", "melde", "rapportere", "tilbakemelding", "ønske", "virker ikke", "kontakt", "support", "si fra"],
+		actions: [{ label: "Meld feil", action: { kind: "route", href: "/hjelp#meld-feil" } }],
+	},
+	{
 		id: "kan-ikke-starte-okt",
 		category: "feilsoking",
 		question: "Jeg får ikke startet en økt. Hva er galt?",
@@ -707,19 +718,10 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
 		category: "feilsoking",
 		question: "Hvordan oppdaterer jeg appen?",
 		answer: [
-			"Skrivebordsappen kan oppdatere seg selv. Under «Generelt» i innstillingene ser du hvilken versjon du har, kan se etter oppdateringer og velge om de skal installeres automatisk.",
+			"Appen ser selv etter nye versjoner og viser et varsel med lenke til nedlastingen. Under «Generelt» i innstillingene ser du hvilken versjon du har, kan se etter oppdateringer selv og slå av den automatiske sjekken.",
 		],
 		keywords: ["oppdatere", "oppdatering", "ny versjon", "versjon", "update"],
 		actions: [{ label: "Åpne «Generelt»", action: { kind: "settings", section: "general" } }],
-	},
-	{
-		id: "melde-feil",
-		category: "feilsoking",
-		question: "Jeg har funnet en feil. Hvor melder jeg fra?",
-		answer: [
-			"Appen har åpen kildekode, og feil og ønsker meldes som saker («Issues») i prosjektet på GitHub. Skriv hva du gjorde, hva du ventet skulle skje, og hva som skjedde i stedet.",
-		],
-		keywords: ["feil", "bug", "melde", "rapportere", "github", "issue", "ønske", "tilbakemelding", "kontakt"],
 	},
 ];
 
