@@ -173,7 +173,7 @@ describe("General update rows", () => {
 		assert.equal(q(host, "update-install"), null);
 		const manual = q(host, "update-manual-download")!;
 		assert.equal(manual.textContent, "Last ned selv");
-		assert.equal(manual.getAttribute("href"), RELEASE);
+		assert.equal(manual.getAttribute("href"), "https://eksamenshjelp-one.vercel.app/oppdater");
 		assert.equal(manual.getAttribute("target"), "_blank");
 	});
 

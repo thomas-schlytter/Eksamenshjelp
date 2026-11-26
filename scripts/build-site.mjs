@@ -22,8 +22,19 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const SITE_DIR = path.join(repoRoot, "site");
 const TEMPLATE = path.join(SITE_DIR, "prompts", "oppsett.txt");
+const UPDATE_TEMPLATE = path.join(SITE_DIR, "prompts", "oppdatering.txt");
 const TOOLS = path.join(SITE_DIR, "prompts", "verktoy.json");
-const INDEX = path.join(SITE_DIR, "index.html");
+
+/**
+ * Every file that carries prompts, with the prompt keys it must hold once
+ * each. The release notes are Markdown (code blocks), so they are not
+ * HTML-escaped; `{{version}}` in them is filled by the release workflow.
+ */
+export const PROMPT_PAGES = [
+	{ file: path.join(SITE_DIR, "index.html"), keys: ["claude", "claude-lh", "codex", "codex-lh"], html: true },
+	{ file: path.join(SITE_DIR, "oppdater.html"), keys: ["oppdater-claude", "oppdater-codex"], html: true },
+	{ file: path.join(repoRoot, ".github", "release-notes.md"), keys: ["oppdater-claude", "oppdater-codex"], html: false },
+];
 
 /**
  * Optional sections: {{#name}} … {{/name}} on their own lines are kept when
@@ -53,44 +64,66 @@ export function escapeHtml(text) {
 	return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
+const FENCE = "```";
+
+/** Only the tool values a template uses (the update prompt needs fewer). */
+function usedValues(template, values) {
+	const names = new Set([...template.matchAll(/\{\{([a-z_]+)\}\}/g)].map((m) => m[1]));
+	return Object.fromEntries(Object.entries(values).filter(([name]) => names.has(name)));
+}
+
 export function renderAll() {
 	const template = fs.readFileSync(TEMPLATE, "utf8");
+	const update = fs.readFileSync(UPDATE_TEMPLATE, "utf8");
 	const tools = JSON.parse(fs.readFileSync(TOOLS, "utf8"));
-	// Each tool twice: plain, and "<tool>-lh" with the LearnHarness step.
+	// Each tool three times: setup, setup with the LearnHarness step, update.
 	return Object.fromEntries(
 		Object.entries(tools).flatMap(([tool, values]) => [
 			[tool, renderPrompt(template, values)],
 			[`${tool}-lh`, renderPrompt(template, values, { learnharness: true })],
+			[`oppdater-${tool}`, renderPrompt(update, usedValues(update, values))],
 		]),
 	);
 }
 
-/** Replace each tool's marked block; every tool needs exactly one block. */
-export function fillIndex(html, prompts) {
+/** Replace each key's marked block; every key needs exactly one block. */
+export function fillIndex(html, prompts, { keys = Object.keys(prompts), escape = true, name = "index.html" } = {}) {
 	let out = html;
-	for (const [tool, text] of Object.entries(prompts)) {
-		const pattern = new RegExp(`(<!-- prompt:${tool} -->)[\\s\\S]*?(<!-- /prompt:${tool} -->)`, "g");
+	for (const key of keys) {
+		const text = prompts[key];
+		if (typeof text !== "string") throw new Error(`build-site: no prompt named ${key}`);
+		const pattern = new RegExp(`(<!-- prompt:${key} -->)[\\s\\S]*?(<!-- /prompt:${key} -->)`, "g");
 		const count = (out.match(pattern) ?? []).length;
-		if (count !== 1) throw new Error(`build-site: expected one prompt:${tool} block in index.html, found ${count}`);
-		out = out.replace(pattern, (_, open, close) => `${open}${escapeHtml(text)}${close}`);
+		if (count !== 1) throw new Error(`build-site: expected one prompt:${key} block in ${name}, found ${count}`);
+		// Markdown pages get the prompt as a fenced block (GitHub adds a copy button).
+		out = out.replace(pattern, (_, open, close) => `${open}${escape ? escapeHtml(text) : `\n\n${FENCE}text\n${text}\n${FENCE}\n\n`}${close}`);
 	}
 	return out;
 }
 
+/** Every prompt page, filled: [{ file, current, filled }]. */
+export function fillAll(prompts = renderAll()) {
+	return PROMPT_PAGES.map((page) => {
+		const current = fs.readFileSync(page.file, "utf8");
+		const filled = fillIndex(current, prompts, { keys: page.keys, escape: page.html, name: path.relative(repoRoot, page.file) });
+		return { file: page.file, current, filled };
+	});
+}
+
 function main() {
 	const check = process.argv.includes("--check");
-	const html = fs.readFileSync(INDEX, "utf8");
-	const filled = fillIndex(html, renderAll());
+	const pages = fillAll();
+	const stale = pages.filter((page) => page.filled !== page.current);
 	if (check) {
-		if (filled !== html) {
-			console.error("site/index.html is out of date with site/prompts/. Run: node scripts/build-site.mjs");
+		if (stale.length > 0) {
+			for (const page of stale) console.error(`${path.relative(repoRoot, page.file)} is out of date with site/prompts/. Run: node scripts/build-site.mjs`);
 			process.exit(1);
 		}
-		console.log("site/index.html matches site/prompts/.");
+		console.log("Every prompt page matches site/prompts/.");
 		return;
 	}
-	if (filled !== html) fs.writeFileSync(INDEX, filled);
-	console.log(filled === html ? "site/index.html already up to date." : "site/index.html updated.");
+	for (const page of stale) fs.writeFileSync(page.file, page.filled);
+	console.log(stale.length ? `Updated: ${stale.map((page) => path.relative(repoRoot, page.file)).join(", ")}` : "Every prompt page already up to date.");
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) main();

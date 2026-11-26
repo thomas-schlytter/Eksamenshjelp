@@ -71,14 +71,23 @@ jobs:
     steps:
       # This job succeeds without creating anything on manual rehearsals.
       # Preparing once avoids the publisher's list-miss/create race between OS jobs.
+      # The release page is where 0.7.2 and every failed «Oppdater nå» lands:
+      # it opens with «Slik oppdaterer du» (.github/release-notes.md).
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push'
+        with:
+          sparse-checkout: .github/release-notes.md
+          sparse-checkout-cone-mode: false
       - name: Create or reuse the tag's draft
         if: github.event_name == 'push'
         uses: actions/github-script@v9
         with:
           script: |
+            const fs = require("node:fs");
             const {owner, repo} = context.repo;
             const tag = context.ref.replace(/^refs\/tags\//, "");
             const version = tag.slice(1);
+            const body = fs.readFileSync(".github/release-notes.md", "utf8").replaceAll("{{version}}", version);
             const releases = await github.paginate(github.rest.repos.listReleases, {
               owner, repo, per_page: 100,
             });
@@ -91,11 +100,12 @@ jobs:
               if (!matches[0].draft) {
                 throw new Error(`${tag} is already published; refusing to modify it.`);
               }
+              await github.rest.repos.updateRelease({owner, repo, release_id: matches[0].id, body});
               core.info(`Reusing draft ${matches[0].id} for ${tag}`);
               return;
             }
             const {data} = await github.rest.repos.createRelease({
-              owner, repo, tag_name: tag, name: version, draft: true,
+              owner, repo, tag_name: tag, name: version, draft: true, body,
             });
             core.info(`Created draft ${data.id} for ${tag}`);
 

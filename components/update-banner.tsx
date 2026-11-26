@@ -19,7 +19,7 @@
 import { useState } from "react";
 import { XIcon } from "lucide-react";
 import {
-	availableRelease, installBusy, installStatusText, startInstall, useUpdateState, type AvailableRelease,
+	availableRelease, installBusy, installStatusText, MANUAL_UPDATE_URL, startInstall, useUpdateState, type AvailableRelease,
 } from "@/components/settings/update-settings.tsx";
 
 const ACTION = "rounded-md bg-accent px-3 py-1.5 text-sm font-medium transition-colors hover:bg-accent/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -28,8 +28,8 @@ const ACTION = "rounded-md bg-accent px-3 py-1.5 text-sm font-medium transition-
 export function UpdateBannerView({ release, onInstall, onDismiss }: { release: AvailableRelease; onInstall: () => void; onDismiss: () => void }) {
 	const busy = installBusy(release.install);
 	const failed = release.install?.phase === "failed";
-	const link = (testid: string, text: string) => (
-		<a href={release.url} target="_blank" rel="noopener noreferrer" data-testid={testid} className={ACTION}>
+	const link = (testid: string, text: string, href: string = release.url) => (
+		<a href={href} target="_blank" rel="noopener noreferrer" data-testid={testid} className={ACTION}>
 			{text}
 		</a>
 	);
@@ -42,7 +42,7 @@ export function UpdateBannerView({ release, onInstall, onDismiss }: { release: A
 				{installStatusText(release.install) ?? `Ny versjon ${release.version}`}
 			</p>
 			{failed
-				? link("update-banner-manual-download", "Last ned selv")
+				? link("update-banner-manual-download", "Last ned selv", MANUAL_UPDATE_URL)
 				: busy
 					? null
 					: release.canInstall

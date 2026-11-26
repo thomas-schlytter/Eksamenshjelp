@@ -114,6 +114,13 @@ function Install-Eksamenshjelp {
 		}
 		# Ikke signert: fjern nedlastingsmerket, saa SmartScreen ikke stopper installeren.
 		Unblock-File -Path $setup
+		# En aapen app laaser filene: lukk den pent, og tving den etter 10 sekunder.
+		if (Get-Process -Name 'Eksamenshjelp' -ErrorAction SilentlyContinue) {
+			Write-Host "Lukker Eksamenshjelp f${oe}r oppdateringen ..."
+			Get-Process -Name 'Eksamenshjelp' -ErrorAction SilentlyContinue | ForEach-Object { $_.CloseMainWindow() | Out-Null }
+			for ($i = 0; $i -lt 10 -and (Get-Process -Name 'Eksamenshjelp' -ErrorAction SilentlyContinue); $i++) { Start-Sleep -Seconds 1 }
+			Get-Process -Name 'Eksamenshjelp' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+		}
 		Write-Host "Installerer ... Viser Windows 'Windows beskyttet PC-en din', trykk 'Mer informasjon' og 'Kj${oe}r likevel'."
 		$proc = Start-Process -FilePath $setup -ArgumentList '/S' -Wait -PassThru
 		Remove-Item -Path $setup -Force -ErrorAction SilentlyContinue

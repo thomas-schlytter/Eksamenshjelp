@@ -1,0 +1,12 @@
+Du er i {{verktoy}} og skal oppdatere appen Eksamenshjelp til nyeste versjon for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg oppdaterer Eksamenshjelp. Fagene, chattene og flammen din blir med. Du må godkjenne én kommando.»
+
+2. Oppdater appen med ett kommando-kall. Det lukker appen hvis den er åpen, laster ned nyeste versjon fra GitHub og installerer den over den gamle. {{godkjenning}}
+Mac:
+curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Ferdig. Eksamenshjelp er oppdatert.»

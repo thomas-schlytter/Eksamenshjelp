@@ -14,7 +14,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
 
-import { fillIndex, renderAll, renderPrompt } from "../scripts/build-site.mjs";
+import { fillAll, renderAll, renderPrompt } from "../scripts/build-site.mjs";
 
 const repoRoot = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const installSh = path.join(repoRoot, "site", "install.sh");
@@ -155,14 +155,27 @@ describe("site/install.ps1 text", () => {
 });
 
 describe("setup prompts (site/prompts → site/index.html)", () => {
-	it("index.html carries exactly the rendered prompts", () => {
-		const html = fs.readFileSync(path.join(repoRoot, "site", "index.html"), "utf8");
-		assert.equal(fillIndex(html, renderAll()), html, "run: node scripts/build-site.mjs");
+	it("index.html, oppdater.html and the release notes carry exactly the rendered prompts", () => {
+		for (const page of fillAll()) assert.equal(page.filled, page.current, `${page.file} is stale — run: node scripts/build-site.mjs`);
+	});
+
+	it("the update prompt only reinstalls, and the release notes are ready for the workflow", () => {
+		const prompts = renderAll();
+		for (const tool of ["claude", "codex"]) {
+			const text = prompts[`oppdater-${tool}`];
+			assert.match(text, /oppdatere appen Eksamenshjelp/);
+			assert.doesNotMatch(text, /Canvas|FAGKODE|LearnHarness/, "no setup steps in the update prompt");
+		}
+		const notes = fs.readFileSync(path.join(repoRoot, ".github", "release-notes.md"), "utf8");
+		assert.match(notes, /^## Slik oppdaterer du/);
+		assert.match(notes, /releases\/download\/v\{\{version\}\}\/Eksamenshjelp-\{\{version\}\}-arm64\.dmg/);
+		assert.match(notes, /releases\/download\/v\{\{version\}\}\/Eksamenshjelp-\{\{version\}\}-x64-setup\.exe/);
+		assert.match(notes, /```text\nDu er i Claude Code og skal oppdatere/);
 	});
 
 	it("each prompt runs exactly the one install command per OS", () => {
 		const prompts = renderAll();
-		assert.deepEqual(Object.keys(prompts).sort(), ["claude", "claude-lh", "codex", "codex-lh"]);
+		assert.deepEqual(Object.keys(prompts).sort(), ["claude", "claude-lh", "codex", "codex-lh", "oppdater-claude", "oppdater-codex"]);
 		for (const text of Object.values(prompts)) {
 			assert.ok(text.includes("curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash"));
 			assert.ok(text.includes("irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"));

@@ -126,12 +126,17 @@ export function AboutSettings({ version = APP_VERSION, homepage = HOMEPAGE }: { 
 	);
 }
 
+/** Where «Last ned selv» goes after a failed «Oppdater nå»: the website's
+ *  plain update page (copy-paste prompt or one download button), not the
+ *  GitHub release page with its eleven files. */
+export const MANUAL_UPDATE_URL = "https://eksamenshjelp-one.vercel.app/oppdater";
+
 /** The row's control for a found release: «oppdater nå» where the shell
  * installs itself, the release page elsewhere and after a failed install. */
 export function ReleaseAction({ release, onInstall = startInstall }: { release: AvailableRelease; onInstall?: () => void }) {
-	const link = (testid: string, text: string) => (
+	const link = (testid: string, text: string, href: string = release.url) => (
 		<a
-			href={release.url}
+			href={href}
 			target="_blank"
 			rel="noopener noreferrer"
 			data-testid={testid}
@@ -140,7 +145,7 @@ export function ReleaseAction({ release, onInstall = startInstall }: { release: 
 			{text}
 		</a>
 	);
-	if (release.install?.phase === "failed") return link("update-manual-download", "Last ned selv");
+	if (release.install?.phase === "failed") return link("update-manual-download", "Last ned selv", MANUAL_UPDATE_URL);
 	if (!release.canInstall) return link("update-download", `Ny versjon ${release.version} – last ned`);
 	const busy = installBusy(release.install);
 	return (

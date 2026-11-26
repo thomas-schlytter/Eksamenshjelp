@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oppdater Eksamenshjelp</title>
+<meta name="description" content="Oppdater Eksamenshjelp til nyeste versjon. Fagene, chattene og flammen din blir med.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='6' fill='%231C2B4A'/%3E%3Crect x='9' y='9' width='16' height='3.4' rx='1.7' fill='%23F5F1E8'/%3E%3Crect x='9' y='15.3' width='11' height='3.4' rx='1.7' fill='%23F5F1E8'/%3E%3Crect x='9' y='21.6' width='16' height='3.4' rx='1.7' fill='%23F5F1E8'/%3E%3Ccircle cx='24' cy='17' r='2.4' fill='%23C9A24A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Sora:wght@500;600;700&amp;display=swap" rel="stylesheet">
+<style>
+:root{
+	--bg:#F7F7F4;--card:#FFFFFF;--soft:#F4F4F1;--line:#E5E5E0;--input:#D6D6D0;
+	--ink:#1A1F2B;--muted:#6F6A5E;--navy:#1C2B4A;--navy-ink:#F5F1E8;
+	--gold:#C9A24A;--green:#2F7A57;
+	--r-card:6px;--r-btn:5px;--r-chip:4px;
+	--head:"Sora",system-ui,sans-serif;--body:"Inter",system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);-webkit-font-smoothing:antialiased}
+a{color:var(--navy)}
+h1,h2,h3{font-family:var(--head);letter-spacing:-.02em;margin:0}
+:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+.wrap{max-width:640px;margin:0 auto;padding:0 20px}
+.top{border-bottom:1px solid var(--line);background:var(--card)}
+.nav{display:flex;align-items:center;justify-content:space-between;height:64px;max-width:1200px;margin:0 auto;padding:0 20px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font:600 18px var(--head)}
+.nav .home{font:500 14px var(--body);text-decoration:none;color:var(--ink)}
+main.wrap{padding-top:56px;padding-bottom:72px}
+h1{font-size:clamp(32px,5vw,44px);line-height:1.08;font-weight:600}
+.sub{margin:12px 0 0;color:var(--muted);font-size:17px}
+.note{margin:28px 0 0;padding:14px 16px;background:var(--card);border:1px solid var(--line);border-left:3px solid var(--gold);border-radius:var(--r-card);font-size:15px}
+h2{margin:40px 0 0;font-size:20px;font-weight:600}
+.lead{margin:4px 0 0;color:var(--muted);font-size:15px}
+.choose{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:4px;margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card)}
+.choose button{font:600 15px var(--body);height:46px;border:0;border-radius:var(--r-btn);background:transparent;color:var(--muted);cursor:pointer}
+.choose button[aria-selected="true"]{background:var(--navy);color:var(--navy-ink)}
+.steps{list-style:none;margin:14px 0 0;padding:0;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card)}
+.steps li{display:flex;align-items:center;gap:14px;padding:14px 16px;border-top:1px solid var(--line)}
+.steps li:first-child{border-top:0}
+.num{flex:none;width:28px;height:28px;border-radius:var(--r-chip);background:var(--soft);display:grid;place-items:center;font:600 14px var(--head);color:var(--navy)}
+.step-text{flex:1;min-width:0;font-size:15px}
+.step-text small{display:block;color:var(--muted);font-size:13px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:40px;padding:0 16px;border-radius:var(--r-btn);font:600 14px var(--body);text-decoration:none;cursor:pointer;white-space:nowrap}
+.btn-primary{background:var(--navy);color:var(--navy-ink);border:0}
+.btn-ghost{background:var(--card);color:var(--navy);border:1px solid var(--input)}
+.status{min-height:20px;margin:8px 2px 0;font-size:13px;color:var(--green);font-weight:600}
+details{margin-top:6px;font-size:13px;color:var(--muted)}
+summary{cursor:pointer}
+pre{white-space:pre-wrap;max-height:260px;overflow:auto;background:var(--soft);border:1px solid var(--line);border-radius:var(--r-btn);padding:12px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink)}
+.panel[hidden]{display:none}
+.manual{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:18px 20px}
+.manual .row{display:flex;flex-wrap:wrap;gap:10px}
+.manual ol{margin:14px 0 0;padding-left:20px;font-size:15px}
+.manual li{margin-top:6px}
+.manual li small{display:block;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+<header class="top">
+	<div class="nav">
+		<a class="brand" href="/">
+			<svg width="30" height="30" viewBox="0 0 34 34" aria-hidden="true"><rect width="34" height="34" rx="6" fill="#1C2B4A"/><rect x="9" y="9" width="16" height="3.4" rx="1.7" fill="#F5F1E8"/><rect x="9" y="15.3" width="11" height="3.4" rx="1.7" fill="#F5F1E8"/><rect x="9" y="21.6" width="16" height="3.4" rx="1.7" fill="#F5F1E8"/><circle cx="24" cy="17" r="2.4" fill="#C9A24A"/></svg>
+			Eksamenshjelp
+		</a>
+		<a class="home" href="/">Til forsiden</a>
+	</div>
+</header>
+
+<main class="wrap">
+	<h1>Oppdater Eksamenshjelp</h1>
+	<p class="sub">Fagene, chattene og flammen din blir med.</p>
+
+	<p class="note"><b>Har du 0.7.3 eller nyere?</b> Trykk «Oppdater nå» i appen. Den gjør alt selv.</p>
+
+	<h2>Enklest: la AI-en gjøre det</h2>
+	<p class="lead">Samme måte som da du installerte appen.</p>
+
+	<div class="choose" role="tablist" aria-label="Hvilken AI har du?">
+		<button type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Jeg har Claude</button>
+		<button type="button" role="tab" id="tab-codex" aria-controls="panel-codex" aria-selected="false" tabindex="-1">Jeg har ChatGPT</button>
+	</div>
+
+	<div class="panel" id="panel-claude" role="tabpanel" aria-labelledby="tab-claude">
+		<ol class="steps">
+			<li><span class="num">1</span><span class="step-text">Åpne Claude-appen og fanen <b>Code</b></span></li>
+			<li><span class="num">2</span><span class="step-text">Kopier og lim inn, trykk Enter<small>Godkjenn kommandoen når Claude spør.</small></span><button type="button" class="btn btn-primary copy" data-target="prompt-claude" data-status="status-claude"><span class="label">Kopier</span></button></li>
+		</ol>
+		<p class="status" id="status-claude" role="status" aria-live="polite"></p>
+		<details><summary>Se hva som limes inn</summary>
+		<pre id="prompt-claude"><!-- prompt:oppdater-claude -->Du er i Claude Code og skal oppdatere appen Eksamenshjelp til nyeste versjon for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg oppdaterer Eksamenshjelp. Fagene, chattene og flammen din blir med. Du må godkjenne én kommando.»
+
+2. Oppdater appen med ett kommando-kall. Det lukker appen hvis den er åpen, laster ned nyeste versjon fra GitHub og installerer den over den gamle. Studenten må godkjenne kommandoen når Claude spør.
+Mac:
+curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Ferdig. Eksamenshjelp er oppdatert.»<!-- /prompt:oppdater-claude --></pre>
+		</details>
+	</div>
+
+	<div class="panel" id="panel-codex" role="tabpanel" aria-labelledby="tab-codex" hidden>
+		<ol class="steps">
+			<li><span class="num">1</span><span class="step-text">Åpne Codex og start en ny oppgave</span></li>
+			<li><span class="num">2</span><span class="step-text">Kopier og lim inn, trykk Enter<small>Godkjenn kommandoen når Codex spør.</small></span><button type="button" class="btn btn-primary copy" data-target="prompt-codex" data-status="status-codex"><span class="label">Kopier</span></button></li>
+		</ol>
+		<p class="status" id="status-codex" role="status" aria-live="polite"></p>
+		<details><summary>Se hva som limes inn</summary>
+		<pre id="prompt-codex"><!-- prompt:oppdater-codex -->Du er i Codex og skal oppdatere appen Eksamenshjelp til nyeste versjon for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg oppdaterer Eksamenshjelp. Fagene, chattene og flammen din blir med. Du må godkjenne én kommando.»
+
+2. Oppdater appen med ett kommando-kall. Det lukker appen hvis den er åpen, laster ned nyeste versjon fra GitHub og installerer den over den gamle. Kommandoen trenger nettverk og skriver utenfor arbeidsmappen, så be om å kjøre den utenfor sandkassen. Studenten må godkjenne den.
+Mac:
+curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Ferdig. Eksamenshjelp er oppdatert.»<!-- /prompt:oppdater-codex --></pre>
+		</details>
+	</div>
+
+	<h2>Uten AI</h2>
+	<div class="manual">
+		<div class="row" id="downloads">
+			<a class="btn btn-primary" id="dl-mac" href="https://github.com/thomas-schlytter/Eksamenshjelp/releases/latest">Last ned for Mac</a>
+			<a class="btn btn-ghost" id="dl-win" href="https://github.com/thomas-schlytter/Eksamenshjelp/releases/latest">Last ned for Windows</a>
+		</div>
+		<ol>
+			<li>Lukk Eksamenshjelp.</li>
+			<li><b>Mac:</b> åpne filen og dra Eksamenshjelp inn i Programmer, og velg «Erstatt».<small>Sier Mac at appen ikke kan åpnes: Systeminnstillinger → Personvern og sikkerhet → «Åpne likevel».</small></li>
+			<li><b>Windows:</b> kjør filen.<small>Viser Windows «Windows beskyttet PC-en din»: trykk «Mer informasjon» og «Kjør likevel».</small></li>
+		</ol>
+	</div>
+</main>
+
+<script>
+(function () {
+	var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+	function select(tab, focus) {
+		tabs.forEach(function (t) {
+			var on = t === tab;
+			t.setAttribute("aria-selected", on ? "true" : "false");
+			t.tabIndex = on ? 0 : -1;
+			document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+		});
+		if (focus) tab.focus();
+	}
+	tabs.forEach(function (tab, i) {
+		tab.addEventListener("click", function () { select(tab, false); });
+		tab.addEventListener("keydown", function (e) {
+			if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+			e.preventDefault();
+			select(tabs[(i + (e.key === "ArrowRight" ? 1 : tabs.length - 1)) % tabs.length], true);
+		});
+	});
+
+	document.querySelectorAll(".copy").forEach(function (btn) {
+		btn.addEventListener("click", function () {
+			var text = document.getElementById(btn.dataset.target).textContent;
+			var status = document.getElementById(btn.dataset.status);
+			function done(ok) {
+				status.textContent = ok ? "Kopiert. Lim inn og trykk Enter." : "Klarte ikke å kopiere. Åpne «Se hva som limes inn» og kopier selv.";
+				if (ok) { var label = btn.querySelector(".label"); label.textContent = "Kopiert"; setTimeout(function () { label.textContent = "Kopier"; }, 2400); }
+			}
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallback(text)); });
+			} else done(fallback(text));
+		});
+	});
+	function fallback(text) {
+		var ta = document.createElement("textarea");
+		ta.value = text; ta.setAttribute("readonly", ""); ta.style.position = "fixed"; ta.style.opacity = "0";
+		document.body.appendChild(ta); ta.select();
+		var ok = false;
+		try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+		document.body.removeChild(ta);
+		return ok;
+	}
+
+	// The download buttons point straight at the newest file; without the API
+	// they keep the release page as a safe fallback.
+	var isWindows = /Windows/i.test(navigator.userAgent);
+	if (isWindows) {
+		var mac = document.getElementById("dl-mac"), win = document.getElementById("dl-win");
+		mac.className = "btn btn-ghost"; win.className = "btn btn-primary";
+		win.parentNode.insertBefore(win, mac);
+	}
+	fetch("https://api.github.com/repos/thomas-schlytter/Eksamenshjelp/releases/latest", { headers: { Accept: "application/vnd.github+json" } })
+		.then(function (res) { return res.ok ? res.json() : null; })
+		.then(function (release) {
+			if (!release || !release.assets) return;
+			var version = String(release.tag_name || "").replace(/^v/, "");
+			release.assets.forEach(function (asset) {
+				if (/-arm64\.dmg$/.test(asset.name)) {
+					var a = document.getElementById("dl-mac"); a.href = asset.browser_download_url; a.textContent = "Last ned " + version + " for Mac";
+				}
+				if (/-x64-setup\.exe$/.test(asset.name)) {
+					var b = document.getElementById("dl-win"); b.href = asset.browser_download_url; b.textContent = "Last ned " + version + " for Windows";
+				}
+			});
+		})
+		.catch(function () {});
+})();
+</script>
+</body>
+</html>

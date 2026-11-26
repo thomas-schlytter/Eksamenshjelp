@@ -125,12 +125,12 @@ describe("update banner view (static render)", () => {
 		}
 	});
 
-	it("a failure shows the shell's message and «Last ned selv» to the release page", () => {
+	it("a failure shows the shell's message and «Last ned selv» to the website's update page", () => {
 		const body = render(release({ install: { phase: "failed", message: "Nedlastingen stoppet. Sjekk nettforbindelsen." } }));
 		assert.equal(status(body), "Nedlastingen stoppet. Sjekk nettforbindelsen.");
 		const link = body.querySelector("[data-testid='update-banner-manual-download']")!;
 		assert.equal(link.textContent, "Last ned selv");
-		assert.equal(link.getAttribute("href"), RELEASE);
+		assert.equal(link.getAttribute("href"), "https://eksamenshjelp-one.vercel.app/oppdater");
 		assert.equal(link.getAttribute("target"), "_blank");
 		assert.equal(body.querySelector("[data-testid='update-banner-install']"), null);
 		assert.ok(body.querySelector("[aria-label='Lukk oppdateringsvarselet']"));
