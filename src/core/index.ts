@@ -107,3 +107,6 @@ export * from "./focus-timer.ts";
 // website and the install scripts), and the agents' display names.
 export * from "./setup-prompts.ts";
 export * from "./role-names.ts";
+// model-recommendation.ts: the subscription plan → the setup dialog's
+// recommended models (empty slots only). Pure, browser-safe.
+export * from "./model-recommendation.ts";

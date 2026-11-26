@@ -28,7 +28,10 @@
  *     the exclusive provider stage. Connecting with all slots already saved
  *     closes setup; otherwise the pickers require only the missing slots.
  *     All three required (owner: no skip, no defaults); Save PUTs the
- *     models section and reports onDone(models).
+ *     models section and reports onDone(models). With Claude or ChatGPT
+ *     connected, the EMPTY slots open with the subscription's recommended
+ *     models (GET /api/subscription-tier, 2026-11): still shown, never
+ *     saved until the learner presses Save, never over a saved pin.
  *
  * Closable without configuring (Esc/backdrop/✕) — browsing the app stays
  * possible; the GATE is the send interception, not the dialog. The
@@ -40,7 +43,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
 import type React from "react";
-import { type ModelCatalogEntry, type ModelSlotName, type ModelsSettings, CUSTOM_PROVIDER, MODEL_SLOTS, ROLE_DISPLAY, ROLES_BY_SLOT, SLOT_DISPLAY, joinNames } from "@/src/core";
+import { type ModelCatalogEntry, type ModelSlotName, type ModelsSettings, type SubscriptionRecommendation, type SubscriptionTierResponse, CLAUDE_CODE_PROVIDER, CUSTOM_PROVIDER, MODEL_SLOTS, ROLE_DISPLAY, ROLES_BY_SLOT, SLOT_DISPLAY, joinNames, planLabel } from "@/src/core";
 import { prettyModel } from "@/components/usage-format";
 import { ModelMenuList } from "@/components/settings/model-menu";
 import { MenuShell } from "@/components/menu-shell";
@@ -231,6 +234,27 @@ export function SetupKeysBody({
 	);
 }
 
+/** The subscription's recommended models (GET /api/subscription-tier) for
+ *  the EMPTY slots only: a saved pin is never replaced, and a recommended
+ *  model missing from the live catalog is skipped. Exported for tests. */
+export function recommendedPrefill(
+	models: ModelCatalogEntry[],
+	slots: ModelsBody["slots"],
+	recommendation: SubscriptionRecommendation | null,
+): { picked: Partial<Record<ModelSlotName, ModelSelection>>; levels: Partial<Record<ModelSlotName, ThinkingLevel>> } {
+	const picked: Partial<Record<ModelSlotName, ModelSelection>> = {};
+	const levels: Partial<Record<ModelSlotName, ThinkingLevel>> = {};
+	for (const slot of SLOT_ORDER) {
+		const pick = recommendation?.slots[slot];
+		if (!pick || slots?.[slot]?.model) continue;
+		const entry = models.find((m) => m.provider === pick.provider && m.id === pick.id);
+		if (!entry) continue;
+		picked[slot] = entry;
+		levels[slot] = populateLevel(pick.thinkingLevel, entry.supportedLevels);
+	}
+	return { picked, levels };
+}
+
 function prefillLevels(body: ModelsBody | undefined): Partial<Record<ModelSlotName, ThinkingLevel>> {
 	const levels: Partial<Record<ModelSlotName, ThinkingLevel>> = {};
 	for (const slot of SLOT_ORDER) {
@@ -247,6 +271,8 @@ interface SetupDialogProps {
 	onClose: () => void;
 	/** Saving never sends the caller's draft. */
 	onDone: (models: ModelsSettings) => void;
+	/** The save button's text; the innføring says «Fortsett». */
+	saveLabel?: string;
 }
 
 export function SetupDialog(props: SetupDialogProps) {
@@ -255,7 +281,7 @@ export function SetupDialog(props: SetupDialogProps) {
 	return props.open ? <OpenSetupDialog {...props} /> : null;
 }
 
-function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
+function OpenSetupDialog({ onClose, onDone, saveLabel = "Lagre modeller" }: SetupDialogProps) {
 	const backdropDismiss = useBackdropDismiss(onClose);
 	const { catalog, failed, refresh } = useModelCatalog();
 	const providerStageSeen = useRef(false);
@@ -263,6 +289,9 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 	const [picked, setPicked] = useState(() => prefillFromSlots(catalog?.models ?? [], catalog?.slots));
 	const [levels, setLevels] = useState(() => prefillLevels(catalog));
 	const editedSlots = useRef(new Set<ModelSlotName>());
+	// The subscription's recommended models, fetched once Claude or ChatGPT
+	// is connected and a slot is still empty.
+	const [recommendation, setRecommendation] = useState<SubscriptionRecommendation | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [openMenu, setOpenMenu] = useState<{ slot: ModelSlotName; kind: "model" | "thinking" } | null>(null);
@@ -303,25 +332,47 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 		if (!catalog) return;
 		const pre = prefillFromSlots(catalog.models, catalog.slots);
 		const preLevels = prefillLevels(catalog);
+		const rec = recommendedPrefill(catalog.models, catalog.slots, recommendation);
 		// Fresh metadata is always used, but a response cannot reset an
 		// edited slot, including a level chosen while the request was pending.
+		// Saved pins first; the recommendation only fills what is empty.
 		setPicked((prev) => {
 			const next = { ...prev };
 			for (const slot of SLOT_ORDER) if (!editedSlots.current.has(slot)) {
-				if (pre[slot]) next[slot] = pre[slot]; else delete next[slot];
+				const value = pre[slot] ?? rec.picked[slot];
+				if (value) next[slot] = value; else delete next[slot];
 			}
 			return next;
 		});
 		setLevels((prev) => {
 			const next = { ...prev };
 			for (const slot of SLOT_ORDER) if (!editedSlots.current.has(slot)) {
-				if (preLevels[slot] !== undefined) next[slot] = preLevels[slot]; else delete next[slot];
+				const value = pre[slot] ? preLevels[slot] : rec.levels[slot] ?? preLevels[slot];
+				if (value !== undefined) next[slot] = value; else delete next[slot];
 			}
 			return next;
 		});
-	}, [catalog]);
+	}, [catalog, recommendation]);
 
 	const stage = setupStage(catalog?.providers ?? null);
+	// Ask for a recommendation only when it can fill something: pickers
+	// showing, a slot without a saved pin, Claude or ChatGPT connected. The
+	// key refetches when their models change (a connection came or went).
+	const recommendationKey = stage === "pickers" && catalog
+		&& SLOT_ORDER.some((slot) => !catalog.slots?.[slot]?.model)
+		&& catalog.providers.some((p) => p.keyPresent && (p.id === CLAUDE_CODE_PROVIDER || p.id === "chatgpt"))
+		? catalog.models.filter((m) => m.provider === CLAUDE_CODE_PROVIDER || m.provider === "chatgpt").map((m) => `${m.provider}:${m.id}`).join(",")
+		: null;
+	useEffect(() => {
+		if (recommendationKey === null) return;
+		let cancelled = false;
+		fetch("/api/subscription-tier")
+			.then((r) => (r.ok ? (r.json() as Promise<SubscriptionTierResponse>) : null))
+			.then((body) => { if (!cancelled) setRecommendation(body?.recommendation ?? null); })
+			// No recommendation is fine: the pickers just open empty.
+			.catch(() => {});
+		return () => { cancelled = true; };
+	}, [recommendationKey]);
 	const closeAfterConnection = stage === "pickers" && providerStageSeen.current && savedSlotsConfigured(catalog?.slots);
 	useEffect(() => {
 		if (stage === "keys") providerStageSeen.current = true;
@@ -377,6 +428,11 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 	if (closeAfterConnection) return null;
 
 	const allPicked = SLOT_ORDER.every((s) => picked[s]);
+	// The note shows while at least one empty slot holds its recommendation.
+	const recommendedShown = !!recommendation && SLOT_ORDER.some((s) => {
+		const pick = recommendation.slots[s];
+		return !!pick && !catalog?.slots?.[s]?.model && picked[s]?.provider === pick.provider && picked[s]?.id === pick.id;
+	});
 
 	/** Stage 1's save: PUT the pasted key, dispatch the keys signal, and
 	 *  CLEAN the local key field. The fresh catalog decides whether to
@@ -487,9 +543,15 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 					<div className="flex flex-col px-6 py-5">{keysBody}</div>
 				) : (
 					<div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" data-testid="setup-stage-pickers">
-						<p className="text-xs text-muted-foreground">
-							Velg en modell for hvert nivå. Alle tre må være valgt før du kan starte en økt.
-						</p>
+						{recommendedShown && recommendation ? (
+							<p className="text-xs text-muted-foreground" data-testid="setup-recommended-note">
+								Vi har valgt modeller som passer abonnementet ditt ({planLabel(recommendation)}). Du kan endre dem senere under Innstillinger.
+							</p>
+						) : (
+							<p className="text-xs text-muted-foreground">
+								Velg en modell for hvert nivå. Alle tre må være valgt før du kan starte en økt.
+							</p>
+						)}
 						{SLOT_ORDER.map((slot) => {
 							const entry = picked[slot];
 							const level = levels[slot];
@@ -623,7 +685,7 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								onClick={() => void save()}
 								className="rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 							>
-								{saving ? "Lagrer…" : "Lagre modeller"}
+								{saving ? "Lagrer…" : saveLabel}
 							</button>
 							{error && <p className="text-xs text-status-red-ink">{error}</p>}
 						</div>
