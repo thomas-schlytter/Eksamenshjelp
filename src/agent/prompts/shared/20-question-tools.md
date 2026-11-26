@@ -23,7 +23,7 @@ A question that refers to a figure, a circuit, a graph or a diagram carries that
 
 Draw it like an exam figure:
 
-- **viewBox** sized to the drawing (e.g. `viewBox="0 0 480 300"`), no width or height; the app scales it to the answer field on a white backing. Black strokes, `stroke-width="2"`, `fill="none"` on wires.
+- **viewBox** sized to the drawing (e.g. `viewBox="0 0 480 300"`), no width or height; the app scales it to the answer field on a white backing. Keep EVERYTHING inside it with a margin of about 20 units: a label left of a component with `text-anchor="end"` must still start at x ≥ 0, so leave room on that side. Black strokes, `stroke-width="2"`, `fill="none"` on wires.
 - **A grid**: place parts on multiples of 20, wires only horizontal and vertical, a filled dot (r 3) at every junction of three or more wires and none at plain corners. Leave room so no label touches a line.
 - **Standard symbols**, one style per figure: resistor as a zigzag (or the IEC rectangle), capacitor as two parallel plates, inductor as a row of loops, voltage source as a circle with + and −, current source as a circle with an arrow, ground as three shrinking bars, op-amp as a triangle with − and + marked inside at the inputs.
 - **Labels as plain SVG text** beside the part, `font-size` 14–16: R₁ = 1 kΩ, V<tspan baseline-shift="sub" font-size="70%">in</tspan> = 2 V. Never LaTeX such as $R_1$ — SVG cannot render it, and the call is rejected. Given values go on the figure; what he must find never does.
