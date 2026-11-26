@@ -25,8 +25,18 @@ const TEMPLATE = path.join(SITE_DIR, "prompts", "oppsett.txt");
 const TOOLS = path.join(SITE_DIR, "prompts", "verktoy.json");
 const INDEX = path.join(SITE_DIR, "index.html");
 
+/**
+ * Optional sections: {{#name}} … {{/name}} on their own lines are kept when
+ * flags[name] is true and dropped (with their lines) otherwise. Used for the
+ * «Jeg bruker LearnHarness» checkbox: one template, two variants per tool.
+ */
+export function applySections(template, flags = {}) {
+	return template.replace(/\{\{#([a-z_]+)\}\}\n([\s\S]*?)\{\{\/\1\}\}\n*/g, (_, name, body) => (flags[name] ? `${body}\n` : ""));
+}
+
 /** Every {{name}} in the template must have a value, and vice versa. */
-export function renderPrompt(template, values) {
+export function renderPrompt(template, values, flags = {}) {
+	template = applySections(template, flags);
 	const used = new Set();
 	const text = template.replace(/\{\{([a-z_]+)\}\}/g, (_, name) => {
 		if (typeof values[name] !== "string") throw new Error(`build-site: no value for {{${name}}}`);
@@ -46,7 +56,13 @@ export function escapeHtml(text) {
 export function renderAll() {
 	const template = fs.readFileSync(TEMPLATE, "utf8");
 	const tools = JSON.parse(fs.readFileSync(TOOLS, "utf8"));
-	return Object.fromEntries(Object.entries(tools).map(([tool, values]) => [tool, renderPrompt(template, values)]));
+	// Each tool twice: plain, and "<tool>-lh" with the LearnHarness step.
+	return Object.fromEntries(
+		Object.entries(tools).flatMap(([tool, values]) => [
+			[tool, renderPrompt(template, values)],
+			[`${tool}-lh`, renderPrompt(template, values, { learnharness: true })],
+		]),
+	);
 }
 
 /** Replace each tool's marked block; every tool needs exactly one block. */

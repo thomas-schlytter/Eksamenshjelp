@@ -2,6 +2,15 @@ Du er i {{verktoy}} og skal sette opp appen Eksamenshjelp for en NTNU-student. F
 
 1. Si kort til studenten: «Jeg installerer Eksamenshjelp, lager en mappe per fag og henter tidligere eksamener med løsningsforslag. Du må godkjenne noen kommandoer underveis.»
 
+{{#learnharness}}
+Før steg 2: Studenten bruker LearnHarness fra før. Øktene, kunnskapskartet og innstillingene blir med til Eksamenshjelp av seg selv, fordi appene bruker samme datamappe. Men er LearnHarness åpen, starter ikke Eksamenshjelp. Lukk den derfor først. Kommandoen gjør ingenting hvis LearnHarness ikke kjører.
+Mac:
+pgrep -x LearnHarness >/dev/null && osascript -e 'quit app "LearnHarness"' && sleep 3; true
+Windows:
+powershell -NoProfile -Command "if (Get-Process LearnHarness -ErrorAction SilentlyContinue) { (Get-Process LearnHarness).CloseMainWindow() | Out-Null; Start-Sleep 5; Get-Process LearnHarness -ErrorAction SilentlyContinue | Stop-Process }"
+Si til studenten: «Øktene og kunnskapskartet ditt fra LearnHarness blir med. Ikke ha LearnHarness og Eksamenshjelp åpne samtidig.»
+{{/learnharness}}
+
 2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. {{godkjenning}}
 Mac:
 curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash

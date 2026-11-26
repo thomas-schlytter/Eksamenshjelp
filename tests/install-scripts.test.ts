@@ -162,13 +162,31 @@ describe("setup prompts (site/prompts → site/index.html)", () => {
 
 	it("each prompt runs exactly the one install command per OS", () => {
 		const prompts = renderAll();
-		assert.deepEqual(Object.keys(prompts).sort(), ["claude", "codex"]);
+		assert.deepEqual(Object.keys(prompts).sort(), ["claude", "claude-lh", "codex", "codex-lh"]);
 		for (const text of Object.values(prompts)) {
 			assert.ok(text.includes("curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash"));
 			assert.ok(text.includes("irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"));
 			assert.doesNotMatch(text, /\{\{|\}\}/);
 			assert.doesNotMatch(text, /git clone|npm /);
 		}
+	});
+
+	it("only the -lh variants close LearnHarness, and before the install", () => {
+		const prompts = renderAll();
+		for (const tool of ["claude", "codex"]) {
+			assert.doesNotMatch(prompts[tool], /LearnHarness/);
+			const lh = prompts[`${tool}-lh`];
+			assert.ok(lh.includes(`quit app "LearnHarness"`));
+			assert.ok(lh.indexOf("Get-Process LearnHarness") < lh.indexOf("install.ps1"));
+			// Same prompt otherwise: dropping the section gives back the plain one.
+			assert.equal(lh.replace(/\n\nFør steg 2:[\s\S]*?samtidig\.»/, ""), prompts[tool]);
+		}
+	});
+
+	it("drops or keeps optional sections without leaving blank lines", () => {
+		const t = "a\n\n{{#x}}\nb\n{{/x}}\n\nc";
+		assert.equal(renderPrompt(t, {}), "a\n\nc");
+		assert.equal(renderPrompt(t, {}, { x: true }), "a\n\nb\n\nc");
 	});
 
 	it("rejects missing and unused template values", () => {

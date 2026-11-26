@@ -63,7 +63,9 @@ details{margin-top:6px;font-size:13px;color:var(--muted)}
 summary{cursor:pointer}
 pre{white-space:pre-wrap;max-height:260px;overflow:auto;background:var(--soft);border:1px solid var(--line);border-radius:var(--r-btn);padding:12px;font:12px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--ink)}
 .need{margin:10px 2px 0;font-size:13px;color:var(--muted)}
-.panel[hidden]{display:none}
+.panel[hidden],pre[hidden]{display:none}
+.lh{display:flex;align-items:center;gap:10px;margin:12px 2px 0;font-size:14px;color:var(--ink);cursor:pointer}
+.lh input{width:18px;height:18px;margin:0;accent-color:var(--navy);cursor:pointer}
 
 /* the window (from the template: the product floats in a landscape) */
 .stage{padding:28px 0 0}
@@ -161,6 +163,7 @@ footer a{color:inherit}
 				<button type="button" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Jeg har Claude</button>
 				<button type="button" role="tab" id="tab-codex" aria-controls="panel-codex" aria-selected="false" tabindex="-1">Jeg har ChatGPT</button>
 			</div>
+			<label class="lh"><input type="checkbox" id="lh"> Jeg bruker LearnHarness og vil overføre dataen</label>
 
 			<div class="panel" id="panel-claude" role="tabpanel" aria-labelledby="tab-claude">
 				<ol class="steps">
@@ -197,6 +200,40 @@ Har du ikke Claude in Chrome, be studenten installere utvidelsen og koble den ti
 6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
 
 7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»<!-- /prompt:claude --></pre>
+				<pre id="prompt-claude-lh" hidden><!-- prompt:claude-lh -->Du er i Claude Code og skal sette opp appen Eksamenshjelp for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg installerer Eksamenshjelp, lager en mappe per fag og henter tidligere eksamener med løsningsforslag. Du må godkjenne noen kommandoer underveis.»
+
+Før steg 2: Studenten bruker LearnHarness fra før. Øktene, kunnskapskartet og innstillingene blir med til Eksamenshjelp av seg selv, fordi appene bruker samme datamappe. Men er LearnHarness åpen, starter ikke Eksamenshjelp. Lukk den derfor først. Kommandoen gjør ingenting hvis LearnHarness ikke kjører.
+Mac:
+pgrep -x LearnHarness &gt;/dev/null &amp;&amp; osascript -e 'quit app "LearnHarness"' &amp;&amp; sleep 3; true
+Windows:
+powershell -NoProfile -Command "if (Get-Process LearnHarness -ErrorAction SilentlyContinue) { (Get-Process LearnHarness).CloseMainWindow() | Out-Null; Start-Sleep 5; Get-Process LearnHarness -ErrorAction SilentlyContinue | Stop-Process }"
+Si til studenten: «Øktene og kunnskapskartet ditt fra LearnHarness blir med. Ikke ha LearnHarness og Eksamenshjelp åpne samtidig.»
+
+2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. Studenten må godkjenne kommandoen når Claude spør.
+Mac:
+curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Spør studenten: «Hvilke fag har du denne eksamensperioden? Skriv fagkodene, for eksempel TMA4100 TDT4110.»
+
+4. Lag én mappe per fagkode, med store bokstaver:
+Mac: ~/Documents/Eksamenshjelp/&lt;FAGKODE&gt;/
+Windows: %USERPROFILE%\Documents\Eksamenshjelp\&lt;FAGKODE&gt;\
+
+5. Finn tidligere eksamener og løsningsforslag for hvert fag med Claude in Chrome, i nettleseren der studenten er innlogget. Se her, i denne rekkefølgen:
+- Canvas-emnerommet på https://ntnu.instructure.com (Filer og Moduler)
+- emnesiden https://www.ntnu.no/studier/emner/&lt;FAGKODE&gt;
+- wiki.math.ntnu.no og andre offentlige emnewikier for faget
+Lagre filene i fagmappen som &lt;år&gt;&lt;sesong&gt;_eksamen.pdf og &lt;år&gt;&lt;sesong&gt;_LF.pdf, der sesong er var, host eller kont (for eksempel 2024host_eksamen.pdf). Offentlige PDF-er henter du med curl. Det nettleseren laster ned, havner i Nedlastinger: flytt det til fagmappen og gi det riktig navn. Ta de nyeste først, og høyst ti eksamener per fag.
+Har du ikke Claude in Chrome, be studenten installere utvidelsen og koble den til. Vil studenten ikke det, hopp over dette steget.
+
+6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
+
+7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»<!-- /prompt:claude-lh --></pre>
 				</details>
 			</div>
 
@@ -235,6 +272,40 @@ Har du verken nettleser eller computer use, hopp over dette steget.
 6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
 
 7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»<!-- /prompt:codex --></pre>
+				<pre id="prompt-codex-lh" hidden><!-- prompt:codex-lh -->Du er i Codex og skal sette opp appen Eksamenshjelp for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg installerer Eksamenshjelp, lager en mappe per fag og henter tidligere eksamener med løsningsforslag. Du må godkjenne noen kommandoer underveis.»
+
+Før steg 2: Studenten bruker LearnHarness fra før. Øktene, kunnskapskartet og innstillingene blir med til Eksamenshjelp av seg selv, fordi appene bruker samme datamappe. Men er LearnHarness åpen, starter ikke Eksamenshjelp. Lukk den derfor først. Kommandoen gjør ingenting hvis LearnHarness ikke kjører.
+Mac:
+pgrep -x LearnHarness &gt;/dev/null &amp;&amp; osascript -e 'quit app "LearnHarness"' &amp;&amp; sleep 3; true
+Windows:
+powershell -NoProfile -Command "if (Get-Process LearnHarness -ErrorAction SilentlyContinue) { (Get-Process LearnHarness).CloseMainWindow() | Out-Null; Start-Sleep 5; Get-Process LearnHarness -ErrorAction SilentlyContinue | Stop-Process }"
+Si til studenten: «Øktene og kunnskapskartet ditt fra LearnHarness blir med. Ikke ha LearnHarness og Eksamenshjelp åpne samtidig.»
+
+2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. Kommandoen trenger nettverk og skriver utenfor arbeidsmappen, så be om å kjøre den utenfor sandkassen. Studenten må godkjenne den.
+Mac:
+curl -fsSL https://eksamenshjelp-one.vercel.app/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://eksamenshjelp-one.vercel.app/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Spør studenten: «Hvilke fag har du denne eksamensperioden? Skriv fagkodene, for eksempel TMA4100 TDT4110.»
+
+4. Lag én mappe per fagkode, med store bokstaver:
+Mac: ~/Documents/Eksamenshjelp/&lt;FAGKODE&gt;/
+Windows: %USERPROFILE%\Documents\Eksamenshjelp\&lt;FAGKODE&gt;\
+
+5. Finn tidligere eksamener og løsningsforslag for hvert fag med Codex-nettleseren eller computer use. Se her, i denne rekkefølgen:
+- Canvas-emnerommet på https://ntnu.instructure.com (Filer og Moduler)
+- emnesiden https://www.ntnu.no/studier/emner/&lt;FAGKODE&gt;
+- wiki.math.ntnu.no og andre offentlige emnewikier for faget
+Lagre filene i fagmappen som &lt;år&gt;&lt;sesong&gt;_eksamen.pdf og &lt;år&gt;&lt;sesong&gt;_LF.pdf, der sesong er var, host eller kont (for eksempel 2024host_eksamen.pdf). Offentlige PDF-er henter du med curl. Det nettleseren laster ned, havner i Nedlastinger: flytt det til fagmappen og gi det riktig navn. Ta de nyeste først, og høyst ti eksamener per fag.
+Har du verken nettleser eller computer use, hopp over dette steget.
+
+6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
+
+7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»<!-- /prompt:codex-lh --></pre>
 				</details>
 			</div>
 
@@ -332,6 +403,17 @@ Har du verken nettleser eller computer use, hopp over dette steget.
 		});
 	});
 
+
+	var lh = document.getElementById("lh");
+	function useLh() {
+		["claude", "codex"].forEach(function (tool) {
+			document.getElementById("prompt-" + tool).hidden = lh.checked;
+			document.getElementById("prompt-" + tool + "-lh").hidden = !lh.checked;
+			document.querySelector('.copy[data-status="status-' + tool + '"]').dataset.target = "prompt-" + tool + (lh.checked ? "-lh" : "");
+		});
+	}
+	lh.addEventListener("change", useLh);
+	useLh();
 
 	document.querySelectorAll(".copy").forEach(function (btn) {
 		btn.addEventListener("click", function () {
