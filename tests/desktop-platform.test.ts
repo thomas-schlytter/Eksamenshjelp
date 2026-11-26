@@ -221,17 +221,24 @@ describe("desktop release workflow", () => {
 	const draft = workflow.jobs.draft;
 	const packaging = workflow.jobs.package;
 	assert.ok(draft && packaging);
-	const prepare = draft.steps[0];
+	const prepare = draft.steps.find(step => step.with?.script);
 	assert.ok(prepare?.with);
+	// The draft step reads the release notes from a sparse checkout first.
+	const checkout = draft.steps[draft.steps.indexOf(prepare) - 1];
 	const script = prepare.with.script;
 	assert.ok(script);
 	type Release = { id: number; tag_name: string; draft: boolean };
 
 	/** Execute the REAL action script with an in-memory GitHub API. */
-	async function prepareDraft(releases: Release[]) {
+	const NOTES = "## Slik oppdaterer du\nLast ned v{{version}}/Eksamenshjelp-{{version}}-arm64.dmg";
+	async function prepareDraft(releases: Release[], updated: Record<string, unknown>[] = []) {
 		const created: Record<string, unknown>[] = [];
 		const listReleases = () => {};
 		await runInNewContext(`(async () => { ${script} })()`, {
+			require: (name: string) => {
+				assert.equal(name, "node:fs");
+				return { readFileSync: (file: string) => { assert.equal(file, ".github/release-notes.md"); return NOTES; } };
+			},
 			context: { repo: { owner: "test-owner", repo: "test-repo" }, ref: "refs/tags/v0.3.0" },
 			core: { info() {} },
 			github: {
@@ -248,6 +255,10 @@ describe("desktop release workflow", () => {
 						created.push(JSON.parse(JSON.stringify(options)));
 						return { data: { id: 123 } };
 					},
+					updateRelease: async (options: Record<string, unknown>) => {
+						updated.push(JSON.parse(JSON.stringify(options)));
+						return { data: {} };
+					},
 				} },
 			},
 		});
@@ -257,6 +268,8 @@ describe("desktop release workflow", () => {
 	it("prepares once after gates, never on rehearsals, before parallel packaging", () => {
 		assert.equal(draft.needs, "quality");
 		assert.equal(prepare.if, "github.event_name == 'push'");
+		assert.equal(checkout?.uses, "actions/checkout@v7");
+		assert.equal(checkout?.if, "github.event_name == 'push'");
 		assert.deepEqual(packaging.needs, ["quality", "draft"]);
 		assert.equal(workflow.concurrency.group, "release-${{ github.ref }}");
 		assert.equal(workflow.concurrency["cancel-in-progress"], false);
@@ -294,11 +307,14 @@ describe("desktop release workflow", () => {
 	it("creates exactly one unpublished draft when none matches", async () => {
 		assert.deepEqual(await prepareDraft([{ id: 9, tag_name: "v0.2.0", draft: false }]), [{
 			owner: "test-owner", repo: "test-repo", tag_name: "v0.3.0", name: "0.3.0", draft: true,
+			body: "## Slik oppdaterer du\nLast ned v0.3.0/Eksamenshjelp-0.3.0-arm64.dmg",
 		}]);
 	});
 
-	it("reuses an existing draft without creating another", async () => {
-		assert.deepEqual(await prepareDraft([{ id: 10, tag_name: "v0.3.0", draft: true }]), []);
+	it("reuses an existing draft without creating another, and gives it the update guide", async () => {
+		const updated: Record<string, unknown>[] = [];
+		assert.deepEqual(await prepareDraft([{ id: 10, tag_name: "v0.3.0", draft: true }], updated), []);
+		assert.deepEqual(updated, [{ owner: "test-owner", repo: "test-repo", release_id: 10, body: "## Slik oppdaterer du\nLast ned v0.3.0/Eksamenshjelp-0.3.0-arm64.dmg" }]);
 		// Match the publisher's support for legacy unprefixed tags too.
 		assert.deepEqual(await prepareDraft([{ id: 10, tag_name: "0.3.0", draft: true }]), []);
 	});
