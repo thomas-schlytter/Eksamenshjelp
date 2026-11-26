@@ -572,7 +572,7 @@ describe("fag in the chrome: sidebar section, session rows, chips", () => {
 		renderChat: () => null,
 	};
 
-	it("the sidebar lists fag as rows that open the fag-chat, nearest exam first, with progress and days in words", () => {
+	it("the sidebar lists fag as rows that open the fag page, nearest exam first, with progress and days in words", () => {
 		const document = dom(
 			<SidebarCourses
 				{...sidebarProps}
@@ -583,7 +583,10 @@ describe("fag in the chrome: sidebar section, session rows, chips", () => {
 		const nav = document.querySelector('[data-tour="sidebar-courses"]')!;
 		assert.equal(nav.getAttribute("aria-label"), "Fag");
 		const rows = Array.from(nav.querySelectorAll('[data-testid="sidebar-course"]'));
-		assert.deepEqual(rows.map((l) => l.tagName), ["BUTTON", "BUTTON"]);
+		// 2026-11-26: a link to the fag page (prefetched), not a button that
+		// opened the fag-chat.
+		assert.deepEqual(rows.map((l) => l.tagName), ["A", "A"]);
+		assert.deepEqual(rows.map((l) => l.getAttribute("href")), ["/fag/TTK4100", "/fag/TMA4100"]);
 		assert.deepEqual(rows.map((l) => l.textContent!.slice(0, 7)), ["TTK4100", "TMA4100"]);
 		assert.equal(rows[0]!.getAttribute("aria-current"), "page");
 		assert.equal(rows[1]!.getAttribute("aria-current"), null);

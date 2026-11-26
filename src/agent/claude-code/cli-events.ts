@@ -1,4 +1,5 @@
 import type { Usage } from "@earendil-works/pi-ai";
+import { parseClaudeRateLimitEvent, type UsageWindows } from "../../core/usage-limits.ts";
 
 export type CliUsage = Partial<Pick<Usage, "input" | "output" | "cacheRead" | "cacheWrite">>;
 
@@ -15,7 +16,9 @@ export type CliEvent =
 	| { type: "messageStop" }
 	| { type: "assistantError"; error: string; text: string }
 	| { type: "resultError"; text: string }
-	| { type: "toolResults"; ids: string[]; texts: Record<string, string> };
+	| { type: "toolResults"; ids: string[]; texts: Record<string, string> }
+	/** The subscription's 5-hour/weekly limits (core/usage-limits.ts). */
+	| { type: "rateLimits"; windows: UsageWindows };
 
 type RawUsage = {
 	input_tokens?: number | null;
@@ -198,6 +201,12 @@ export function parseCliLine(text: string): CliEvent | null {
 		case "result":
 			if (line.is_error !== true) return null;
 			return { type: "resultError", text: getResultErrorText(line) };
+
+		case "rate_limit_event": {
+			// Lines with only {"status":"allowed"} carry no numbers: null.
+			const windows = parseClaudeRateLimitEvent(parsed);
+			return windows ? { type: "rateLimits", windows } : null;
+		}
 
 		default:
 			return null;

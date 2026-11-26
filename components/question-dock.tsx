@@ -1253,6 +1253,7 @@ function QuestionDockForm({
 							<Button
 								type="submit"
 								disabled={!canSubmit || compactionRunning || turnSettling}
+								pending={turnSettling}
 								title={answerChosen && explanationMissing ? "Skriv en kort forklaring først" : undefined}
 								className="h-9 rounded-md px-3.5 text-sm font-medium"
 							>

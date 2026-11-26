@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { ChevronDownIcon, MessageSquarePlusIcon } from "lucide-react";
 import { MenuShell } from "@/components/menu-shell";
+import { beginNavigation } from "@/components/navigation-progress";
 import { newSubChatHref } from "./course-chats";
 
 /**
@@ -89,7 +90,10 @@ export function CourseChatMenu({ code, chatId }: { code: string; chatId: string 
 							data-testid={`course-chat-menu-${item.id}`}
 							onClick={() => {
 								setOpen(false);
-								if (item.href) router.push(item.href);
+								if (item.href) {
+									beginNavigation(); // the top stripe runs until the draft view lands
+									router.push(item.href);
+								}
 								item.onSelect?.();
 							}}
 							className="flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-left text-foreground transition-colors hover:bg-accent"

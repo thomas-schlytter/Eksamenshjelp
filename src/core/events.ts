@@ -68,6 +68,10 @@ export interface ServerEvents {
 	 *  the fag page's score curve refetches). `chatId` is not sent; it is
 	 *  declared so consumers that filter the union on it still type-check. */
 	"mock-exams-changed": { code: string; chatId?: string };
+	/** A subscription reported new usage-limit numbers (the 5-hour and
+	 *  weekly windows, 2026-11-26). Open sidebars refetch
+	 *  GET /api/usage-limits. */
+	"usage-limits-changed": Record<string, never>;
 }
 
 export type ServerEventType = keyof ServerEvents;
@@ -89,6 +93,7 @@ export const SERVER_EVENT_TYPES = [
 	"map-changed",
 	"streak-changed",
 	"mock-exams-changed",
+	"usage-limits-changed",
 ] as const satisfies readonly ServerEventType[];
 
 /** One notification: the type discriminates the payload. */

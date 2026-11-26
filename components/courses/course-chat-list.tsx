@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { MessageSquareIcon, PlusIcon } from "lucide-react";
 import { sessionMeta } from "@/components/sidebar";
+import { Spinner } from "@/components/ui/pending";
 import { cn } from "@/lib/utils";
 import type { ChatListItem, CourseChatGroup } from "@/src/core";
 import { newSubChatHref } from "./course-chats";
@@ -45,8 +46,10 @@ export function CourseChatList({ code, group, onOpenMain, opening = false }: {
 							<span className="shrink-0 text-xs text-muted-foreground">{sessionMeta(group.main)}</span>
 						</Link>
 					) : (
-						<button type="button" onClick={onOpenMain} disabled={opening || group === null} data-testid="course-chat-main" className={cn(ROW, "cursor-pointer disabled:cursor-default disabled:opacity-60")}>
-							<MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+						<button type="button" onClick={onOpenMain} disabled={opening || group === null} aria-busy={opening || undefined} data-testid="course-chat-main" className={cn(ROW, "cursor-pointer disabled:cursor-default disabled:opacity-60")}>
+							{opening
+								? <Spinner className="size-4 shrink-0 text-muted-foreground" />
+								: <MessageSquareIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />}
 							<span className="min-w-0 flex-1 truncate font-medium">Fag-chat</span>
 							<span className="shrink-0 text-xs text-muted-foreground">{group === null ? "Laster …" : "Ikke startet"}</span>
 						</button>

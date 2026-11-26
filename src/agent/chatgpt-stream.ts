@@ -5,6 +5,7 @@ import { transformMessages } from "@earendil-works/pi-ai/api/transform-messages"
 import { chatGPTAbortController, chatGPTScope, chatGPTScopeCurrent, chatGPTLease, chatGPTDenial } from "./chatgpt-bridge.ts";
 import type { AdmissionScope, ChatGPTDispatchLifecycle } from "./chatgpt-request-cycle.ts";
 import { capturePreparedBackgroundPayload } from "./background-capture.ts";
+import { recordChatGPTRateLimitHeaders } from "./usage-limits.ts";
 
 const USAGE = "https://chatgpt.com/settings/usage";
 const NO_FALLBACK = "Ingen API-nøkkel ble brukt i stedet.";
@@ -83,7 +84,12 @@ export function chatGPTStream(background: () => boolean, lifecycle?: ChatGPTDisp
 						if (committed) throw new Error("ChatGPT does not retry admitted requests");
 						lifecycle?.beforeDispatch(scope!);
 						committed = true;
-						return delegate(input, init);
+						// Bruk (2026-11-26): the subscription's 5-hour/weekly
+						// numbers, when the response carries rate-limit headers.
+						return delegate(input, init).then((response) => {
+							recordChatGPTRateLimitHeaders(response?.headers);
+							return response;
+						});
 					},
 					onPayload: async (raw, model) => {
 						const replacement = await options?.onPayload?.(raw, model);

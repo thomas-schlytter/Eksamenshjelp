@@ -6,6 +6,7 @@ import { SetupDialog } from "@/components/setup-dialog";
 import { openModelPicker, selectedModelUnavailable, useModelSetup, ZeroKeysPill } from "@/components/setup-cta";
 import { SessionStarter, type SessionCreation } from "@/components/start-session";
 import { OPENING_PROMPT_FAILURE, stashCarriedMessage, stashOpeningPrompt } from "@/components/opening-prompt";
+import { beginNavigation } from "@/components/navigation-progress";
 import { openCourseChatId } from "./course-chats";
 
 /**
@@ -55,6 +56,7 @@ export function useSessionLauncher(initialConfigured: boolean) {
 		setFailed(false);
 		try {
 			const target = await starterRef.current.start(body, fetch, JSON.stringify(catalog?.slots.strong), openingText);
+			beginNavigation();
 			router.push(target);
 			return "started";
 		} catch {
@@ -79,6 +81,7 @@ export function useSessionLauncher(initialConfigured: boolean) {
 			const id = await openCourseChatId(code, fetch);
 			const handed = id.empty ? stashOpeningPrompt(id.id, text) : stashCarriedMessage(id.id, text);
 			if (!handed) throw new Error(OPENING_PROMPT_FAILURE);
+			beginNavigation();
 			router.push(`/chat/${id.id}`);
 			return "started";
 		} catch {

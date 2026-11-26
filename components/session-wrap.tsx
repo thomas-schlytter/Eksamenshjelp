@@ -162,7 +162,7 @@ export function EndSessionDialog({
 					<Button data-testid="end-session-quiz" autoFocus onClick={onQuiz} disabled={ending}>
 						Oppsummering med quiz
 					</Button>
-					<Button data-testid="end-session-end" variant="outline" onClick={() => void end()} disabled={ending}>
+					<Button data-testid="end-session-end" variant="outline" onClick={() => void end()} pending={ending}>
 						{ending ? "Avslutter …" : "Bare avslutt"}
 					</Button>
 					<Button data-testid="end-session-cancel" variant="ghost" onClick={onClose} disabled={ending}>
@@ -394,7 +394,7 @@ export function SessionWrapDialog({
 									<Button variant="outline" size="sm" onClick={() => void generate()} disabled={finishing}>
 										Prøv igjen
 									</Button>
-									<Button data-testid="session-wrap-end-bare" size="sm" onClick={() => void finish(true)} disabled={finishing}>
+									<Button data-testid="session-wrap-end-bare" size="sm" onClick={() => void finish(true)} pending={finishing}>
 										{finishing ? "Avslutter …" : "Bare avslutt"}
 									</Button>
 								</div>
@@ -426,7 +426,7 @@ export function SessionWrapDialog({
 								<Button variant="ghost" size="sm" onClick={() => setConfirmEnd(false)} disabled={finishing}>
 									Fortsett quizen
 								</Button>
-								<Button size="sm" onClick={() => void finish()} disabled={finishing}>
+								<Button size="sm" onClick={() => void finish()} pending={finishing}>
 									{finishing ? "Avslutter …" : "Avslutt økt"}
 								</Button>
 							</div>
@@ -455,7 +455,7 @@ export function SessionWrapDialog({
 							</div>
 						) : step === "result" ? (
 							<div className="flex items-center justify-end gap-2">
-								<Button data-testid="session-wrap-finish" size="sm" onClick={() => void finish()} disabled={finishing}>
+								<Button data-testid="session-wrap-finish" size="sm" onClick={() => void finish()} pending={finishing}>
 									{finishing ? "Avslutter …" : "Avslutt økt"}
 								</Button>
 							</div>

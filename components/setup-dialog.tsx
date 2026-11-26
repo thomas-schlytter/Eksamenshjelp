@@ -48,6 +48,7 @@ import { notifySettingsSaved, useSettingsSaved } from "@/components/settings-sig
 import { useModelCatalog } from "@/components/model-catalog";
 import { savedSlotsConfigured } from "@/components/setup-cta";
 import { Hint } from "@/components/ui/hint";
+import { Spinner } from "@/components/ui/pending";
 import { type ProviderKeyInfo, CUSTOM_PROVIDER_INFO, CustomEndpointSetup } from "@/components/settings/keys-section";
 import { ProviderMenuList } from "@/components/settings/model-menu";
 import { ChatGPTBackgroundAccess } from "@/components/settings/chatgpt-connection";
@@ -212,9 +213,11 @@ export function SetupKeysBody({
 								type="button"
 								onClick={onSave}
 								disabled={saving || !value.trim()}
+								aria-busy={saving || undefined}
 								data-testid="setup-key-save"
-								className="shrink-0 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="inline-flex shrink-0 items-center gap-1.5 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 							>
+								{saving && <Spinner className="size-3" />}
 								{saving ? "Lagrer…" : "Lagre nøkkel"}
 							</button>
 						</div>
@@ -620,9 +623,11 @@ function OpenSetupDialog({ onClose, onDone }: SetupDialogProps) {
 								type="button"
 								data-testid="setup-save"
 								disabled={!allPicked || saving}
+								aria-busy={saving || undefined}
 								onClick={() => void save()}
-								className="rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
+								className="inline-flex items-center gap-1.5 rounded-sm border border-border bg-background px-3 py-1.5 font-ui text-xs text-foreground transition-colors hover:border-muted-foreground/50 disabled:cursor-not-allowed disabled:opacity-40"
 							>
+								{saving && <Spinner className="size-3" />}
 								{saving ? "Lagrer…" : "Lagre modeller"}
 							</button>
 							{error && <p className="text-xs text-status-red-ink">{error}</p>}

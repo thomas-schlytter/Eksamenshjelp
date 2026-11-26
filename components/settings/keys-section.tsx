@@ -42,6 +42,7 @@ import { ClaudeCodeInstallationStatus } from "./claude-code-status.tsx";
 import { ProviderMenuList } from "./model-menu.tsx";
 import { MenuShell } from "@/components/menu-shell";
 import { notifySettingsSaved } from "@/components/settings-signal";
+import { Spinner } from "@/components/ui/pending";
 import { DictationLanguageSetting } from "@/components/dictation-language";
 
 /** One pi-ai provider with plain API-key auth (the Platform seam —
@@ -227,9 +228,11 @@ function KeyTableRow({
 						type="button"
 						onClick={() => void save()}
 						disabled={busy || !value.trim()}
+						aria-busy={busy || undefined}
 						data-testid={`${testid}-save`}
-						className="shrink-0 text-xs text-foreground underline-offset-2 hover:underline disabled:text-muted-foreground/40 disabled:no-underline"
+						className="inline-flex shrink-0 items-center gap-1 text-xs text-foreground underline-offset-2 hover:underline disabled:text-muted-foreground/40 disabled:no-underline"
 					>
+						{busy && <Spinner className="size-3" />}
 						Lagre
 					</button>
 					<button
@@ -1041,9 +1044,11 @@ function CustomEndpointEditor({
 							type="button"
 							onClick={() => void savePins()}
 							disabled={pinsBusy || !dirty}
+							aria-busy={pinsBusy || undefined}
 							data-testid="custom-pins-save"
-							className="ml-auto shrink-0 text-xs text-foreground underline-offset-2 hover:underline disabled:text-muted-foreground/40 disabled:no-underline"
+							className="ml-auto inline-flex shrink-0 items-center gap-1 text-xs text-foreground underline-offset-2 hover:underline disabled:text-muted-foreground/40 disabled:no-underline"
 						>
+							{pinsBusy && <Spinner className="size-3" />}
 							{pinsBusy ? "Lagrer…" : "Lagre grenser"}
 						</button>
 					</div>

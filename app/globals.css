@@ -773,3 +773,43 @@ body {
 		animation: none;
 	}
 }
+
+/* While the sidebar is docked (components/sidebar.tsx, 2026-11-26) the
+   closed toggle's slot is zero wide, and its traffic-light gutter goes
+   with it. Specificity above the .lh-closed-toggle rule above. */
+.lh-electron[data-lh-platform="darwin"] [data-sidebar-docked] .lh-closed-toggle {
+	margin-left: 0;
+}
+
+/* The route progress stripe (components/navigation-progress.tsx,
+   2026-11-26): it grows fast and then ever slower while a page loads,
+   fills and fades when it lands. A transform on its own layer, never
+   layout. Reduced motion: a still, half-strength bar that just goes. */
+@keyframes lh-nav-progress-run {
+	from {
+		transform: scaleX(0);
+	}
+	to {
+		transform: scaleX(0.92);
+	}
+}
+.lh-nav-progress {
+	will-change: transform, opacity;
+}
+.lh-nav-progress[data-phase="running"] {
+	animation: lh-nav-progress-run 8s cubic-bezier(0.08, 0.82, 0.17, 1) forwards;
+}
+.lh-nav-progress[data-phase="done"] {
+	transform: scaleX(1);
+	opacity: 0;
+	transition: transform 150ms ease-out, opacity 200ms ease-out 100ms;
+}
+@media (prefers-reduced-motion: reduce) {
+	.lh-nav-progress[data-phase="running"] {
+		animation: none;
+		opacity: 0.6;
+	}
+	.lh-nav-progress[data-phase="done"] {
+		transition: none;
+	}
+}

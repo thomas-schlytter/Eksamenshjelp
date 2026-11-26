@@ -43,9 +43,9 @@ export function MockGradeDispatchCard({ part }: ArtifactPartProps) {
 export { MAKE_MOCK_EXAM_TEXT } from "@/src/core";
 
 /** «Lag prøveeksamen» in the fag-chat's top bar. */
-export function MakeMockExamButton({ onClick }: { onClick: () => void }) {
+export function MakeMockExamButton({ onClick, pending = false }: { onClick: () => void; pending?: boolean }) {
 	return (
-		<Button variant="outline" size="sm" data-testid="make-mock-exam" onClick={onClick} className="lh-no-drag shrink-0">
+		<Button variant="outline" size="sm" data-testid="make-mock-exam" onClick={onClick} pending={pending} className="lh-no-drag shrink-0">
 			<NotebookPenIcon aria-hidden />
 			Lag prøveeksamen
 		</Button>

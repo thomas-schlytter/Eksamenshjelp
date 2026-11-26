@@ -29,6 +29,7 @@ import type { LhMessage } from "../../core/native-messages.ts";
 import { ClaudeLaunchError, createClaudeLauncher } from "./launch.ts";
 import { parseCliLine, type CliBlock, type CliEvent, type CliUsage } from "./cli-events.ts";
 import { ClaudeCodeError } from "./constants.ts";
+import { recordUsageLimits } from "../usage-limits.ts";
 import { ContextWindowProbe } from "./context-window.ts";
 import { addLiveProcess, getLiveProcess, removeLiveProcess, type LiveProcess } from "./live-processes.ts";
 import { configurationForReuse, conversationForReuse } from "./reuse-context.ts";
@@ -621,6 +622,12 @@ class ClaudeProcess implements LiveProcess {
 		if (this.contextProbe?.handle(JSON.parse(line))) return;
 		const event = parseCliLine(line);
 		if (!event) return;
+		if (event.type === "rateLimits") {
+			// Bruk (2026-11-26): the subscription's limits, for the sidebar.
+			// Not part of the turn.
+			recordUsageLimits("claude", event.windows);
+			return;
+		}
 		if (event.type === "toolResults") {
 			// The CLI answered a harness call itself (invalid input, denial, discarded
 			// execution) instead of sending it to the MCP bridge. Nothing ran, and the
