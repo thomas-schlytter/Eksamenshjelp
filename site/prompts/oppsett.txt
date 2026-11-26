@@ -1,0 +1,27 @@
+Du er i {{verktoy}} og skal sette opp appen Eksamenshjelp for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg installerer Eksamenshjelp, lager en mappe per fag og henter tidligere eksamener med løsningsforslag. Du må godkjenne noen kommandoer underveis.»
+
+2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. {{godkjenning}}
+Mac:
+curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Spør studenten: «Hvilke fag har du denne eksamensperioden? Skriv fagkodene, for eksempel TMA4100 TDT4110.»
+
+4. Lag én mappe per fagkode, med store bokstaver:
+Mac: ~/Documents/Eksamenshjelp/<FAGKODE>/
+Windows: %USERPROFILE%\Documents\Eksamenshjelp\<FAGKODE>\
+
+5. Finn tidligere eksamener og løsningsforslag for hvert fag med {{nettleser}}. Se her, i denne rekkefølgen:
+- Canvas-emnerommet på https://ntnu.instructure.com (Filer og Moduler)
+- emnesiden https://www.ntnu.no/studier/emner/<FAGKODE>
+- wiki.math.ntnu.no og andre offentlige emnewikier for faget
+Lagre filene i fagmappen som <år><sesong>_eksamen.pdf og <år><sesong>_LF.pdf, der sesong er var, host eller kont (for eksempel 2024host_eksamen.pdf). Offentlige PDF-er henter du med curl. Det nettleseren laster ned, havner i Nedlastinger: flytt det til fagmappen og gi det riktig navn. Ta de nyeste først, og høyst ti eksamener per fag.
+{{uten_nettleser}}
+
+6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
+
+7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»

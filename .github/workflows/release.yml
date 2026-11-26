@@ -10,6 +10,19 @@ on:
 permissions:
   contents: read
 
+# Eksamenshjelp ships UNSIGNED (owner 2026-11-26): no Apple Developer ID and
+# no Windows certificate, so no secrets beyond the built-in GITHUB_TOKEN.
+#   mac arm64  ad-hoc signed (identity "-"), not notarized, no hardened
+#              runtime: the same shape as `npm run desktop:local`. The
+#              website's install.sh removes the quarantine flag.
+#   win x64    NSIS, unsigned (electron-builder.yml signExecutable: false);
+#              install.ps1 runs Unblock-File.
+#   linux x64  AppImage + deb, kept because scripts/verify-release.ts
+#              expects the full 11-asset set.
+# The website's install scripts pick Eksamenshjelp-<v>-arm64-mac.zip (dmg as
+# fallback) and Eksamenshjelp-<v>-x64-setup.exe from /releases/latest — keep
+# those names in step with scripts/verify-release.ts.
+
 # Serialize separate runs for the same ref; never cancel an upload in flight.
 concurrency:
   group: release-${{ github.ref }}
@@ -17,6 +30,9 @@ concurrency:
 
 env:
   NEXT_TELEMETRY_DISABLED: "1"
+  # Ad-hoc mac signing, as in package.json's desktop:local (that script also
+  # swaps in build/icon.icns; CI compiles build/icon.icon with Xcode 26).
+  MAC_UNSIGNED_ARGS: -c.mac.notarize=false -c.mac.identity=- -c.mac.hardenedRuntime=false
 
 jobs:
   quality:
@@ -102,8 +118,7 @@ jobs:
             platform: linux-x64
             builder_args: --linux --x64
     runs-on: ${{ matrix.os }}
-    # Apple's notarization queue has taken ~2 hours for this team.
-    timeout-minutes: 180
+    timeout-minutes: 90
     defaults:
       run:
         shell: bash
@@ -133,41 +148,22 @@ jobs:
       - run: node scripts/smoke-provider-runtime.mjs
       - run: node scripts/build-server.mjs
       - run: node scripts/smoke-server.mjs --electron
-      - name: Validate macOS release secrets
-        if: github.event_name == 'push' && runner.os == 'macOS'
-        env:
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID; do
-            if [[ -z "${!name}" ]]; then
-              echo "::error::Missing signing/notarization secret: $name"
-              exit 1
-            fi
-          done
-      - name: Signed and notarized macOS release → draft
+      - name: Ad-hoc signed macOS release → draft
         if: github.event_name == 'push' && runner.os == 'macOS'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npx electron-builder ${{ matrix.builder_args }} --publish always -c.forceCodeSigning=true
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+        run: npx electron-builder ${{ matrix.builder_args }} --publish always $MAC_UNSIGNED_ARGS
       - name: Windows/Linux release → draft
         if: github.event_name == 'push' && runner.os != 'macOS'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npx electron-builder ${{ matrix.builder_args }} --publish always
-      - name: Unsigned macOS rehearsal (no publish, no notarization)
+      - name: Ad-hoc signed macOS rehearsal (no publish)
         if: github.event_name == 'workflow_dispatch' && runner.os == 'macOS'
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: "false"
-        run: npx electron-builder ${{ matrix.builder_args }} --publish never -c.mac.notarize=false
+        run: npx electron-builder ${{ matrix.builder_args }} --publish never $MAC_UNSIGNED_ARGS
       - name: Windows/Linux rehearsal (no publish)
         if: github.event_name == 'workflow_dispatch' && runner.os != 'macOS'
         run: npx electron-builder ${{ matrix.builder_args }} --publish never
@@ -175,13 +171,13 @@ jobs:
         run: |
           case "$RUNNER_OS" in
             macOS)
-              app="dist/mac-arm64/LearnHarness.app/Contents"
+              app="dist/mac-arm64/Eksamenshjelp.app/Contents"
               payload="$app/Resources/server/standalone"
-              runtime="$app/MacOS/LearnHarness"
+              runtime="$app/MacOS/Eksamenshjelp"
               ;;
             Windows)
               payload="dist/win-unpacked/resources/server/standalone"
-              runtime="dist/win-unpacked/LearnHarness.exe"
+              runtime="dist/win-unpacked/Eksamenshjelp.exe"
               ;;
             Linux)
               payload="dist/linux-unpacked/resources/server/standalone"
@@ -194,11 +190,11 @@ jobs:
         run: |
           case "$RUNNER_OS" in
             macOS)
-              app="dist/mac-arm64/LearnHarness.app/Contents"
-              node scripts/smoke-demo-runtime.mjs --standalone "$app/Resources/server/standalone" --runtime "$app/MacOS/LearnHarness" --browser
+              app="dist/mac-arm64/Eksamenshjelp.app/Contents"
+              node scripts/smoke-demo-runtime.mjs --standalone "$app/Resources/server/standalone" --runtime "$app/MacOS/Eksamenshjelp" --browser
               ;;
             Windows)
-              node scripts/smoke-demo-runtime.mjs --standalone dist/win-unpacked/resources/server/standalone --runtime dist/win-unpacked/LearnHarness.exe --browser
+              node scripts/smoke-demo-runtime.mjs --standalone dist/win-unpacked/resources/server/standalone --runtime dist/win-unpacked/Eksamenshjelp.exe --browser
               ;;
             Linux)
               xvfb-run -a node scripts/smoke-demo-runtime.mjs --standalone dist/linux-unpacked/resources/server/standalone --runtime dist/linux-unpacked/learnharness --browser
@@ -207,7 +203,7 @@ jobs:
       - name: Save installers and update metadata
         uses: actions/upload-artifact@v7
         with:
-          name: learnharness-${{ matrix.platform }}
+          name: eksamenshjelp-${{ matrix.platform }}
           retention-days: 7
           if-no-files-found: error
           path: |

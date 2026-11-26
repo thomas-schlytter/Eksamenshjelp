@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="nb">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Eksamenshjelp – kom i gang</title>
+<meta name="description" content="Sett opp Eksamenshjelp på Mac eller Windows: kopier én tekst inn i Claude Code eller Codex, så installeres appen og fagene dine gjøres klare.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 34 34'%3E%3Crect width='34' height='34' rx='6' fill='%231C2B4A'/%3E%3Crect x='9' y='9' width='16' height='3.4' rx='1.7' fill='%23F5F1E8'/%3E%3Crect x='9' y='15.3' width='11' height='3.4' rx='1.7' fill='%23F5F1E8'/%3E%3Crect x='9' y='21.6' width='16' height='3.4' rx='1.7' fill='%23F5F1E8'/%3E%3Ccircle cx='24' cy='17' r='2.4' fill='%23C9A24A'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Sora:wght@600;700&amp;display=swap">
+<script>document.documentElement.classList.add("js");</script>
+<style>
+	:root {
+		color-scheme: light;
+		--marine: #1C2B4A;
+		--marine-hover: #2A3D63;
+		--gold: #C9A24A;
+		--gold-soft: #F4ECD8;
+		--bg: #F7F7F4;
+		--card: #FFFFFF;
+		--text: #1B1F27;
+		--muted: #575348;
+		--line: #DEDBD2;
+		--on-marine: #F5F1E8;
+		--radius: 6px;
+		--radius-sm: 4px;
+	}
+	* { box-sizing: border-box; }
+	html { -webkit-text-size-adjust: 100%; }
+	body {
+		margin: 0;
+		background: var(--bg);
+		color: var(--text);
+		font: 400 1rem/1.6 Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+	}
+	h1, h2, h3 { font-family: Sora, Inter, system-ui, sans-serif; color: var(--marine); line-height: 1.25; margin: 0; }
+	h1 { font-size: clamp(1.9rem, 6vw, 2.6rem); font-weight: 700; letter-spacing: -0.01em; }
+	h2 { font-size: 1.35rem; font-weight: 600; margin-bottom: 0.75rem; }
+	p { margin: 0 0 0.75rem; }
+	a { color: var(--marine); text-underline-offset: 2px; }
+	a:hover { color: var(--marine-hover); }
+	:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; }
+	code { font: 0.92em/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+	.wrap { max-width: 44rem; margin: 0 auto; padding: 0 16px; }
+	header.site { padding: 20px 0; }
+	.brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--marine); font: 600 1.1rem/1 Sora, Inter, sans-serif; }
+	.brand svg { width: 32px; height: 32px; flex: none; }
+	main section { margin: 2.5rem 0; }
+	.lead { font-size: 1.125rem; color: var(--text); margin-top: 0.75rem; }
+
+	.needs { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+	.needs li { padding-left: 22px; position: relative; }
+	.needs li::before { content: ""; position: absolute; left: 4px; top: 0.6em; width: 8px; height: 8px; border-radius: 50%; background: var(--gold); }
+
+	.steps { list-style: none; padding: 0; margin: 0; counter-reset: step; display: grid; gap: 12px; }
+	.steps li { counter-increment: step; display: grid; grid-template-columns: 2rem 1fr; gap: 12px; align-items: start; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; }
+	.steps li::before { content: counter(step); display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: var(--radius-sm); background: var(--marine); color: var(--on-marine); font: 600 1rem/1 Sora, Inter, sans-serif; }
+	.steps p { margin: 0; }
+	.steps .hint { color: var(--muted); font-size: 0.94rem; margin-top: 4px; }
+
+	.after { margin-top: 1rem; }
+	.note { border-left: 4px solid var(--gold); background: var(--gold-soft); padding: 10px 14px; border-radius: var(--radius-sm); margin: 0 0 1rem; }
+
+	.prompt { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+	.tabs { display: none; border-bottom: 1px solid var(--line); }
+	.js .tabs { display: flex; }
+	.tab {
+		flex: 1 1 0; min-height: 48px; padding: 10px 12px; border: 0; border-bottom: 3px solid transparent;
+		background: transparent; color: var(--muted); font: 600 1rem/1.2 Inter, system-ui, sans-serif; cursor: pointer;
+	}
+	.tab[aria-selected="true"] { color: var(--marine); border-bottom-color: var(--marine); background: var(--card); }
+	.tab:hover { color: var(--marine); }
+	.panel { padding: 16px; }
+	.panel + .panel { border-top: 1px solid var(--line); }
+	.js .panel + .panel { border-top: 0; }
+	.panel h3 { font-size: 1.05rem; margin-bottom: 4px; }
+	.js .panel h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+	.panel-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+	.panel-head p { margin: 0; color: var(--muted); flex: 1 1 16rem; }
+	.copy {
+		display: none; min-height: 44px; padding: 10px 22px; border: 0; border-radius: var(--radius-sm);
+		background: var(--marine); color: var(--on-marine); font: 600 1rem/1 Inter, system-ui, sans-serif; cursor: pointer;
+	}
+	.js .copy { display: inline-block; }
+	.copy:hover { background: var(--marine-hover); }
+	.status { min-height: 1.5em; margin: 8px 0 0; color: var(--marine); font-weight: 500; }
+	pre {
+		margin: 0; padding: 12px 14px; max-height: 18rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+		background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);
+		font: 0.85rem/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--text);
+	}
+
+	details { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); margin-bottom: 8px; }
+	summary { cursor: pointer; padding: 14px 16px; font-weight: 600; color: var(--marine); min-height: 48px; }
+	details > div { padding: 0 16px 14px; }
+	details > div p:last-child { margin-bottom: 0; }
+
+	footer.site { border-top: 1px solid var(--line); padding: 20px 0 32px; color: var(--muted); font-size: 0.94rem; }
+	footer.site p { margin: 0 0 4px; }
+	footer.site a { color: var(--muted); }
+	footer.site a:hover { color: var(--marine); }
+</style>
+</head>
+<body>
+<header class="site">
+	<div class="wrap">
+		<a class="brand" href="./" aria-label="Eksamenshjelp, forsiden">
+			<svg viewBox="0 0 34 34" aria-hidden="true" focusable="false">
+				<rect width="34" height="34" rx="6" fill="#1C2B4A"/>
+				<rect x="9" y="9" width="16" height="3.4" rx="1.7" fill="#F5F1E8"/>
+				<rect x="9" y="15.3" width="11" height="3.4" rx="1.7" fill="#F5F1E8"/>
+				<rect x="9" y="21.6" width="16" height="3.4" rx="1.7" fill="#F5F1E8"/>
+				<circle cx="24" cy="17" r="2.4" fill="#C9A24A"/>
+			</svg>
+			Eksamenshjelp
+		</a>
+	</div>
+</header>
+
+<main class="wrap">
+	<section aria-labelledby="tittel">
+		<h1 id="tittel">Sett opp Eksamenshjelp</h1>
+		<p class="lead">Eksamenshjelp er en gratis app som hjelper NTNU-studenter å øve mot eksamen, med tidligere eksamener fra fagene dine og en plan fram mot eksamensdagen.</p>
+	</section>
+
+	<section aria-labelledby="trenger">
+		<h2 id="trenger">Du trenger</h2>
+		<ul class="needs">
+			<li>En Mac med Apple-brikke (M1 eller nyere) eller en Windows-PC.</li>
+			<li>Et abonnement på Claude Pro eller Max, eller på ChatGPT Plus eller Pro.</li>
+		</ul>
+	</section>
+
+	<section aria-labelledby="steg">
+		<h2 id="steg">Tre steg</h2>
+		<ol class="steps">
+			<li>
+				<div>
+					<p>Last ned <a href="https://claude.com/download">Claude-appen</a> eller <a href="https://developers.openai.com/codex/app">Codex</a>, og logg inn.</p>
+				</div>
+			</li>
+			<li>
+				<div>
+					<p>Åpne Code-fanen i Claude-appen, eller åpne Codex.</p>
+					<p class="hint">Spør den etter en mappe, velg Dokumenter.</p>
+				</div>
+			</li>
+			<li>
+				<div>
+					<p>Trykk «Kopier» under, lim inn og trykk Enter.</p>
+					<p class="hint">Godkjenn kommandoene når du blir spurt, og logg inn i Canvas selv når den ber om det.</p>
+				</div>
+			</li>
+		</ol>
+	</section>
+
+	<section aria-labelledby="kopier">
+		<h2 id="kopier">Teksten du limer inn</h2>
+		<p class="note"><strong>Bruk Code-fanen eller Codex.</strong> Vanlig chat i Claude eller ChatGPT kan ikke installere noe.</p>
+
+		<div class="prompt">
+			<div class="tabs" role="tablist" aria-label="Velg verktøy">
+				<button type="button" class="tab" role="tab" id="tab-claude" aria-controls="panel-claude" aria-selected="true">Claude Code</button>
+				<button type="button" class="tab" role="tab" id="tab-codex" aria-controls="panel-codex" aria-selected="false" tabindex="-1">ChatGPT Codex</button>
+			</div>
+
+			<div class="panel" id="panel-claude" role="tabpanel" aria-labelledby="tab-claude">
+				<h3>Claude Code</h3>
+				<div class="panel-head">
+					<p>For Code-fanen i Claude-appen. Henter eksamener fra Canvas med Claude in Chrome.</p>
+					<button type="button" class="copy" data-target="prompt-claude" data-status="status-claude">Kopier</button>
+				</div>
+				<pre id="prompt-claude"><!-- prompt:claude -->Du er i Claude Code og skal sette opp appen Eksamenshjelp for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg installerer Eksamenshjelp, lager en mappe per fag og henter tidligere eksamener med løsningsforslag. Du må godkjenne noen kommandoer underveis.»
+
+2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. Studenten må godkjenne kommandoen når Claude spør.
+Mac:
+curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Spør studenten: «Hvilke fag har du denne eksamensperioden? Skriv fagkodene, for eksempel TMA4100 TDT4110.»
+
+4. Lag én mappe per fagkode, med store bokstaver:
+Mac: ~/Documents/Eksamenshjelp/&lt;FAGKODE&gt;/
+Windows: %USERPROFILE%\Documents\Eksamenshjelp\&lt;FAGKODE&gt;\
+
+5. Finn tidligere eksamener og løsningsforslag for hvert fag med Claude in Chrome, i nettleseren der studenten er innlogget. Se her, i denne rekkefølgen:
+- Canvas-emnerommet på https://ntnu.instructure.com (Filer og Moduler)
+- emnesiden https://www.ntnu.no/studier/emner/&lt;FAGKODE&gt;
+- wiki.math.ntnu.no og andre offentlige emnewikier for faget
+Lagre filene i fagmappen som &lt;år&gt;&lt;sesong&gt;_eksamen.pdf og &lt;år&gt;&lt;sesong&gt;_LF.pdf, der sesong er var, host eller kont (for eksempel 2024host_eksamen.pdf). Offentlige PDF-er henter du med curl. Det nettleseren laster ned, havner i Nedlastinger: flytt det til fagmappen og gi det riktig navn. Ta de nyeste først, og høyst ti eksamener per fag.
+Har du ikke Claude in Chrome, be studenten installere utvidelsen og koble den til. Vil studenten ikke det, hopp over dette steget.
+
+6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
+
+7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»<!-- /prompt:claude --></pre>
+				<p class="status" id="status-claude" role="status" aria-live="polite"></p>
+			</div>
+
+			<div class="panel" id="panel-codex" role="tabpanel" aria-labelledby="tab-codex">
+				<h3>ChatGPT Codex</h3>
+				<div class="panel-head">
+					<p>For Codex. Henter eksamener fra Canvas med Codex-nettleseren.</p>
+					<button type="button" class="copy" data-target="prompt-codex" data-status="status-codex">Kopier</button>
+				</div>
+				<pre id="prompt-codex"><!-- prompt:codex -->Du er i Codex og skal sette opp appen Eksamenshjelp for en NTNU-student. Følg stegene i rekkefølge. Ikke utforsk, klon eller bygg noe.
+
+1. Si kort til studenten: «Jeg installerer Eksamenshjelp, lager en mappe per fag og henter tidligere eksamener med løsningsforslag. Du må godkjenne noen kommandoer underveis.»
+
+2. Installer appen med ett kommando-kall. Det laster ned den ferdige appen fra GitHub, installerer den og starter den. Kommandoen trenger nettverk og skriver utenfor arbeidsmappen, så be om å kjøre den utenfor sandkassen. Studenten må godkjenne den.
+Mac:
+curl -fsSL https://thomas030505.github.io/Eksamenshjelp/install.sh | bash
+Windows:
+powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://thomas030505.github.io/Eksamenshjelp/install.ps1 | iex"
+Skriver kommandoen «Feil:», forklar feilen for studenten med enkle ord og stopp.
+
+3. Spør studenten: «Hvilke fag har du denne eksamensperioden? Skriv fagkodene, for eksempel TMA4100 TDT4110.»
+
+4. Lag én mappe per fagkode, med store bokstaver:
+Mac: ~/Documents/Eksamenshjelp/&lt;FAGKODE&gt;/
+Windows: %USERPROFILE%\Documents\Eksamenshjelp\&lt;FAGKODE&gt;\
+
+5. Finn tidligere eksamener og løsningsforslag for hvert fag med Codex-nettleseren eller computer use. Se her, i denne rekkefølgen:
+- Canvas-emnerommet på https://ntnu.instructure.com (Filer og Moduler)
+- emnesiden https://www.ntnu.no/studier/emner/&lt;FAGKODE&gt;
+- wiki.math.ntnu.no og andre offentlige emnewikier for faget
+Lagre filene i fagmappen som &lt;år&gt;&lt;sesong&gt;_eksamen.pdf og &lt;år&gt;&lt;sesong&gt;_LF.pdf, der sesong er var, host eller kont (for eksempel 2024host_eksamen.pdf). Offentlige PDF-er henter du med curl. Det nettleseren laster ned, havner i Nedlastinger: flytt det til fagmappen og gi det riktig navn. Ta de nyeste først, og høyst ti eksamener per fag.
+Har du verken nettleser eller computer use, hopp over dette steget.
+
+6. Skriv aldri passord, og fyll aldri ut en innlogging. Er studenten ikke innlogget, be studenten logge inn selv og vent. Last ikke ned noe annet enn fagmateriale for disse fagene.
+
+7. Start appen hvis den ikke er åpen (Mac: open -a Eksamenshjelp, Windows: kommandoen nederst i utskriften fra steg 2). Si til slutt: «Åpne Eksamenshjelp og følg innføringen.»<!-- /prompt:codex --></pre>
+				<p class="status" id="status-codex" role="status" aria-live="polite"></p>
+			</div>
+		</div>
+		<p class="after">Det tar noen minutter. Når den er ferdig, åpner du Eksamenshjelp og følger innføringen.</p>
+	</section>
+
+	<section aria-labelledby="sporsmal">
+		<h2 id="sporsmal">Spørsmål</h2>
+		<details>
+			<summary>Er det trygt?</summary>
+			<div>
+				<p>Appen og skriptene har åpen kildekode. Kommandoen laster bare ned den ferdige appen fra <a href="https://github.com/thomas030505/Eksamenshjelp/releases">prosjektets side på GitHub</a> og lager mappen Dokumenter/Eksamenshjelp.</p>
+				<p>AI-en skriver aldri passordet ditt. Du logger inn i Canvas selv, og alt lagres på maskinen din. Vil du se hva som kjøres, kan du lese <a href="install.sh">install.sh</a> (Mac) og <a href="install.ps1">install.ps1</a> (Windows).</p>
+			</div>
+		</details>
+		<details>
+			<summary>Hva koster det?</summary>
+			<div>
+				<p>Appen er gratis. Oppsettet bruker litt av abonnementet ditt: installasjonen nesten ingenting, mens letingen etter eksamener i Canvas bruker noe mer.</p>
+				<p>I appen kobler du til en AI-modell, for eksempel med abonnementet du alt har.</p>
+			</div>
+		</details>
+		<details>
+			<summary>Hvorfor advarer Mac eller Windows?</summary>
+			<div>
+				<p>Appen er ikke signert med et betalt sertifikat fra Apple eller Microsoft. Skriptet fjerner derfor nedlastingsmerket selv, så vanligvis ser du ingen advarsel.</p>
+				<p>Ser du «Windows beskyttet PC-en din», trykker du «Mer informasjon» og så «Kjør likevel». Sier Macen at appen ikke kan åpnes, går du til Systeminnstillinger → Personvern og sikkerhet og trykker «Åpne likevel».</p>
+			</div>
+		</details>
+	</section>
+</main>
+
+<footer class="site">
+	<div class="wrap">
+		<p>Laget av <a href="https://www.linkedin.com/in/thomas-schlytter-henrichsen-0b4182296/">Thomas Schlytter-Henrichsen</a></p>
+		<p>Basert på <a href="https://github.com/amosblomqvist/learnharness">LearnHarness</a></p>
+	</div>
+</footer>
+
+<script>
+(function () {
+	var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+	function select(tab, focus) {
+		tabs.forEach(function (t) {
+			var on = t === tab;
+			t.setAttribute("aria-selected", on ? "true" : "false");
+			t.tabIndex = on ? 0 : -1;
+			document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+		});
+		if (focus) tab.focus();
+	}
+	tabs.forEach(function (tab, i) {
+		tab.addEventListener("click", function () { select(tab, false); });
+		tab.addEventListener("keydown", function (e) {
+			var next = null;
+			if (e.key === "ArrowRight") next = tabs[(i + 1) % tabs.length];
+			else if (e.key === "ArrowLeft") next = tabs[(i - 1 + tabs.length) % tabs.length];
+			else if (e.key === "Home") next = tabs[0];
+			else if (e.key === "End") next = tabs[tabs.length - 1];
+			if (next) { e.preventDefault(); select(next, true); }
+		});
+	});
+	if (tabs.length) select(tabs[0], false);
+
+	function fallbackCopy(pre) {
+		var range = document.createRange();
+		range.selectNodeContents(pre);
+		var sel = window.getSelection();
+		sel.removeAllRanges();
+		sel.addRange(range);
+		var ok = false;
+		try { ok = document.execCommand("copy"); } catch (e) { ok = false; }
+		return ok;
+	}
+	document.querySelectorAll(".copy").forEach(function (button) {
+		button.addEventListener("click", function () {
+			var pre = document.getElementById(button.dataset.target);
+			var status = document.getElementById(button.dataset.status);
+			function done(ok) {
+				status.textContent = ok ? "Kopiert. Lim inn og trykk Enter." : "Kunne ikke kopiere. Teksten er merket: trykk Cmd+C eller Ctrl+C.";
+				if (ok) {
+					button.textContent = "Kopiert";
+					setTimeout(function () { button.textContent = "Kopier"; }, 2500);
+				}
+			}
+			var text = pre.textContent;
+			if (navigator.clipboard && window.isSecureContext) {
+				navigator.clipboard.writeText(text).then(function () { done(true); }, function () { done(fallbackCopy(pre)); });
+			} else {
+				done(fallbackCopy(pre));
+			}
+		});
+	});
+})();
+</script>
+</body>
+</html>

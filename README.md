@@ -19,6 +19,10 @@ Dette er en norsk, eksamensrettet versjon av LearnHarness for studenter ved NTNU
 
 Appen er gratis og har åpen kildekode. Alt i appen er på norsk bokmål.
 
+## Kom i gang
+
+Gå til **[thomas030505.github.io/Eksamenshjelp](https://thomas030505.github.io/Eksamenshjelp/)**, trykk «Kopier» og lim teksten inn i Code-fanen i Claude-appen eller i Codex. Den installerer appen, lager en mappe per fag og henter tidligere eksamener fra Canvas. Du trenger en Mac med Apple-brikke eller en Windows-PC, og et Claude Pro/Max- eller ChatGPT Plus/Pro-abonnement.
+
 > **Bygger på [LearnHarness](https://github.com/amosblomqvist/learnharness) av Amos Blomqvist.** Læringsmotoren, kunnskapskartet og skrivebordsappen kommer fra originalprosjektet. Denne versjonen legger til fag, eksamensmodus, hjelpesenter og norsk språk. Se [Bygger på LearnHarness](#bygger-på-learnharness).
 
 ![En læringsøkt i LearnHarness](docs/assets/teaching-session.png)
@@ -53,9 +57,9 @@ Senere økter kan lese kartet i stedet for å begynne fra bunnen av, og øvings�
 
 Hjelpesenteret i appen har søk i funksjoner, spørsmål og svar, og interaktive veivisere som viser deg rundt. Du kan også åpne søket fra sidemenyen, uansett hvor du er i appen.
 
-## Kom i gang
+## Kjør fra kildekoden
 
-Denne versjonen kjører du fra kildekoden:
+For utvikling kjører du appen fra kildekoden:
 
 ```bash
 npm install
