@@ -93,8 +93,10 @@ describe("the fagmappe convention (core)", () => {
 				"2023_eksamen.pdf", "2023_LF.pdf", "2022_eksamen_2.pdf", "2022_lf_2.pdf",
 				"Eksamen-H2021.PDF", "losningsforslag 2021.pdf", "sub/exam_2019.pdf",
 				"notater.pdf", "2023_eksamen.txt", "forelesning.pdf",
+				// The website prompt's names: <år><sesong>_<eksamen|LF>.pdf.
+				"2024host_eksamen.pdf", "2024kont_LF.pdf", "2025var_eksamen.pdf",
 			]),
-			{ exams: 4, solutions: 3 },
+			{ exams: 6, solutions: 4 },
 		);
 	});
 
@@ -102,7 +104,9 @@ describe("the fagmappe convention (core)", () => {
 		const text = canvasPrompt({ codes: ["ttk4100", "TMA4100", "TTK4100"], folder: "/Users/eva/Documents/Eksamenshjelp" });
 		assert.match(text, /Fagene mine: TTK4100, TMA4100\./);
 		assert.match(text, /\/Users\/eva\/Documents\/Eksamenshjelp\/TTK4100/);
-		assert.match(text, /<FAGKODE>\/<år>_eksamen\.pdf og <FAGKODE>\/<år>_LF\.pdf/);
+		// The same names as the website's setup prompt (site/prompts/oppsett.txt).
+		assert.match(text, /<FAGKODE>\/<år><sesong>_eksamen\.pdf og <FAGKODE>\/<år><sesong>_LF\.pdf/);
+		assert.match(text, /var, host eller kont/);
 		assert.match(text, /nettleseren der jeg allerede er logget inn/);
 		assert.match(text, /Skriv aldri inn et passord/);
 		assert.match(text, /spør meg/);

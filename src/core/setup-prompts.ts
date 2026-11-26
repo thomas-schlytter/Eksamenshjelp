@@ -7,7 +7,9 @@
  * The app watches it (src/server/course-folders.ts): a folder named after a
  * course code becomes that course, and every file in it is the course's
  * material. A setup AI (Claude Code or Codex) fills it with earlier exams and
- * solutions, named `<FAGKODE>/<år>_<eksamen|LF>.pdf`.
+ * solutions, named `<FAGKODE>/<år><sesong>_<eksamen|LF>.pdf` (sesong: var, host
+ * or kont) — the same convention as the website's setup prompt
+ * (site/prompts/oppsett.txt).
  *
  * This module is the ONE source of that convention and of the Canvas prompt
  * text. The website and the install scripts reuse it (same folder, same
@@ -34,7 +36,7 @@ export const COURSE_FOLDER_README = [
 	"- Lag én mappe per fag, og gi den fagkoden som navn, for eksempel TTK4100.",
 	"  Appen legger da til faget av seg selv, med fakta fra NTNU.",
 	"- Legg tidligere eksamener og løsningsforslag i fagets mappe, for eksempel",
-	"  TTK4100/2023_eksamen.pdf og TTK4100/2023_LF.pdf.",
+	"  TTK4100/2023host_eksamen.pdf og TTK4100/2023host_LF.pdf (sesong: var, host eller kont).",
 	"- Du kan også legge inn egne notater, øvinger og bilder.",
 	"",
 	"Alt som ligger her, blir med når du øver. Ingenting lastes opp før du starter en økt.",
@@ -93,7 +95,7 @@ export function canvasPrompt(opts: { codes: readonly string[]; folder?: string }
 		"Slik gjør du det:",
 		"1. Bruk nettleseren der jeg allerede er logget inn (Canvas, Innsida og NTNUs nettsider). Skriv aldri inn et passord, og spør meg aldri om passordet mitt. Kommer du til en innloggingsside, stopp og be meg logge inn selv.",
 		"2. Let etter tidligere eksamener og løsningsforslag for hvert fag: i fagets rom i Canvas (Filer, Moduler og Sider), på emnesiden hos NTNU og på fagets wiki eller nettside.",
-		`3. Last ned PDF-ene og lagre dem i fagets mappe som <FAGKODE>/<år>_eksamen.pdf og <FAGKODE>/<år>_LF.pdf, for eksempel ${example}/2023_eksamen.pdf og ${example}/2023_LF.pdf. Har faget flere eksamener samme år, legg til _2, _3 og så videre: ${example}/2023_eksamen_2.pdf. Lag mappen hvis den ikke finnes.`,
+		`3. Last ned PDF-ene og lagre dem i fagets mappe som <FAGKODE>/<år><sesong>_eksamen.pdf og <FAGKODE>/<år><sesong>_LF.pdf, der sesong er var, host eller kont, for eksempel ${example}/2023host_eksamen.pdf og ${example}/2023host_LF.pdf. Ta de nyeste først, og høyst ti eksamener per fag. Lag mappen hvis den ikke finnes.`,
 		"4. Lagre bare eksamener og løsningsforslag. Ikke endre eller slett filer som allerede ligger i mappen, og ikke last ned den samme filen to ganger.",
 		"5. Er noe uklart, for eksempel hvilket fag eller år en fil hører til, eller om den faktisk er en eksamen, så spør meg før du fortsetter.",
 		"6. Gi meg til slutt en kort liste per fag over hva du lagret og hva du ikke fant.",
