@@ -1,3 +1,4 @@
+import { messagesForClient } from "@/src/core";
 import { compactionInFlight, deleteChatSession, getChat, isTurnRunning, sessionCoverage, sessionCost, stores, turnFailure, type ChatDeleteMode } from "@/src/server";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -14,9 +15,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 	// agent history, served VERBATIM — the client derives its view
 	// (core/view.ts projectView). turnInFlight lets a returning client
 	// re-attach to a running turn; coverage is the chat view's ring meter.
+	// 2026-11-26: minus the tool results' image bytes, which no client
+	// shows (core/client-messages.ts); the fag-chat record was 14.5 MB, and
+	// the model picker and the coverage meter read this route too.
 	return Response.json({
 		...chat,
-		messages: chat.messages,
+		messages: messagesForClient(chat.messages),
 		pricing: sessionCost(chat),
 		turnInFlight: isTurnRunning(id),
 		// Also reaches idle views that missed the failing turn's stream.

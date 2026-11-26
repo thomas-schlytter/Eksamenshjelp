@@ -42,6 +42,8 @@ import {
 import { useAppearance } from "./appearance.tsx";
 import { SettingsGroup, SettingsRow, SettingsSection } from "./controls.tsx";
 import { Button } from "@/components/ui/button";
+import { Spinner } from "@/components/ui/pending";
+import { cn } from "@/lib/utils";
 import { openLegacyImport } from "@/components/import/legacy-import-event";
 import { AboutSettings, UpdateSettings } from "./update-settings.tsx";
 import { AgentSection } from "./agent-section.tsx";
@@ -226,17 +228,24 @@ export function SettingsDialogBody({
 	/** ONE writer for the whole dialog: PUT the whole section, keep the
 	 *  record mirror in sync, surface route errors inline (a 400 is a
 	 *  schema mistake caught by the validation surface). */
+	const [saving, setSaving] = useState(0);
 	const write = useCallback(
 		async (
 			section: "general" | "agent" | "models" | "appearance" | "graph" | "compaction",
 			body: object,
 		) => {
 			setError(null);
-			const res = await fetch(`/api/settings/${section}`, {
-				method: "PUT",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify(body),
-			});
+			setSaving((n) => n + 1);
+			let res: Response;
+			try {
+				res = await fetch(`/api/settings/${section}`, {
+					method: "PUT",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(body),
+				});
+			} finally {
+				setSaving((n) => Math.max(0, n - 1));
+			}
 			if (!res.ok) {
 				const detail = (await res.json().catch(() => ({}))) as {
 					error?: string;
@@ -275,6 +284,13 @@ export function SettingsDialogBody({
 			{/* Header — the app's quiet CMU title language. */}
 			<header className="flex h-15 shrink-0 items-center gap-3 border-b border-border px-5">
 				<h2 className="font-title text-2xl tracking-tight">Innstillinger</h2>
+				{/* A write in flight (2026-11-26): the shared waiting look. */}
+				{saving > 0 && (
+					<span role="status" data-testid="settings-saving" className="ml-auto flex items-center gap-1.5 font-ui text-xs text-muted-foreground">
+						<Spinner className="size-3.5" />
+						Lagrer …
+					</span>
+				)}
 				<Hint
 						// Esc closes the dialog (its own listener) — surface it.
 						label="Lukk"
@@ -285,7 +301,7 @@ export function SettingsDialogBody({
 					type="button"
 					aria-label="Lukk innstillinger"
 					data-testid="settings-close"
-					className="ml-auto size-7 rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+					className={cn("size-7 rounded-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground", saving === 0 && "ml-auto")}
 					onClick={onClose}
 				>
 					<svg

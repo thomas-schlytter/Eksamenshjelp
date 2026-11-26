@@ -44,6 +44,10 @@ export * from "./math-delims.ts";
 // and the input-events contract — all
 // pure logic, browser-safe.
 export * from "./native-messages.ts";
+// What the chat view is sent: the record minus tool-result image bytes.
+export * from "./client-messages.ts";
+// Bruk: the subscriptions' 5-hour and weekly limits (2026-11-26).
+export * from "./usage-limits.ts";
 export * from "./compaction.ts";
 // session-wrap.ts («Oppsummering», 2026-11-22): the økt scope, the quiz
 // checks and the teacher-facing wrap marker.

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Chat } from "@/components/chat";
-import { slotsConfigured } from "@/src/core";
+import { messagesForClient, slotsConfigured } from "@/src/core";
 import { compactionInFlight, getChat, isTurnRunning, readSettingsRecord, turnFailure } from "@/src/server";
 
 export const dynamic = "force-dynamic";
@@ -27,8 +27,10 @@ export default async function ChatPage({
 			kind={chat.kind ?? "teach"}
 			// Wave D: the record IS native agent history — the client view is
 				// derived app-side (core/view.ts projectView; GET serves the same
-				// native messages).
-				initialMessages={chat.messages}
+				// native messages). Without the tool results' image bytes, which
+				// the view never shows (core/client-messages.ts: 12.8 of the
+				// fag-chat's 14.5 MB).
+				initialMessages={messagesForClient(chat.messages)}
 			initialError={turnFailure(chat.id)}
 			initialConfigured={slotsConfigured(record?.models)}
 			initialPrompt={prompt}

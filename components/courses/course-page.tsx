@@ -27,7 +27,8 @@ import {
 import { localIsoDate, topicCounts, TOPIC_STATUS_LABEL, type Course, type CourseTopic, type TopicStatus } from "./course-types";
 import { CourseWizard } from "./course-wizard";
 import { ExamPlanView } from "./exam-plan";
-import { LauncherSetupDialog, usePageTabCycle, useSessionLauncher } from "./session-launcher";
+import { LauncherSetupDialog, usePageTabCycle, useSessionLauncher, type LaunchOutcome } from "./session-launcher";
+import { beginNavigation } from "@/components/navigation-progress";
 import { TopicBoard } from "./topic-board";
 
 /** The collapsed sections at the bottom of the fag page (fase 7b). */
@@ -419,11 +420,13 @@ export function WorkNowCard({ topics, items, onWork, onAllTopics, onMakeTopics }
 // ─── the mock exams ──────────────────────────────────────────────────────────
 
 /** The score curve (percent per prøveeksamen) with dates and the change. */
-export function MockExamsCard({ points, loaded, busy, onMake }: {
+export function MockExamsCard({ points, loaded, busy, pending, onMake }: {
 	points: readonly MockExamPoint[];
 	/** false until the first read. */
 	loaded: boolean;
 	busy?: boolean;
+	/** «Lag prøveeksamen» was pressed and waits for the server. */
+	pending?: boolean;
 	onMake: () => void;
 }) {
 	const change = mockExamChange(points);
@@ -452,7 +455,7 @@ export function MockExamsCard({ points, loaded, busy, onMake }: {
 						{loaded ? "Ingen rettede prøveeksamener ennå." : "Laster …"}
 					</p>
 					{loaded && (
-						<Button variant="outline" onClick={onMake} disabled={busy}>
+						<Button variant="outline" onClick={onMake} disabled={busy} pending={pending}>
 							<SparklesIcon aria-hidden="true" />
 							Lag prøveeksamen
 						</Button>
@@ -770,22 +773,36 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 	};
 	// The fag-chat (fase 2): «Fortsett i fag-chatten» opens it (created the
 	// first time); «Lag prøveeksamen» and a topic send their text into it.
+	// An existing fag-chat is a plain prefetched link (2026-11-26): nothing
+	// awaits before the navigation. Only the first visit asks the server.
 	const [openingChat, setOpeningChat] = useState(false);
 	const openMainChat = () => {
 		setOpeningChat(true);
 		openCourseChatId(code, fetch)
-			.then((chat) => router.push(`/chat/${chat.id}`))
+			.then((chat) => {
+				beginNavigation();
+				router.push(`/chat/${chat.id}`);
+			})
 			.catch(() => {
 				setOpeningChat(false);
 				setNotice("Kunne ikke åpne fag-chatten. Prøv igjen.");
 			});
 	};
-	const sendToCourseChat = (text: string) => {
+	const sendToCourseChat = (text: string, onSettled?: (outcome: LaunchOutcome) => void) => {
 		void launcher.sendToCourseChat(code, text).then((outcome) => {
 			if (outcome === "failed") setNotice("Kunne ikke åpne fag-chatten. Prøv igjen.");
+			onSettled?.(outcome);
 		});
 	};
-	const makeMockExam = () => sendToCourseChat(MAKE_MOCK_EXAM_TEXT);
+	// «Lag prøveeksamen» spins on the button that was pressed (the launcher's
+	// busy also covers a topic sent to the fag-chat).
+	const [makingExam, setMakingExam] = useState(false);
+	const makeMockExam = () => {
+		setMakingExam(true);
+		sendToCourseChat(MAKE_MOCK_EXAM_TEXT, (outcome) => {
+			if (outcome !== "started") setMakingExam(false);
+		});
+	};
 	const showWizard = () => {
 		setWizard(true);
 		root.current?.querySelector("[data-scroll-root]")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -861,13 +878,18 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 							<h1 className="mt-1.5 font-title text-4xl font-semibold leading-tight tracking-tight text-balance">{course.name}</h1>
 						</div>
 						<div className="flex flex-wrap items-center gap-2.5">
-							<Button variant="outline" size="lg" onClick={makeMockExam} disabled={launcher.busy} data-testid="course-make-mock-exam">
+							<Button variant="outline" size="lg" onClick={makeMockExam} disabled={launcher.busy} pending={makingExam} data-testid="course-make-mock-exam">
 								Lag prøveeksamen
 							</Button>
-							<Button size="lg" onClick={openMainChat} disabled={openingChat || launcher.busy} data-testid="course-open-chat">
-								{openingChat && <LoaderCircleIcon className="animate-spin" aria-hidden="true" />}
-								Fortsett i fag-chatten
-							</Button>
+							{chatGroup?.main && !launcher.busy ? (
+								<Button asChild size="lg" data-testid="course-open-chat">
+									<Link href={`/chat/${chatGroup.main.id}`}>Fortsett i fag-chatten</Link>
+								</Button>
+							) : (
+								<Button size="lg" onClick={openMainChat} disabled={launcher.busy} pending={openingChat} data-testid="course-open-chat">
+									Fortsett i fag-chatten
+								</Button>
+							)}
 							<CourseMenu
 								custom={course.custom}
 								refreshing={refreshing}
@@ -927,7 +949,7 @@ export function CoursePage({ initial, initialConfigured }: { initial: CourseAndP
 							onAllTopics={() => openSection("topics", true)}
 							onMakeTopics={showWizard}
 						/>
-						<MockExamsCard points={points} loaded={results !== null} busy={launcher.busy} onMake={makeMockExam} />
+						<MockExamsCard points={points} loaded={results !== null} busy={launcher.busy} pending={makingExam} onMake={makeMockExam} />
 					</div>
 
 					{/* The rest, collapsed. `course-tabs` keeps the help center's

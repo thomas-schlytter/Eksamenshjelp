@@ -19,6 +19,11 @@ export interface CourseChatRef {
 
 const CHAT_ID = /^[A-Za-z0-9_-]+$/;
 
+/** The fag page. */
+export function courseHref(code: string): string {
+	return `/fag/${encodeURIComponent(code)}`;
+}
+
 /** «Ny underchat» in a fag: the draft view, linked to the fag (the
  *  session is created with the first message, which becomes its title). */
 export function newSubChatHref(code: string): string {

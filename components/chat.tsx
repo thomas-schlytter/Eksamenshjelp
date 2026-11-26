@@ -945,6 +945,8 @@ export function Chat({
 	// The live plan popup (wave 4): opened by any transcript plan block, the
 	// top-bar plan chip, and the dock band's marginalia.
 	const [planOpen, setPlanOpen] = useState(false);
+	// «Lag prøveeksamen» in the bar: waiting for the server to take it.
+	const [makingExam, setMakingExam] = useState(false);
 	// «Avslutt økt» (2026-11-22; 2026-11-23): the draft on the record (quiz
 	// in progress), the choice popup, the live window, and the read-only
 	// review a divider opens.
@@ -1586,9 +1588,16 @@ export function Chat({
 					    session that carries its course link. */}
 					{kind === "exam" && messages.some((m) => m.parts.some((p) => p.type === "data-course-context")) && (
 						<MakeMockExamButton
+							pending={makingExam}
 							onClick={() => {
-								if (busy) void steer(MAKE_MOCK_EXAM_TEXT);
-								else void send({ type: "text", text: MAKE_MOCK_EXAM_TEXT });
+								if (busy) {
+									void steer(MAKE_MOCK_EXAM_TEXT);
+									return;
+								}
+								// Spins until the server has taken the request.
+								setMakingExam(true);
+								void send({ type: "text", text: MAKE_MOCK_EXAM_TEXT }, () => setMakingExam(false))
+									.finally(() => setMakingExam(false));
 							}}
 						/>
 					)}

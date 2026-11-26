@@ -20,7 +20,10 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { AUTHOR_NAME, AUTHOR_URL, UPSTREAM_NAME, UPSTREAM_URL } from "@/lib/credits";
 import { useServerEvent, useServerResync } from "@/components/server-events";
-import { moveChatToCourse, newSubChatHref, openCourseChatId } from "@/components/courses/course-chats";
+import { courseHref, moveChatToCourse, newSubChatHref, openCourseChatId } from "@/components/courses/course-chats";
+import { beginNavigation, NavigationProgress } from "@/components/navigation-progress";
+import { Spinner } from "@/components/ui/pending";
+import { UsageLimits } from "@/components/usage-limits";
 import type { ChatListItem } from "@/src/core";
 import { kbdEventForAction } from "@/src/core";
 import { notifySettingsSaved } from "@/components/settings-signal";
@@ -193,6 +196,16 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 	const shown = open && !narrow;
 	const value = useMemo(() => ({ open: shown, toggle }), [shown, toggle]);
 
+	// THE SMOOTH TOGGLE, take 2 (owner 2026-11-26, «litt hakkete»): the
+	// panel glides OVER the page, and the page's width changes only once
+	// the glide is over (docked). Before, the width snapped in the first
+	// frame of the glide: the whole page (KaTeX, tables, the map canvas)
+	// was laid out, every ResizeObserver fired and the map resized its
+	// canvas in the very frames the panel was moving. Now that one layout
+	// lands when nothing moves. docked rides a data attribute on the shell
+	// (CSS, not context), so the settle re-renders no React consumer.
+	const docked = useDockedAfterSlide(shown, mounted);
+
 	return (
 		<SidebarContext.Provider value={value}>
 			{/* transitions gated on mount: no slide-in flash on page load.
@@ -204,30 +217,64 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
 			    hidden: a clip box is not a scroll container, so
 			    scrollIntoView (tours, keyboard selection) cannot shift the
 			    whole app sideways or up. */}
-			<div className={cn("flex h-dvh overflow-clip", mounted && "[&_.sidebar-motion]:transition-[width,margin,opacity] [&_.sidebar-slide]:transition-[translate,visibility]")}>{children}</div>
+			<div
+				data-sidebar-docked={docked || undefined}
+				className={cn("group/shell flex h-dvh overflow-clip", mounted && "[&_.sidebar-fade]:transition-opacity [&_.sidebar-slide]:transition-[translate,visibility] motion-reduce:[&_.sidebar-fade]:transition-none motion-reduce:[&_.sidebar-slide]:transition-none")}
+			>
+				{children}
+			</div>
 		</SidebarContext.Provider>
 	);
 }
 
+/**
+ * When the page gives the panel its room: `shown` after the glide (open:
+ * the panel lands first, then the page narrows; close: the panel leaves
+ * first, then the page widens). Immediate until the shell has mounted
+ * (the stored state lands with the first paint, no glide) and under
+ * reduced motion (there is no glide). Pure timing; exported for tests.
+ */
+export function dockDelay(wasMounted: boolean, reducedMotion: boolean): number {
+	return wasMounted && !reducedMotion ? SIDEBAR_SLIDE_MS : 0;
+}
+
+function useDockedAfterSlide(shown: boolean, mounted: boolean): boolean {
+	const [docked, setDocked] = useState(shown);
+	const wasMountedRef = useRef(false);
+	useEffect(() => {
+		const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
+		const delay = dockDelay(wasMountedRef.current, reduced);
+		wasMountedRef.current = mounted;
+		if (delay === 0) {
+			setDocked(shown);
+			return;
+		}
+		const timer = window.setTimeout(() => setDocked(shown), delay);
+		return () => window.clearTimeout(timer);
+	}, [shown, mounted]);
+	return docked;
+}
+
 /** Hamburger for page headers — only visible when the sidebar is closed.
  *
- *  Owner, round 6c: the toggle is ALWAYS MOUNTED, owning a slot whose
- *  width+margin animate in LOCKSTEP with the sidebar's own width
- *  transition (same duration-200, same easing, both gated on mount) —
- *  before, it mounted/unmounted in one frame, so its 48px footprint
- *  (button + gap) popped and dragged the title and chips sideways while
- *  the sidebar was still mid-slide. When open the slot is exactly zero
- *  (w-0 -mr-3: width 0, the negative margin cancels the header's gap-3),
- *  so resting layouts are pixel-identical to the old conditional render.
- *  The icon fades with the slot and is clipped by it as it collapses —
- *  no popping in either direction. */
+ *  Owner, round 6c: the toggle is ALWAYS MOUNTED, so it never pops in a
+ *  React commit. Its slot follows the shell's DOCKED state (2026-11-26):
+ *  it collapses and grows in the same frame as the page's own width
+ *  change, after the panel's glide, so the title moves once, with the
+ *  page, instead of a width animation running beside the glide. While
+ *  docked the slot is exactly zero (w-0 -mr-3: the negative margin cancels
+ *  the header's gap-3). Opening, the toggle sits under the gliding panel;
+ *  closing, it fades in where the page lands, next to the traffic lights
+ *  (lh-closed-toggle). Focus and clicks follow `open` at once. */
 export function SidebarToggle() {
 	const { open, toggle } = useSidebar();
 	return (
 		<span
 			className={cn(
-				"sidebar-motion lh-no-drag relative flex h-9 shrink-0 overflow-hidden duration-200",
-				open ? "w-0 -mr-3" : "w-9 mr-0 lh-closed-toggle",
+				"lh-no-drag relative flex h-9 w-9 shrink-0 overflow-hidden",
+				// The lights' gutter margin is dropped while docked in globals.css
+				// (it must beat the Electron rule's specificity).
+				"lh-closed-toggle group-data-[sidebar-docked]/shell:-mr-3 group-data-[sidebar-docked]/shell:w-0",
 			)}
 		>
 			<Hint label="Åpne sidemenyen" action="toggle-sidebar">
@@ -238,7 +285,7 @@ export function SidebarToggle() {
 				aria-hidden={open}
 				tabIndex={open ? -1 : 0}
 				onClick={toggle}
-				className={cn("sidebar-motion duration-200", open ? "pointer-events-none opacity-0" : "opacity-100")}
+				className={cn("sidebar-fade opacity-100 duration-200 group-data-[sidebar-docked]/shell:opacity-0", open && "pointer-events-none")}
 			>
 				{/* Owner, round 6: size-4, SAME as the close glyph — the toggle
 				    must not grow when the sidebar is closed (it did: size-5 here).
@@ -312,27 +359,25 @@ export function sessionMeta(chat: ChatListItem): string {
 export function SessionRow({
 	chat,
 	active,
+	href,
 	onOpen,
 	onContextMenu,
 }: {
 	chat: ChatListItem;
 	active: boolean;
-	onOpen: () => void;
+	/** The chat's page: the row is a prefetched link (2026-11-26). */
+	href?: string;
+	/** Without `href`: what a click does. */
+	onOpen?: () => void;
 	/** Right-click opens the context menu (Rename / Move / Export / Delete). */
-	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+	onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
-	return (
-		<button
-			type="button"
-			onClick={onOpen}
-			onContextMenu={onContextMenu}
-			aria-current={active ? "page" : undefined}
-			data-testid="session-row"
-			className={cn(
-				"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors hover:bg-accent",
-				active && "bg-accent text-primary dark:text-foreground [&>span>span:first-child]:font-semibold",
-			)}
-		>
+	const className = cn(
+		"relative mb-0.5 flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:ring-[3px] focus-visible:ring-ring/50",
+		active && "bg-accent text-primary dark:text-foreground [&>span>span:first-child]:font-semibold",
+	);
+	const body = (
+		<>
 			<SessionStatus busy={chat.busy || chat.compacting} />
 			<span className="min-w-0 flex-1">
 				{/* Titles are the learner's/teacher's WORDS — the prose face;
@@ -340,6 +385,18 @@ export function SessionRow({
 				<span className="block truncate font-prose text-(length:--lh-prose-size)">{chat.title}</span>
 				<span className="block text-xs text-muted-foreground">{sessionMeta(chat)}</span>
 			</span>
+		</>
+	);
+	if (href) {
+		return (
+			<Link href={href} onContextMenu={onContextMenu} aria-current={active ? "page" : undefined} data-testid="session-row" className={className}>
+				{body}
+			</Link>
+		);
+	}
+	return (
+		<button type="button" onClick={onOpen} onContextMenu={onContextMenu} aria-current={active ? "page" : undefined} data-testid="session-row" className={className}>
+			{body}
 		</button>
 	);
 }
@@ -353,6 +410,7 @@ export function CourseChatRow({
 	chat,
 	label,
 	active,
+	href,
 	onOpen,
 	onContextMenu,
 }: {
@@ -360,23 +418,27 @@ export function CourseChatRow({
 	/** Overrides the title (the fag-chat reads «Fag-chat»). */
 	label?: string;
 	active: boolean;
-	onOpen: () => void;
-	onContextMenu?: (e: React.MouseEvent<HTMLButtonElement>) => void;
+	/** The chat's page: the row is a prefetched link (2026-11-26). */
+	href?: string;
+	/** Without `href`: what a click does. */
+	onOpen?: () => void;
+	onContextMenu?: (e: React.MouseEvent<HTMLElement>) => void;
 }) {
-	return (
-		<button
-			type="button"
-			onClick={onOpen}
-			onContextMenu={onContextMenu}
-			title={sessionMeta(chat)}
-			aria-current={active ? "page" : undefined}
-			data-testid={label ? "course-main-chat" : "course-sub-chat"}
-			className={cn(SUB_ROW, active && ACTIVE_ROW)}
-		>
+	const shared = {
+		onContextMenu,
+		title: sessionMeta(chat),
+		"aria-current": active ? ("page" as const) : undefined,
+		"data-testid": label ? "course-main-chat" : "course-sub-chat",
+		className: cn(SUB_ROW, active && ACTIVE_ROW),
+	};
+	const body = (
+		<>
 			<span className="min-w-0 flex-1 truncate">{label ?? chat.title}</span>
 			<SessionStatus busy={chat.busy || chat.compacting} />
-		</button>
+		</>
 	);
+	if (href) return <Link href={href} {...shared}>{body}</Link>;
+	return <button type="button" onClick={onOpen} {...shared}>{body}</button>;
 }
 
 /** The inline-rename row (wave 6): same geometry as SessionRow, but the
@@ -466,12 +528,14 @@ export type ChatRowRenderer = (chat: ChatListItem, label?: string) => React.Reac
 /**
  * THE FAG SECTION (fase 2: one chat per fag). Every fag as a row with its
  * fagkode, the topic colours and the days left, nearest exam first. The
- * row opens the fag-chat. Under the active fag (or one the learner
- * unfolded) sit the fag-chat and the underchats, indented on a thin line;
- * the chevron folds a fag in and out, and the «+» that shows on hover
- * starts an underchat. Pure (props in, markup out) for the render pins.
+ * row opens the FAG PAGE (2026-11-26) and unfolds the fag. Under the
+ * active fag (or one the learner unfolded) sit the fag-chat and the
+ * underchats, indented on a thin line; «Fag-chat» opens (or first
+ * creates) the fag-chat. The chevron folds a fag in and out without
+ * navigating, and the «+» that shows on hover starts an underchat. Pure
+ * (props in, markup out) for the render pins.
  */
-export function SidebarCourses({ courses, groups, activeCode, activeChatId, expanded, onToggle, onOpenCourse, onOpenMainChat, renderChat, onAdd }: {
+export function SidebarCourses({ courses, groups, activeCode, activeChatId, expanded, onToggle, onOpenCourse, onOpenMainChat, openingMainChat, renderChat, onAdd }: {
 	courses: readonly CourseSummary[] | null;
 	groups: ReadonlyMap<string, CourseChatGroup<ChatListItem>>;
 	/** The fag the open page belongs to, if any. */
@@ -481,10 +545,12 @@ export function SidebarCourses({ courses, groups, activeCode, activeChatId, expa
 	/** Is the fag unfolded? */
 	expanded: (code: string) => boolean;
 	onToggle: (code: string) => void;
-	/** Open the fag: its fag-chat, created the first time. */
+	/** The fag's row was clicked (the link opens the fag page): unfold it. */
 	onOpenCourse: (code: string) => void;
 	/** The «Fag-chat» row of a fag that has none yet. */
 	onOpenMainChat: (code: string) => void;
+	/** The fag whose fag-chat is being created right now. */
+	openingMainChat?: string | null;
 	renderChat: ChatRowRenderer;
 	onAdd?: () => void;
 }) {
@@ -528,18 +594,21 @@ export function SidebarCourses({ courses, groups, activeCode, activeChatId, expa
 								>
 									<ChevronRightIcon className={cn("size-3.5 transition-transform", open && "rotate-90")} aria-hidden="true" />
 								</button>
-								<button
-									type="button"
+								{/* The fag page, at once (2026-11-26): a prefetched link
+								    (the route's loading.tsx shows the instant it is
+								    clicked); the click also unfolds the fag here. */}
+								<Link
+									href={courseHref(course.code)}
 									onClick={() => onOpenCourse(course.code)}
 									title={`${course.code} ${course.name}. ${daysLeftLabel(course.daysLeft)}.`}
 									aria-current={active && !activeChatId ? "page" : undefined}
 									data-testid="sidebar-course"
-									className="flex min-w-0 flex-1 items-center gap-2 py-1.5 pr-1 text-left font-ui text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+									className="flex min-w-0 flex-1 items-center gap-2 rounded-sm py-1.5 pr-1 text-left font-ui text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
 								>
 									<span className={cn("w-[4.5rem] shrink-0 truncate font-medium tabular-nums", active && "font-semibold text-primary dark:text-foreground")}>{course.code}</span>
 									<span className="sr-only">{course.name}. {daysLeftLabel(course.daysLeft)}.</span>
 									<TopicStatusBar counts={course.counts} className="min-w-0 flex-1" />
-								</button>
+								</Link>
 								<Hint label="Ny underchat" side="right">
 									<Link
 										href={newSubChatHref(course.code)}
@@ -563,10 +632,13 @@ export function SidebarCourses({ courses, groups, activeCode, activeChatId, expa
 											<button
 												type="button"
 												onClick={() => onOpenMainChat(course.code)}
+												disabled={openingMainChat === course.code}
+												aria-busy={openingMainChat === course.code || undefined}
 												data-testid="course-main-chat"
-												className={SUB_ROW}
+												className={cn(SUB_ROW, "disabled:cursor-default")}
 											>
 												<span className="min-w-0 flex-1 truncate">Fag-chat</span>
+												{openingMainChat === course.code && <Spinner className="size-3.5 shrink-0" />}
 											</button>
 										)}
 									</li>
@@ -630,32 +702,33 @@ function SessionsSidebar() {
 		}
 	}, []);
 
-	/* Open a fag = open its fag-chat (fase 2). The list knows it when it
-	   exists; otherwise the server finds or creates it (one per fag, also
-	   under two quick clicks). Clicking a fag also unfolds it again. */
+	/* «Fag-chat» before the fag has one (fase 2; 2026-11-26): the server
+	   finds or creates it (one per fag, also under two quick clicks), then
+	   the chat opens. An existing fag-chat is a plain link (renderChat). */
+	const [openingMainChat, setOpeningMainChat] = useState<string | null>(null);
 	const openingRef = useRef(false);
 	const openMainChat = useCallback((code: string) => {
 		if (openingRef.current) return;
 		openingRef.current = true;
+		setOpeningMainChat(code);
 		void openCourseChatId(code, fetch)
 			.then((chat) => {
+				beginNavigation();
 				router.push(`/chat/${chat.id}`);
 				void refresh();
 			})
 			.catch((err) => console.error("fag-chat failed:", err))
-			.finally(() => { openingRef.current = false; });
+			.finally(() => {
+				openingRef.current = false;
+				setOpeningMainChat(null);
+			});
 	}, [router, refresh]);
+	/* A click on a fag (2026-11-26): its link opens the fag page; here the
+	   fag unfolds, showing «Fag-chat» and the underchats. Nothing awaits
+	   before the navigation. */
 	const openCourse = useCallback((code: string) => {
-		setFolds((prev) => {
-			if (!(code in prev)) return prev;
-			const next = { ...prev };
-			delete next[code];
-			return next;
-		});
-		const main = grouped.byCourse.get(code)?.main;
-		if (main) router.push(`/chat/${main.id}`);
-		else openMainChat(code);
-	}, [grouped, router, openMainChat]);
+		setFolds((prev) => (prev[code] === true ? prev : { ...prev, [code]: true }));
+	}, []);
 
 	/* Instant rename propagation (2026-09-17): the chat header's rename
 	   commits dispatch lh:chat-renamed; patch the snapshot in place instead
@@ -748,12 +821,13 @@ function SessionsSidebar() {
 	const [ctxChatId, setCtxChatId] = useState<string | null>(null);
 	const [ctxStep, setCtxStep] = useState<"menu" | "move">("menu");
 	const [moveError, setMoveError] = useState<string | null>(null);
-	const [moving, setMoving] = useState(false);
+	/** The fag a «Flytt til fag» is moving the session into, while it waits. */
+	const [moving, setMoving] = useState<string | null>(null);
 	const ctxAnchorRef = useRef<HTMLElement | null>(null);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [deleting, setDeleting] = useState<ChatListItem | null>(null);
 
-	const openContext = useCallback((e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => {
+	const openContext = useCallback((e: React.MouseEvent<HTMLElement>, chat: ChatListItem) => {
 		e.preventDefault(); // suppress the native menu
 		ctxAnchorRef.current = e.currentTarget;
 		setCtxStep("menu");
@@ -813,10 +887,10 @@ function SessionsSidebar() {
 	// fag; the server writes the fag's context into it and announces the
 	// change (the list regroups on chats-changed; refreshed here at once).
 	const moveToCourse = useCallback(async (chatId: string, code: string) => {
-		setMoving(true);
+		setMoving(code);
 		setMoveError(null);
 		const error = await moveChatToCourse(chatId, code, fetch);
-		setMoving(false);
+		setMoving(null);
 		if (error) {
 			setMoveError(error);
 			return;
@@ -835,7 +909,10 @@ function SessionsSidebar() {
 		(id: string, _mode: ChatDeleteMode, graphRevision: number) => {
 			setDeleting(null);
 			setChats((prev) => (prev ? prev.filter((c) => c.id !== id) : prev));
-			if (pathname === `/chat/${id}`) router.push("/");
+			if (pathname === `/chat/${id}`) {
+				beginNavigation();
+				router.push("/");
+			}
 			window.dispatchEvent(new CustomEvent("lh:graph-revision", { detail: { revision: graphRevision } }));
 		},
 		[pathname, router],
@@ -862,16 +939,11 @@ function SessionsSidebar() {
 		return () => window.clearTimeout(timer);
 	}, [open, pathname, refresh]);
 
-	// Stable row callbacks so memoized rows skip re-rendering on a toggle.
-	const openChat = useCallback((id: string) => {
-		router.push(`/chat/${id}`);
-	}, [router]);
-
 	const renderCourseChat: ChatRowRenderer = (chat, label) =>
 		renamingId === chat.id ? (
 			<RenameRow chat={chat} onCommit={(next) => void commitRename(chat.id, next)} onCancel={() => setRenamingId(null)} />
 		) : (
-			<CourseChatListRow chat={chat} label={label} active={activeChatId === chat.id} onOpenChat={openChat} onChatContextMenu={openContext} />
+			<CourseChatListRow chat={chat} label={label} active={activeChatId === chat.id} onChatContextMenu={openContext} />
 		);
 
 	const ctxChat = ctxChatId !== null ? chats?.find((c) => c.id === ctxChatId) : undefined;
@@ -880,17 +952,18 @@ function SessionsSidebar() {
 	const moveTargets = sortCoursesByExam(courses ?? []);
 
 	return (
-		// SMOOTH TOGGLE (owner 2026-11-23): the aside's WIDTH SNAPS, so the
-		// main column (chat with KaTeX, tables, the graph canvas) is laid out
-		// once per toggle instead of on every frame of a width transition.
-		// Only the panel moves: a translate on its own layer (compositor
-		// only). Closing: main takes the full width at once and the panel
-		// slides out over it; opening: main makes room at once and the panel
-		// slides in. visibility flips at the END of a close (and at the start
-		// of an open), so the parked panel is neither focusable nor a drag
-		// region. SidebarToggle's slot keeps its own lockstep animation.
+		// SMOOTH TOGGLE (owner 2026-11-23, take 2 2026-11-26): the aside's
+		// WIDTH SNAPS, so the main column (chat with KaTeX, tables, the graph
+		// canvas) is laid out once per toggle instead of on every frame of a
+		// width transition. Only the panel moves: a translate on its own
+		// layer (compositor only). And the snap waits for the glide
+		// (data-sidebar-docked on the shell, see SidebarProvider): opening,
+		// the panel slides in OVER the page, then the page makes room;
+		// closing, the panel slides out, then the page takes the width.
+		// visibility flips at the END of a close (and at the start of an
+		// open), so the parked panel is neither focusable nor a drag region.
 		<aside
-			className={cn("relative z-40 shrink-0", open ? "w-72" : "w-0")}
+			className="relative z-40 w-0 shrink-0 group-data-[sidebar-docked]/shell:w-72"
 			aria-hidden={!open}
 		>
 			<div
@@ -978,6 +1051,7 @@ function SessionsSidebar() {
 						onToggle={toggleCourse}
 						onOpenCourse={openCourse}
 						onOpenMainChat={openMainChat}
+						openingMainChat={openingMainChat}
 						renderChat={renderCourseChat}
 						onAdd={() => window.dispatchEvent(new CustomEvent(ADD_COURSE_EVENT))}
 					/>
@@ -1000,7 +1074,6 @@ function SessionsSidebar() {
 										key={c.id}
 										chat={c}
 										active={activeChatId === c.id}
-										onOpenChat={openChat}
 										onChatContextMenu={openContext}
 									/>
 								),
@@ -1016,6 +1089,11 @@ function SessionsSidebar() {
 				<ActivitySection />
 
 				<SidebarDivider />
+
+				{/* Bruk (2026-11-26): the subscriptions' 5-hour and weekly
+				    limits, right above Hjelp and Innstillinger. Renders
+				    nothing until a provider has reported numbers. */}
+				<UsageLimits />
 
 				{/* Help + settings (settings-app wave; help in the NTNU round):
 				    quiet, bottom-pinned, side by side. Hjelp opens the help
@@ -1071,13 +1149,15 @@ function SessionsSidebar() {
 								<button
 									key={course.code}
 									type="button"
-									disabled={moving}
+									disabled={moving !== null}
+									aria-busy={moving === course.code || undefined}
 									data-testid="ctx-move-target"
 									onClick={() => void moveToCourse(ctxChatId, course.code)}
 									className={cn(MENU_ITEM, "gap-2 disabled:opacity-60")}
 								>
 									<span className="shrink-0 font-medium tabular-nums">{course.code}</span>
 									<span className="min-w-0 flex-1 truncate text-muted-foreground">{course.name}</span>
+									{moving === course.code && <Spinner className="size-3.5 shrink-0" />}
 								</button>
 							))}
 							{moveError && <p role="alert" className="px-2.5 py-1 text-destructive">{moveError}</p>}
@@ -1155,24 +1235,25 @@ function SessionsSidebar() {
 	);
 }
 
+/** The chat's page (the rows' prefetched links). */
+const chatHref = (id: string) => `/chat/${id}`;
+
 /** SessionRow for the live list: memoized, with id-keyed callbacks, so a
  *  sidebar toggle or a sibling's state change does not re-render every row. */
 const SessionListRow = memo(function SessionListRow({
 	chat,
 	active,
-	onOpenChat,
 	onChatContextMenu,
 }: {
 	chat: ChatListItem;
 	active: boolean;
-	onOpenChat: (id: string) => void;
-	onChatContextMenu: (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => void;
+	onChatContextMenu: (e: React.MouseEvent<HTMLElement>, chat: ChatListItem) => void;
 }) {
 	return (
 		<SessionRow
 			chat={chat}
 			active={active}
-			onOpen={() => onOpenChat(chat.id)}
+			href={chatHref(chat.id)}
 			onContextMenu={(e) => onChatContextMenu(e, chat)}
 		/>
 	);
@@ -1183,21 +1264,19 @@ const CourseChatListRow = memo(function CourseChatListRow({
 	chat,
 	label,
 	active,
-	onOpenChat,
 	onChatContextMenu,
 }: {
 	chat: ChatListItem;
 	label?: string;
 	active: boolean;
-	onOpenChat: (id: string) => void;
-	onChatContextMenu: (e: React.MouseEvent<HTMLButtonElement>, chat: ChatListItem) => void;
+	onChatContextMenu: (e: React.MouseEvent<HTMLElement>, chat: ChatListItem) => void;
 }) {
 	return (
 		<CourseChatRow
 			chat={chat}
 			label={label}
 			active={active}
-			onOpen={() => onOpenChat(chat.id)}
+			href={chatHref(chat.id)}
 			onContextMenu={(e) => onChatContextMenu(e, chat)}
 		/>
 	);
@@ -1217,6 +1296,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 			    the flame. One each per window, above every page. */}
 			<FocusRuntime />
 			<StreakCelebration />
+			{/* The route progress stripe (2026-11-26), above everything. */}
+			<NavigationProgress />
 		</SettingsDialogProvider>
 	);
 }
