@@ -364,7 +364,7 @@ function AiStep({ onNext, onBack, onSkip }: { onNext: () => void; onBack: () => 
 			</OnboardingFrame>
 			{/* The existing model picker (the send-interception flow's dialog);
 			    portaled after the innføring, so it sits on top of it. */}
-			<SetupDialog open={setup} onClose={() => setSetup(false)} onDone={() => setSetup(false)} />
+			<SetupDialog open={setup} onClose={() => setSetup(false)} onDone={() => setSetup(false)} saveLabel="Fortsett" />
 		</>
 	);
 }

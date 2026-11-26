@@ -50,6 +50,8 @@ export * from "./model-catalog.ts";
 export { subscriptionControlsResponse, subscriptionBrowserResponse } from "./web-subscription-http.ts";
 export { sessionCost } from "./pricing.ts";
 export { claudeCodeInstallationResponse } from "./claude-code.ts";
+// The setup dialog's recommended models: the Claude/ChatGPT plan (GET /api/subscription-tier).
+export { subscriptionTier } from "./subscription-tier.ts";
 // The custom endpoint module (registers into piModels() + probes for models).
 // No import side effects; the boot sync lives in stores.ts.
 export * from "./custom-provider.ts";
