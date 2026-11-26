@@ -345,6 +345,19 @@ export function ChatGPTConnection({ labelClassName }: { setup?: boolean; labelCl
 	</div>;
 }
 
+/** The innføring's view of the same connection (components/onboarding):
+ *  connected or not, and the existing «Koble til» flow to start. */
+export function useChatGPTConnect(): { connected: boolean; available: boolean; busy: boolean; error: string | null; connect: () => void } {
+	const ui = useContext(Context);
+	return {
+		connected: ui.status.accounts.some((a) => a.id === ui.status.activeId && a.connected),
+		available: ui.status.available,
+		busy: ui.busy || ui.status.pending,
+		error: ui.inlineError,
+		connect: ui.connect,
+	};
+}
+
 /** Contextual consent discovery belongs beside background model choices only. */
 export function ChatGPTBackgroundAccess({ provider }: { provider: string | undefined }) {
 	const ui = useContext(Context);

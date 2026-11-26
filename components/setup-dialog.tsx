@@ -40,7 +40,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useBackdropDismiss } from "@/components/backdrop-dismiss";
 import type React from "react";
-import { type ModelCatalogEntry, type ModelSlotName, type ModelsSettings, CUSTOM_PROVIDER } from "@/src/core";
+import { type ModelCatalogEntry, type ModelSlotName, type ModelsSettings, CUSTOM_PROVIDER, MODEL_SLOTS, ROLE_DISPLAY, ROLES_BY_SLOT, SLOT_DISPLAY, joinNames } from "@/src/core";
 import { prettyModel } from "@/components/usage-format";
 import { ModelMenuList } from "@/components/settings/model-menu";
 import { MenuShell } from "@/components/menu-shell";
@@ -56,13 +56,14 @@ import { defaultOrderLevel, populateLevel, THINKING_LABEL } from "@/components/t
 import { ThinkingMenuList } from "@/components/settings/model-menu";
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 
-/** The pickers' slot identity — same roster language as the Agent
- *  section's slot rows. */
-const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = {
-	strong: { label: "Sterk", roster: "Hovedmodellen i øktene dine: kartlegger og lærer" },
-	cheap: { label: "Rimelig", roster: "Hjelperne i bakgrunnen: research, demoer, uttrekk og kontroll" },
-	vision: { label: "Bilde", roster: "Lager visualiseringer og leser PDF-er" },
-};
+/** The pickers' slot identity — the Agent section's names and roster
+ *  (src/core/role-names.ts). */
+const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = Object.fromEntries(
+	MODEL_SLOTS.map((slot) => [slot, {
+		label: SLOT_DISPLAY[slot].name,
+		roster: `Brukes av ${joinNames(ROLES_BY_SLOT[slot].map((role) => ROLE_DISPLAY[role].name))}`,
+	}]),
+) as Record<ModelSlotName, { label: string; roster: string }>;
 const SLOT_ORDER: readonly ModelSlotName[] = ["strong", "cheap", "vision"];
 
 /** The GET /api/models response fields the flow consumes. */

@@ -501,6 +501,26 @@ export function addCourseSource(rawCode: string, body: unknown): CourseOutcome {
 	return done(commit(course));
 }
 
+/** The fagmappe's link to its course (src/server/course-folders.ts): add
+ *  the folder as a source when the course does not have it yet, otherwise
+ *  refresh its file count. Saves and announces only when something changed,
+ *  so the watcher can call it on every tick. */
+export function syncCourseFolderSource(rawCode: string, folderPath: string): CourseOutcome<{ changed: boolean }> {
+	const course = load(rawCode);
+	if (isFailure(course)) return course;
+	const resolved = path.resolve(folderPath);
+	const existing = course.sources.find((s) => s.kind === "folder" && s.path && path.resolve(s.path) === resolved);
+	if (!existing) {
+		const added = addCourseSource(course.code, { kind: "folder", path: resolved });
+		if (!added.ok) return added;
+		return { ...added, changed: added.course.sources.length !== course.sources.length };
+	}
+	const fileCount = listSupportedFiles(resolved).length;
+	if (existing.fileCount === fileCount) return { ...done(course), changed: false };
+	existing.fileCount = fileCount;
+	return { ...done(commit(course)), changed: true };
+}
+
 export function removeCourseSource(rawCode: string, sourceId: string): CourseOutcome {
 	const course = load(rawCode);
 	if (isFailure(course)) return course;

@@ -29,13 +29,15 @@ import {
 	CUSTOM_MODEL_DEFAULT_CONTEXT_WINDOW,
 	CUSTOM_MODEL_DEFAULT_MAX_TOKENS,
 	CUSTOM_PROVIDER,
+	NATIVE_SUBSCRIPTIONS,
 	normalizeBaseUrl,
 	type AuthKeyStatus,
 	type CustomModel,
 	type CustomModelOverride,
 } from "@/src/core";
-import { SettingsGroup } from "./controls.tsx";
-import { SubscriptionConnections } from "./subscription-connections.tsx";
+import { SettingsAdvanced, SettingsGroup } from "./controls.tsx";
+import { NativeSubscriptionConnection } from "./subscription-connections.tsx";
+import { ChatGPTConnection } from "./chatgpt-connection.tsx";
 import { ClaudeCodeInstallationStatus } from "./claude-code-status.tsx";
 import { ProviderMenuList } from "./model-menu.tsx";
 import { MenuShell } from "@/components/menu-shell";
@@ -489,8 +491,34 @@ export function KeysSection({
 		}
 	}
 
+	// «Avansert» opens on arrival for a deep-link into one of its rows, and
+	// for anyone who already runs on API keys (their keys stay in view).
+	const advancedOpen = initialRow !== undefined || providerRows.some((s) => s.present) || !!custom?.baseUrl;
+	const labelClassName = "font-prose text-(length:--lh-prose-size) text-foreground";
+
 	return (
 		<>
+			{/* Innføringen: the two ways most learners connect, first and plain.
+			    Everything else (keys, other subscriptions, dictation, search)
+			    folds under «Avansert». */}
+			<SettingsGroup label="Claude eller ChatGPT" testid="group-recommended">
+				<p className="text-xs text-muted-foreground">Du trenger bare én. Bruk abonnementet du allerede har.</p>
+				<div className="flex flex-col gap-1" data-testid="recommended-claude">
+					<ClaudeCodeInstallationStatus />
+					<p className="text-xs text-muted-foreground/70">Claude kjører gjennom Claude Code. Du trenger et Claude Pro- eller Max-abonnement.</p>
+				</div>
+				<div className="flex flex-col gap-1" data-testid="recommended-chatgpt">
+					<ChatGPTConnection labelClassName={labelClassName} />
+					<p className="text-xs text-muted-foreground/70">Logg inn med ChatGPT-kontoen din. Grensene i abonnementet ditt gjelder.</p>
+				</div>
+			</SettingsGroup>
+
+			<SettingsAdvanced
+				key={initialRow ?? "none"}
+				testid="keys-advanced"
+				defaultOpen={advancedOpen}
+				hint="API-nøkler, andre abonnementer, diktering og nettsøk."
+			>
 			<SettingsGroup label="API-nøkler for modeller" testid="group-provider-keys">
 				{providerRows.map((status) => (
 					<KeyTableRow
@@ -571,12 +599,10 @@ export function KeysSection({
 				</div>}
 			</SettingsGroup>
 
-			<SettingsGroup label="Abonnementer" testid="group-subscriptions">
-				<SubscriptionConnections />
-			</SettingsGroup>
-
-			<SettingsGroup label="Ekstern CLI" testid="group-external-cli">
-				<ClaudeCodeInstallationStatus />
+			<SettingsGroup label="Andre abonnementer" testid="group-subscriptions">
+				<div className="space-y-3" data-testid="subscription-connections">
+					{NATIVE_SUBSCRIPTIONS.map((p) => <NativeSubscriptionConnection key={p.providerId} providerId={p.providerId} labelClassName={labelClassName} />)}
+				</div>
 			</SettingsGroup>
 
 			{(["dictation", "search"] as const).map((group) => <SettingsGroup key={group} label={group === "dictation" ? "Diktering" : "Søk"} testid={group === "dictation" ? "group-dictation" : "group-search"}>
@@ -610,7 +636,7 @@ export function KeysSection({
 					</p>
 				</>}
 			</SettingsGroup>)}
-
+			</SettingsAdvanced>
 		</>
 	);
 }

@@ -234,6 +234,9 @@ function startServer(port) {
 					LH_AUTH_FILE: AUTH_FILE(),
 					LH_DESKTOP_SERVER: "1",
 					LH_DESKTOP_API_SECRET: desktopAPISecret,
+					// The fagmappe lives in the OS documents folder (follows a
+					// moved or OneDrive-redirected one on Windows).
+					LH_DOCUMENTS_DIR: app.getPath("documents"),
 				},
 				stdio: ["ignore", "pipe", "pipe", "ipc"],
 			},

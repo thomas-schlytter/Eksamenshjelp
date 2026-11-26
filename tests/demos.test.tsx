@@ -264,7 +264,7 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /Research-agent/);
+		assert.match(html, /Kildesøk/);
 		assert.match(html, /web_search: (&quot;|")plato/);
 		assert.ok(!html.includes("Dispatched (job j1.)") || true, "ack text is not the display");
 	});
@@ -275,7 +275,7 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /Research-agent/);
+		assert.match(html, /Kildesøk/);
 		assert.match(html, /Startet…/);
 	});
 
@@ -285,7 +285,7 @@ describe("dispatch card rendering (the tool-call ack box)", () => {
 				<JobCard part={ackPart as never} />
 			</JobsContext.Provider>,
 		);
-		assert.match(html, /Research-agent/);
+		assert.match(html, /Kildesøk/);
 		assert.match(html, /ferdig/);
 		assert.ok(!html.includes("web_search"), "no stale activity line once settled");
 	});
@@ -403,7 +403,7 @@ describe("steer card rendering (the delivered artifact)", () => {
 		assert.equal(view.parts.length, 2, "text (teacher-facing) + the data-subagent-aborted marker part");
 		const html = renderToStaticMarkup(<SubagentSteerCard message={view as never} />);
 		assert.match(html, /job-aborted-badge/);
-		assert.match(html, /research/, "the job's kind, lower-cased like the complete-badge idiom");
+		assert.match(html, /Kildesøk/, "the agent that was stopped, by its display name");
 		assert.match(html, /avbrutt av deg/);
 		// the teacher-facing protocol text never renders for the learner
 		assert.ok(!html.includes("no brief is coming"), "no protocol glue in the chip");

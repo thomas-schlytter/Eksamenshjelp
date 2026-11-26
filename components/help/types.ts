@@ -31,6 +31,8 @@ export type HelpAction =
 	| { kind: "article"; id: string }
 	/** Open the «Importer fra LearnHarness» dialog (components/import/). */
 	| { kind: "legacy-import" }
+	/** Open the innføring (components/onboarding/). */
+	| { kind: "onboarding" }
 	/** Go to a route and point at one control; the control stays clickable. */
 	| { kind: "point"; route: string; anchor: string; title: string; text: string };
 

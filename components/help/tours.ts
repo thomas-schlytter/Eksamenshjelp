@@ -11,7 +11,7 @@ import type { Tour } from "./types.ts";
 /** Dynamic route placeholder: resolves to the learner's first course. */
 export const COURSE_ROUTE = "/fag/[code]";
 
-/** The tour offered on first launch. */
+/** The welcome tour (featured in the help centre; the innføring is what opens at first launch). */
 export const WELCOME_TOUR_ID = "kom-i-gang";
 
 export const TOURS: readonly Tour[] = [
@@ -252,8 +252,8 @@ export const TOURS: readonly Tour[] = [
 				before: { kind: "settings", section: "keys" },
 				selector: '[data-testid="settings-nav"]',
 				title: "Innstillingene",
-				text: "Appen bruker dine egne AI-modeller. Oppsettet gjør du i to seksjoner: «Leverandører» og «Agent».",
-				fallback: "Appen bruker dine egne AI-modeller. Oppsettet gjør du i innstillingene, i seksjonene «Leverandører» og «Agent».",
+				text: "Appen bruker dine egne AI-modeller. Oppsettet gjør du i to seksjoner: «Koble til AI» og «Agent».",
+				fallback: "Appen bruker dine egne AI-modeller. Oppsettet gjør du i innstillingene, i seksjonene «Koble til AI» og «Agent».",
 			},
 			{
 				id: "leverandor",
@@ -261,15 +261,15 @@ export const TOURS: readonly Tour[] = [
 				selector: '[data-testid="section-keys"]',
 				title: "Koble til en leverandør",
 				text: "Velg én måte: lim inn en API-nøkkel, koble til et abonnement (i skrivebordsappen), bruk Claude Code hvis du har det installert, eller pek på en egen OpenAI-kompatibel adresse, for eksempel en lokal modell.",
-				fallback: "Under «Leverandører» kobler du til på én av fire måter: API-nøkkel, abonnement (i skrivebordsappen), Claude Code eller en egen OpenAI-kompatibel adresse, for eksempel en lokal modell.",
+				fallback: "Under «Koble til AI» kobler du til på én av fire måter: API-nøkkel, abonnement (i skrivebordsappen), Claude Code eller en egen OpenAI-kompatibel adresse, for eksempel en lokal modell.",
 			},
 			{
 				id: "modeller",
 				before: { kind: "settings", section: "agent" },
 				selector: '[data-testid="section-agent"]',
 				title: "Velg modeller",
-				text: "Appen bruker tre modellplasser: «Sterk» er hovedmodellen i øktene, «Rimelig» gjør bakgrunnsarbeid, og «Bilde» tegner og leser PDF-er. Velg en modell for hver.",
-				fallback: "Under «Agent» velger du tre modeller: «Sterk» er hovedmodellen i øktene, «Rimelig» gjør bakgrunnsarbeid, og «Bilde» tegner og leser PDF-er.",
+				text: "Appen bruker tre modeller: «Kraftig modell» for Læreren og Kartleggeren, «Rask og billig modell» for arbeidet i bakgrunnen, og «Modell som ser bilder» for figurer og PDF-er. Velg en modell for hver.",
+				fallback: "Under «Agent» velger du tre modeller: «Kraftig modell» for Læreren og Kartleggeren, «Rask og billig modell» for arbeidet i bakgrunnen, og «Modell som ser bilder» for figurer og PDF-er.",
 			},
 			{
 				id: "valgfritt",
@@ -277,7 +277,7 @@ export const TOURS: readonly Tour[] = [
 				selector: '[data-testid="section-keys"]',
 				title: "Valgfritt: diktering og nettsøk",
 				text: "Vil du snakke i stedet for å skrive, legger du inn en Deepgram-nøkkel. Vil du at appen skal kunne søke på nettet, legger du inn en nøkkel fra Tavily eller Brave Search.",
-				fallback: "Under «Leverandører» kan du også legge inn en Deepgram-nøkkel for diktering og en nøkkel fra Tavily eller Brave Search for nettsøk. Begge deler er valgfritt.",
+				fallback: "Under «Koble til AI» kan du også legge inn en Deepgram-nøkkel for diktering og en nøkkel fra Tavily eller Brave Search for nettsøk. Begge deler er valgfritt.",
 			},
 			{
 				id: "ferdig",

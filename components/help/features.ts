@@ -79,6 +79,14 @@ export const FEATURES: readonly FeatureEntry[] = [
 		action: { kind: "legacy-import" },
 	},
 	{
+		id: "innforing",
+		title: "Innføring",
+		description: "Sett opp appen steg for steg: koble til AI, legg til fag og hent tidligere eksamener.",
+		keywords: ["innføring", "onboarding", "oppsett", "kom i gang", "start", "første gang", "fagmappe", "canvas", "eksamener", "sette opp"],
+		action: { kind: "onboarding" },
+		suggested: true,
+	},
+	{
 		id: "hjelpesenter",
 		title: "Hjelpesenter",
 		description: "Spørsmål og svar, og veivisere som viser deg rundt.",
@@ -95,8 +103,8 @@ export const FEATURES: readonly FeatureEntry[] = [
 	},
 	{
 		id: "innstillinger-leverandorer",
-		title: "Leverandører og API-nøkler",
-		description: "Koble til en AI-leverandør med API-nøkkel, abonnement, Claude Code eller egen adresse.",
+		title: "Koble til AI",
+		description: "Koble til Claude eller ChatGPT. API-nøkler og egne adresser ligger under «Avansert».",
 		keywords: [
 			"nøkkel", "nøkler", "api", "api-nøkkel", "api key", "leverandør", "provider", "abonnement", "openai", "anthropic",
 			"claude", "chatgpt", "google", "gemini", "openrouter", "claude code", "lokal modell", "ollama", "endepunkt",
@@ -107,7 +115,7 @@ export const FEATURES: readonly FeatureEntry[] = [
 	{
 		id: "innstillinger-modeller",
 		title: "Velg modeller",
-		description: "Velg modell for «Sterk», «Rimelig» og «Bilde», og styr hva agenten får gjøre.",
+		description: "Velg kraftig modell, rask og billig modell og modell som ser bilder, og se hvem som gjør hva.",
 		keywords: ["modell", "modeller", "model", "sterk", "rimelig", "bilde", "agent", "tenkenivå", "nettsøk", "verktøy", "systemprompt"],
 		action: { kind: "settings", section: "agent" },
 	},

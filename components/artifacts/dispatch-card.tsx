@@ -4,7 +4,7 @@ import { useContext } from "react";
 import { CheckIcon, SettingsIcon, XIcon } from "lucide-react";
 import { JobsContext } from "@/components/jobs-context";
 import { ChatActionsContext } from "@/components/chat";
-import { isModelsRefusal, isProviderKeyRefusal, type JobKind, type JobRecord } from "@/src/core";
+import { ROLE_DISPLAY, isModelsRefusal, isProviderKeyRefusal, type JobKind, type JobRecord } from "@/src/core";
 import { BrailleSpinner } from "@/components/braille-spinner";
 
 /**
@@ -20,10 +20,10 @@ import { BrailleSpinner } from "@/components/braille-spinner";
  *                 box must not duplicate it.
  */
 const KIND_LABEL: Record<JobKind, string> = {
-	research: "Research-agent",
-	demo: "Demo-agent",
-	visual: "Visualiseringsagent",
-	pdf: "PDF-leser",
+	research: ROLE_DISPLAY.researcher.name,
+	demo: ROLE_DISPLAY.demoBuilder.name,
+	visual: ROLE_DISPLAY.visualMaker.name,
+	pdf: ROLE_DISPLAY.pdfReader.name,
 	mockExam: "Prøveeksamen",
 	mockGrade: "Retting",
 };

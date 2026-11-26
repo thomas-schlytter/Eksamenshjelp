@@ -71,7 +71,7 @@ export function SubagentSteerCard({ message }: { message: LhViewMessage }) {
 /** The aborted-job chip: mirrors the complete-badge one-liner — the
  * teacher's wake turn acknowledges the abort in the lesson itself,
  * this just marks what happened. */
-const ABORTED_KIND_LABEL: Record<string, string> = { research: "research", demo: "demo", visual: "visualisering", pdf: "PDF", mockExam: "prøveeksamen", mockGrade: "retting", job: "jobb" };
+const ABORTED_KIND_LABEL: Record<string, string> = { research: "Kildesøk", demo: "Demo-lageren", visual: "Figurtegneren", pdf: "PDF-leseren", mockExam: "prøveeksamen", mockGrade: "retting", job: "jobb" };
 function AbortedBadge({ kind }: { kind: string }) {
 	return (
 		<div data-testid="job-aborted-badge" className="flex items-center gap-2 text-xs text-muted-foreground">
@@ -121,7 +121,7 @@ function ResearchCompleteBadge({ result }: { result: ResearchResult }) {
 		<details data-testid="research-complete-badge" className="group w-full text-xs text-muted-foreground">
 			<summary className="flex cursor-pointer select-none list-none items-center gap-2 [&::-webkit-details-marker]:hidden">
 				<CheckIcon className="size-3.5" />
-				<span className="font-medium uppercase tracking-wide">Research</span>
+				<span className="font-medium uppercase tracking-wide">Kildesøk</span>
 				<span>ferdig</span>
 				{result.sources.length > 0 && <span>· {result.sources.length} {result.sources.length === 1 ? "kilde" : "kilder"}</span>}
 				<span className="ml-1 text-xs text-muted-foreground/70 group-open:hidden">vis sammendrag</span>

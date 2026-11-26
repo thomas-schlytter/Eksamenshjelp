@@ -144,6 +144,20 @@ export function HelpCenter() {
 								Kom i gang
 							</h2>
 							<p className="mt-0.5 mb-3 text-sm text-muted-foreground">Veiviserne peker på tingene i appen og forklarer dem steg for steg.</p>
+							<div data-testid="help-onboarding" className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-card p-4">
+								<div className="min-w-0">
+									<h3 className="text-sm font-semibold">Innføring</h3>
+									<p className="mt-1 text-sm text-muted-foreground">Sett opp appen steg for steg: koble til AI, legg til fag og hent tidligere eksamener.</p>
+								</div>
+								<button
+									type="button"
+									onClick={() => run({ kind: "onboarding" })}
+									data-testid="help-onboarding-start"
+									className={`shrink-0 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 ${FOCUS_RING}`}
+								>
+									Start innføringen
+								</button>
+							</div>
 							<TourGrid tours={TOURS} completed={completedTours} onStart={startTour} />
 						</section>
 

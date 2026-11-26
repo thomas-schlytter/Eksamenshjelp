@@ -56,6 +56,11 @@ export * from "./custom-provider.ts";
 export { customProviderGet, customProviderMutation } from "./custom-provider-http.ts";
 // Courses ("fag", exam mode): the /api/courses service + the NTNU fetch.
 export * from "./courses.ts";
+// The fagmappe the app follows (innføringen): ~/Documents/Eksamenshjelp/<FAGKODE>/.
+export {
+	scanCourseFolders, installCourseFolderWatcher, openCourseFolder, courseFolderSeams, documentsDir,
+	type CourseFolderScan, type CourseFolderEntry,
+} from "./course-folders.ts";
 // Én chat per fag (fase 2): the fag-chat and «Flytt til fag».
 export * from "./course-chats.ts";
 // «Avslutt økt»: the /api/chats/[id]/wrap service (end the økt, summary +

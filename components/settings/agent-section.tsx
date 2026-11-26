@@ -63,6 +63,10 @@ import type React from "react";
 import {
 	COMPACTION_THRESHOLD_FLOOR,
 	MODEL_SLOTS,
+	ROLE_DISPLAY,
+	ROLES_BY_SLOT,
+	SLOT_DISPLAY,
+	joinNames,
 	resolveSettings,
 	type AgentSettings,
 	type CompactionSettings,
@@ -73,18 +77,19 @@ import {
 import type { ThinkingLevel } from "@earendil-works/pi-agent-core";
 import { prettyModel } from "@/components/usage-format";
 import { cn } from "@/lib/utils";
-import { SettingsGroup, SettingsRow, SettingsMenuTrigger, Toggle, CommitInput } from "./controls.tsx";
+import { SettingsAdvanced, SettingsGroup, SettingsRow, SettingsMenuTrigger, Toggle, CommitInput } from "./controls.tsx";
 import { ModelMenuList, ThinkingMenuList } from "./model-menu";
 import { ChatGPTBackgroundAccess } from "./chatgpt-connection";
 import { NativeSubscriptionBackgroundAccess } from "./subscription-connections";
 
-/** One slot's display identity — the tier's roster as the row hint rides
- *  with the resolved default (owner: the hint ALWAYS names the default). */
-const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = {
-	strong: { label: "Sterk", roster: "Hovedmodellen i øktene dine" },
-	cheap: { label: "Rimelig", roster: "Assistentene som gjør research, lager demoer og vurderer arbeidet ditt" },
-	vision: { label: "Bilde", roster: "Assistentene som tegner og leser PDF-er" },
-};
+/** One slot's display identity (src/core/role-names.ts): the plain name,
+ *  and which agents use it as the row hint. */
+const SLOT_META: Record<ModelSlotName, { label: string; roster: string }> = Object.fromEntries(
+	MODEL_SLOTS.map((slot) => [slot, {
+		label: SLOT_DISPLAY[slot].name,
+		roster: `Brukes av ${joinNames(ROLES_BY_SLOT[slot].map((role) => ROLE_DISPLAY[role].name))}`,
+	}]),
+) as Record<ModelSlotName, { label: string; roster: string }>;
 
 /** The search engines this wave ships (src/core/search.ts) + their labels. */
 const SEARCH_ENGINES = ["tavily", "brave"] as const;
@@ -93,12 +98,19 @@ const SEARCH_ENGINES = ["tavily", "brave"] as const;
  *  changing — the Teacher stream settled this 2026-09-19). */
 export const TOGGLE_TOOLS = ["research", "demo", "visual", "pdf"] as const;
 
-/** Display names only: the ids above are the stored settings keys. */
+/** Display names only: the ids above are the stored settings keys. Each
+ *  tool is one of the agents, so it carries that agent's name. */
 const TOOL_LABEL: Record<(typeof TOGGLE_TOOLS)[number], string> = {
-	research: "research",
-	demo: "demo",
-	visual: "visualisering",
-	pdf: "PDF",
+	research: ROLE_DISPLAY.researcher.name,
+	demo: ROLE_DISPLAY.demoBuilder.name,
+	visual: ROLE_DISPLAY.visualMaker.name,
+	pdf: ROLE_DISPLAY.pdfReader.name,
+};
+const TOOL_HINT: Record<(typeof TOGGLE_TOOLS)[number], string> = {
+	research: "Læreren kan be Kildesøk finne stoff",
+	demo: "Læreren kan be Demo-lageren lage en demo",
+	visual: "Læreren kan be Figurtegneren tegne",
+	pdf: "Læreren kan be PDF-leseren lese en PDF",
 };
 
 const THINKING_LEVELS: readonly ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
@@ -205,12 +217,12 @@ export interface PromptSection {
 export function sectionedSegments(view: { prober: SegmentInfo[]; teacher: SegmentInfo[] }): PromptSection[] {
 	const own = (who: "prober" | "teacher") => view[who].filter((s) => !s.shared);
 	return [
-		{ id: "teacher", label: "Lærer", segments: own("teacher") },
-		{ id: "prober", label: "Kartlegger", segments: own("prober") },
+		{ id: "teacher", label: ROLE_DISPLAY.teacher.name, segments: own("teacher") },
+		{ id: "prober", label: ROLE_DISPLAY.prober.name, segments: own("prober") },
 		{
 			id: "shared",
 			label: "Felles",
-			hint: "Brukes av begge agentene",
+			hint: "Brukes av både Læreren og Kartleggeren",
 			segments: view.teacher.filter((s) => s.shared),
 		},
 	];
@@ -600,7 +612,7 @@ export function AgentSection({
 					aria-expanded={advancedModels}
 					onClick={() => { setAdvancedModels(!advancedModels); setOpenMenu(null); }}
 					className="mb-1 self-start text-xs text-muted-foreground hover:text-foreground"
-				>{advancedModels ? "Skjul avanserte innstillinger" : "Vis avanserte innstillinger"}</button>
+				>{advancedModels ? "Skjul tenkenivå og cache" : "Vis tenkenivå og cache"}</button>
 				{catalogFailed && <p role="alert" className="text-xs text-status-red-ink">Kunne ikke laste modellkatalogen. Sjekk tilkoblingen og prøv igjen. <button type="button" className="underline" onClick={refreshCatalog}>Prøv igjen</button></p>}
 				{MODEL_SLOTS.map((slot) => {
 					const override = models?.[slot];
@@ -650,7 +662,9 @@ export function AgentSection({
 									onClick={() => setOpenMenu(thisMenuOpen === "model" ? null : { target: slot, kind: "model" })}
 									widthClass="min-w-20"
 								/>
-								<MenuTrigger
+								{/* Thinking level and cache are advanced (innføringen): a
+								    fresh pick fills the level on its own. */}
+								{advancedModels && <MenuTrigger
 									// Legacy display (chunk 2 item 4): no stored level + a known
 									// model → the RESOLVED level (the ordering's first supported —
 									// what the engine build runs). Display-only until a pick writes.
@@ -661,7 +675,7 @@ export function AgentSection({
 									open={thisMenuOpen === "thinking"}
 									onClick={() => setOpenMenu(thisMenuOpen === "thinking" ? null : { target: slot, kind: "thinking" })}
 									widthClass="w-20"
-								/>
+								/>}
 								{advancedModels && <MenuTrigger
 									value={cacheRetentionLabel(override?.cacheRetention)}
 									emptyLabel="Cache: standard"
@@ -705,13 +719,13 @@ export function AgentSection({
 											}}
 											footer={
 												catalog && catalog.length === 0
-													? "Ingen modeller. Legg til en API-nøkkel under Leverandører"
+													? "Ingen modeller. Koble til AI først"
 													: "Brukes av alle agentene på dette nivået"
 											}
 										/>
 									</MenuShell>
 								)}
-								{thisMenuOpen === "thinking" && (
+								{advancedModels && thisMenuOpen === "thinking" && (
 									<MenuShell
 										preferredSide="down"
 											anchorTestid={`slot-thinking-${slot}`}
@@ -736,6 +750,17 @@ export function AgentSection({
 				})}
 			</SettingsGroup>
 
+			<SettingsGroup label="Hvem gjør hva" testid="group-roles">
+				<ul className="flex flex-col gap-1" data-testid="role-list">
+					{MODEL_SLOTS.flatMap((slot) => ROLES_BY_SLOT[slot]).map((role) => (
+						<li key={role} data-testid={`role-${role}`} className="text-xs text-muted-foreground">
+							<span className="font-medium text-foreground">{ROLE_DISPLAY[role].name}</span>: {ROLE_DISPLAY[role].description}
+						</li>
+					))}
+				</ul>
+			</SettingsGroup>
+
+			<SettingsAdvanced testid="agent-advanced" hint="Verktøy, minne og instrukser. Standardvalgene passer for de fleste.">
 			<SettingsGroup label="Verktøy" testid="group-tools">
 				{/* The prober's graph tools (wave 7, owner ruling 2026-09-23):
 				    FIRST row of the group — its subject is the map, its
@@ -749,7 +774,7 @@ export function AgentSection({
 					return (
 						<SettingsRow
 							label="Kartverktøy"
-							hint={graphOn ? "Lar agenten slå opp i kunnskapskartet ditt mellom øktene" : "Kunnskapskartet er slått av"}
+							hint={graphOn ? "Lar Kartleggeren slå opp i kunnskapskartet ditt mellom øktene" : "Kunnskapskartet er slått av"}
 							testid="graph-tools-row"
 							dimmed={!graphOn}
 						>
@@ -766,7 +791,8 @@ export function AgentSection({
 				{TOGGLE_TOOLS.map((id) => (
 					<SettingsRow
 						key={id}
-						label={`Verktøy · ${TOOL_LABEL[id]}`}
+						label={TOOL_LABEL[id]}
+						hint={TOOL_HINT[id]}
 						testid={`tool-row-${id}`}
 					>
 						<Toggle
@@ -824,10 +850,10 @@ export function AgentSection({
 				})()}
 			</SettingsGroup>
 
-			<SettingsGroup label="Kontekst" testid="group-context">
+			<SettingsGroup label="Lange økter" testid="group-context">
 				<SettingsRow
-					label="Grense for komprimering"
-					hint={`${resolvedCompaction.thresholdTokens} tok`}
+					label="Oppsummer lange økter etter"
+					hint={`${resolvedCompaction.thresholdTokens} tokens: da oppsummeres de eldste delene av økta`}
 					testid="compaction-row-threshold"
 				>
 					<CommitInput
@@ -882,6 +908,7 @@ export function AgentSection({
 					</div>
 				)}
 			</SettingsGroup>
+			</SettingsAdvanced>
 		</>
 	);
 }
